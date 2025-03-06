@@ -2,34 +2,46 @@ from dash import html, callback, Input, Output, no_update, State, dcc, ctx
 import pandas as pd
 import dash_ag_grid
 import dash_bootstrap_components as dbc
-import dash_mantine_components as dmc
+
 from utils import get_csv_files
 import json
 from jsonschema import Draft7Validator
 from collections import Counter
 from components.summary_tables import stats_tab
 import base64, io
+import os
+
 
 # Grab the CSV file data - NOTE: this may switch to a upload button later.
 csv_file_data = get_csv_files("metadata")
 
 
-def _get_column_defs(cols):
-    """Read the shim dictionary."""
+def _get_column_defs(cols, existing_defs=None):
+    """Read the shim dictionary and create column definitions."""
     with open("schemaFiles/adrcNpSchema.json", "r") as fh:
         schema = json.load(fh)
+
+    # Create a dictionary of existing column definitions for quick lookup
+    existing_dict = {}
+    if existing_defs:
+        existing_dict = {col_def["field"]: col_def for col_def in existing_defs}
 
     columnDefs = []
 
     for col in cols:
+        # Start with existing column definition if available
+        if col in existing_dict:
+            col_def = existing_dict[col].copy()
+        else:
+            col_def = {"field": col}
+
+        # Apply special formatting for specific columns
         if col in ["stainID", "regionName"]:
             values = schema["properties"][col]["enum"]
-
             values = [f'"{v}"' for v in values]
 
-            columnDefs.append(
+            col_def.update(
                 {
-                    "field": col,
                     "editable": True,
                     "cellStyle": {
                         "styleConditions": [
@@ -43,9 +55,8 @@ def _get_column_defs(cols):
                 }
             )
         elif col == "caseID":
-            columnDefs.append(
+            col_def.update(
                 {
-                    "field": col,
                     "editable": True,
                     "cellStyle": {
                         "styleConditions": [
@@ -58,8 +69,8 @@ def _get_column_defs(cols):
                     },
                 }
             )
-        else:
-            columnDefs.append({"field": col})
+
+        columnDefs.append(col_def)
 
     return columnDefs
 
@@ -85,6 +96,83 @@ csv_select_data = [
     for dct in csv_file_data
 ]
 
+# Replace the column visibility dropdown with a button that opens a modal
+column_visibility_button = html.Div(
+    [
+        dbc.Button(
+            "Show/Hide Columns",
+            id="open-column-modal-button",
+            color="primary",
+            className="me-1",
+        ),
+        dbc.Modal(
+            [
+                dbc.ModalHeader("Manage Columns"),
+                dbc.ModalBody(
+                    [
+                        dbc.Row(
+                            [
+                                dbc.Col(
+                                    [
+                                        dbc.Button(
+                                            "Select All",
+                                            id="select-all-columns-btn",
+                                            color="primary",
+                                            size="sm",
+                                            className="me-2 mb-3",
+                                        ),
+                                        dbc.Button(
+                                            "Deselect All",
+                                            id="deselect-all-columns-btn",
+                                            color="secondary",
+                                            size="sm",
+                                            className="me-2 mb-3",
+                                        ),
+                                        dbc.Button(
+                                            "Reset to Default",
+                                            id="reset-columns-btn",
+                                            color="info",
+                                            size="sm",
+                                            className="mb-3",
+                                        ),
+                                    ],
+                                    width=12,
+                                ),
+                            ]
+                        ),
+                        dbc.Row(
+                            [
+                                dbc.Col(
+                                    [
+                                        dbc.Checklist(
+                                            id="column-visibility-checklist",
+                                            options=[],
+                                            value=[],
+                                            style={
+                                                "maxHeight": "400px",
+                                                "overflowY": "auto",
+                                            },
+                                        ),
+                                    ]
+                                ),
+                            ]
+                        ),
+                    ]
+                ),
+                dbc.ModalFooter(
+                    dbc.Button(
+                        "Close", id="close-column-modal-button", className="ms-auto"
+                    )
+                ),
+            ],
+            id="column-visibility-modal",
+            size="lg",
+            is_open=False,
+        ),
+    ],
+    style={"display": "inline-block", "margin-right": "10px"},
+)
+
 metadataBrowser_tab = html.Div(
     [
         html.Div(
@@ -102,13 +190,9 @@ metadataBrowser_tab = html.Div(
                         "height": "auto",
                         "lineHeight": "auto",
                         "borderWidth": "1px",
-                        # "borderStyle": "dashed",
-                        # "borderRadius": "5px",
                         "textAlign": "center",
                         "margin-right": 5,
-                        # "margin": "10px",
                     },
-                    # multiple=True,  # could make this multiple files, for now the logic is for one.
                 ),
                 dbc.Button(
                     "Apply Shim Dictionary",
@@ -122,6 +206,13 @@ metadataBrowser_tab = html.Div(
                     color="success",
                     className="me-1",
                 ),
+                dbc.Button(
+                    "Load Sample Data",
+                    id="load_sample_data",
+                    color="info",
+                    className="me-1",
+                ),
+                column_visibility_button,
                 html.Div(
                     "Showing metadata for files for:",
                     style={"fontWeight": "bold"},
@@ -132,13 +223,13 @@ metadataBrowser_tab = html.Div(
                         {"label": "All CSV", "value": "all-rows"},
                         {"label": "Only in file system", "value": "filtered-rows"},
                     ],
-                    value="filtered-rows",
+                    value="all-rows",
                     inline=True,
                     style={"margin-left": 10},
                     labelStyle={"margin-right": 10},
                 ),
             ],
-            style={"display": "flex", "padding": "5px"},
+            style={"display": "flex", "padding": "5px", "align-items": "center"},
         ),
         html.Div(
             children=[
@@ -166,15 +257,18 @@ metadataBrowser_tab = html.Div(
         Input("upload-data", "contents"),
         Input("upload-data", "filename"),
         Input("shim-dict-btn", "n_clicks"),
+        Input("load_sample_data", "n_clicks"),
     ],
     State("metadata-store", "data"),
     prevent_initial_call=True,
 )
-def update_metadata_store(contents, filename, n_clicks, current_store):
+def update_metadata_store(
+    contents, filename, apply_shim_button, load_sample_data_button, current_store
+):
     """Update the metadata store from selected CSV file."""
     context_id = ctx.triggered_id
 
-    if n_clicks and context_id == "shim-dict-btn" and current_store:
+    if apply_shim_button and context_id == "shim-dict-btn" and current_store:
         # Apply the shim dictionary to the entire store and reload!
         with open("shim-dictionary.json", "r") as fh:
             shim_dict = json.load(fh)
@@ -193,7 +287,32 @@ def update_metadata_store(contents, filename, n_clicks, current_store):
                             break
 
         return df.to_dict("records")
-    elif contents is not None:
+    elif load_sample_data_button and context_id == "load_sample_data":
+        # Load the sample data with more careful parsing-- using year 2020 right now
+        try:
+            # Try reading with explicit parameters to handle special characters in column names
+            df = pd.read_csv("year_2020_dsametadata.csv", encoding="utf-8")
+            print("Sample data loaded. Columns:", df.columns.tolist())
+
+            # Normalize column names to ensure consistency
+            # This renames columns to a standard format (lowercase, spaces to underscores)
+            df.columns = [
+                col.lower().replace(" ", "_").replace(".", "_") for col in df.columns
+            ]
+
+            # If you need to specifically rename a column to 'fileName'
+            if "filename" in df.columns:
+                df = df.rename(columns={"filename": "fileName"})
+            elif "file_name" in df.columns:
+                df = df.rename(columns={"file_name": "fileName"})
+
+            print("Normalized columns:", df.columns.tolist())
+            return df.to_dict("records")
+        except Exception as e:
+            print(f"Error loading sample data: {e}")
+            print(f"Current working directory: {os.getcwd()}")
+            return []
+    elif contents is not None and context_id == "upload-data":
         # There should be a single file.
         content_type, content_string = contents.split(",")
         decoded = base64.b64decode(content_string)
@@ -205,42 +324,160 @@ def update_metadata_store(contents, filename, n_clicks, current_store):
 
 
 @callback(
-    Output("metadata-table", "rowData"),
-    Output("metadata-table", "columnDefs"),
-    [Input("metadata-store", "data"), Input("filter-radio", "value")],
-    State("localFileSet_store", "data"),
+    Output("column-visibility-store", "data"),
+    Input("column-visibility-checklist", "value"),
+    State("column-visibility-checklist", "options"),
+    State("column-visibility-store", "data"),
     prevent_initial_call=True,
 )
-def update_metadata_table(
+def update_column_visibility(selected_columns, options, current_visibility):
+    """Update the column visibility store based on user selection."""
+    if not options:
+        return current_visibility or {}
+
+    all_columns = [option["value"] for option in options]
+
+    # Start with existing visibility settings
+    visibility = current_visibility.copy() if current_visibility else {}
+
+    # Update visibility based on selection
+    for col in all_columns:
+        visibility[col] = col in selected_columns
+
+    return visibility
+
+
+@callback(
+    Output("column-visibility-checklist", "options"),
+    Output("column-visibility-checklist", "value"),
+    Input("metadata-store", "data"),
+    State("column-visibility-store", "data"),
+    prevent_initial_call=True,
+)
+def update_column_checklist(metadata_data, stored_visibility):
+    """Update the column visibility checklist based on available columns."""
+    if not metadata_data:
+        return [], []
+
+    # Get all column fields from the data
+    df = pd.DataFrame(metadata_data)
+    all_columns = df.columns.tolist()
+
+    # Create options for the checklist
+    options = [{"label": col, "value": col} for col in all_columns]
+
+    # Determine which columns should be visible
+    if stored_visibility:
+        # For existing columns, use stored visibility
+        # For new columns, default to visible
+        visible_columns = [
+            col for col in all_columns if stored_visibility.get(col, True)
+        ]
+    else:
+        # Default: all columns visible
+        visible_columns = all_columns
+
+    return options, visible_columns
+
+
+@callback(
+    Output("metadata-table", "columnDefs"),
+    [
+        Input("metadata-store", "data"),
+        Input("filter-radio", "value"),
+        Input("column-visibility-store", "data"),
+    ],
+    [State("localFileSet_store", "data"), State("metadata-table", "columnDefs")],
+    prevent_initial_call=True,
+)
+def update_table_columns(
+    metadata_data: list[dict],
+    showing: str,
+    visibility: dict,
+    local_fileset_store: list[dict],
+    existing_column_defs: list,
+):
+    """Update the table columns based on data changes and visibility settings."""
+    trigger = ctx.triggered_id
+
+    if trigger == "column-visibility-store" and existing_column_defs:
+        # Only visibility changed, apply it to existing columns
+        if not visibility:
+            return existing_column_defs
+
+        updated_column_defs = []
+        for col_def in existing_column_defs:
+            field = col_def["field"]
+            new_col_def = col_def.copy()
+            new_col_def["hide"] = not visibility.get(field, True)
+            updated_column_defs.append(new_col_def)
+
+        return updated_column_defs
+
+    elif metadata_data:
+        # Data changed, create new column definitions
+        df = pd.DataFrame(metadata_data).fillna("")
+        columnDefs = _get_column_defs(df.columns, existing_column_defs)
+
+        # Apply visibility settings if available
+        if visibility:
+            for col_def in columnDefs:
+                field = col_def["field"]
+                # For existing columns, use stored visibility
+                # For new columns, default to visible
+                col_def["hide"] = not visibility.get(field, True)
+
+        return columnDefs
+
+    return []
+
+
+@callback(
+    Output("metadata-table", "rowData"),
+    [Input("metadata-store", "data"), Input("filter-radio", "value")],
+    [State("localFileSet_store", "data")],
+    prevent_initial_call=True,
+)
+def update_metadata_table_rows(
     metadata_data: list[dict], showing: str, local_fileset_store: list[dict]
 ) -> list[dict]:
-    """Update the metadata table when the metadata store changes or the toggle
-    to show all or just the rows matching local file set.
-
-    Args:
-        metadata_data (list[dict]): The metadata as a list of dictionaries.
-        showing (str): The value of the radio button.
-        local_fileset_store (list[dict]): The local fileset store.
-
-    Returns:
-        list[dict]: The metadata as a list of dictionaries.
-
-    """
+    """Update just the row data when the metadata store changes or the filter changes."""
     if metadata_data:
         # Return the metadata directly from store, or filter it by matching to local fileset.
         df = pd.DataFrame(metadata_data).fillna("")
-        columnDefs = _get_column_defs(df.columns)
 
         if showing != "all-rows":
-            local_fns = [file_data["fileName"] for file_data in local_fileset_store]
+            local_fns = [
+                file_data.get("fileName", "") for file_data in local_fileset_store
+            ]
 
-            df = df[df.fileName.isin(local_fns)]
+            # Check for possible filename column variations
+            filename_col = None
+            for possible_name in [
+                "fileName",
+                "FileName",
+                "filename",
+                "file_name",
+                "file name",
+            ]:
+                if possible_name in df.columns:
+                    filename_col = possible_name
+                    break
 
-            return df.to_dict("records"), columnDefs
+            # If we found a filename column, filter by it
+            if filename_col:
+                df = df[df[filename_col].isin(local_fns)]
+            else:
+                print(
+                    "Warning: No filename column found in metadata. Available columns:",
+                    df.columns.tolist(),
+                )
 
-        return metadata_data, columnDefs
+            return df.to_dict("records")
 
-    return [], []
+        return metadata_data
+
+    return []
 
 
 @callback(
@@ -295,47 +532,118 @@ def get_metadata_stats(
         # Convert to dataframe for faster searching.
         table_data = pd.DataFrame(table_data).fillna("")
 
-        if stain_check:
-            # Get unmapped stains.
-            df = table_data[~table_data.stainID.isin(valid_stains)]
+        # Initialize counters and stats
+        stains = Counter()
+        regions = Counter()
+
+        # Check for stainID column (might be lowercase or have different naming)
+        stain_col = None
+        for possible_name in ["stainID", "stainid", "stain_id", "stain"]:
+            if possible_name in table_data.columns:
+                stain_col = possible_name
+                break
+
+        # Check for regionName column
+        region_col = None
+        for possible_name in ["regionName", "regionname", "region_name", "region"]:
+            if possible_name in table_data.columns:
+                region_col = possible_name
+                break
+
+        # Check for caseID column
+        case_col = None
+        for possible_name in ["caseID", "caseid", "case_id", "case"]:
+            if possible_name in table_data.columns:
+                case_col = possible_name
+                break
+
+        # Process stains if column exists
+        if stain_col:
+            if stain_check:
+                # Get unmapped stains.
+                df = table_data[~table_data[stain_col].isin(valid_stains)]
+            else:
+                df = table_data[table_data[stain_col].isin(valid_stains)]
+
+            stains = Counter(df[stain_col].tolist())
+            stain_valid_count = len(
+                table_data[table_data[stain_col].isin(valid_stains)]
+            )
         else:
-            df = table_data[table_data.stainID.isin(valid_stains)]
+            print("Warning: No stain column found in metadata")
+            stain_valid_count = 0
 
-        stains = Counter(df.stainID.tolist())
+        # Process regions if column exists
+        if region_col:
+            if region_check:
+                # Get unmapped regions.
+                df = table_data[~table_data[region_col].isin(valid_regions)]
+            else:
+                df = table_data[table_data[region_col].isin(valid_regions)]
 
-        if region_check:
-            # Get unmapped regions.
-            df = table_data[~table_data.regionName.isin(valid_regions)]
+            regions = Counter(df[region_col].tolist())
+            region_valid_count = len(
+                table_data[table_data[region_col].isin(valid_regions)]
+            )
         else:
-            df = table_data[table_data.regionName.isin(valid_regions)]
+            print("Warning: No region column found in metadata")
+            region_valid_count = 0
 
-        regions = Counter(df.regionName.tolist())
+        # Calculate valid files count
+        valid_files = 0
+        if case_col and stain_col and region_col:
+            valid_files = len(
+                table_data[
+                    (table_data[case_col] != "")
+                    & (table_data[stain_col].isin(valid_stains))
+                    & (table_data[region_col].isin(valid_regions))
+                ]
+            )
 
-        valid_files = len(
-            table_data[
-                (table_data.caseID != "")
-                & (table_data.stainID.isin(valid_stains))
-                & (table_data.regionName.isin(valid_regions))
-            ]
-        )
-        case_valid_count = len(table_data[table_data.caseID != ""])
-        stain_valid_count = len(table_data[table_data.stainID.isin(valid_stains)])
-        region_valid_count = len(table_data[table_data.regionName.isin(valid_regions)])
+        # Calculate case valid count
+        case_valid_count = 0
+        if case_col:
+            case_valid_count = len(table_data[table_data[case_col] != ""])
 
         N = len(table_data)
 
-        stats_df = pd.DataFrame(
-            [
-                ["Files", f"{valid_files} ({valid_files/N*100:.2f}%)"],
-                ["caseID", f"{case_valid_count} ({case_valid_count/N*100:.2f}%)"],
-                ["stainID", f"{stain_valid_count} ({stain_valid_count/N*100:.2f}%)"],
+        # Create stats dataframe
+        stats_rows = []
+        stats_rows.append(
+            ["Files", f"{valid_files} ({valid_files/N*100:.2f}% if N > 0 else 0)"]
+        )
+
+        if case_col:
+            stats_rows.append(
+                [
+                    "caseID",
+                    f"{case_valid_count} ({case_valid_count/N*100:.2f}% if N > 0 else 0)",
+                ]
+            )
+        else:
+            stats_rows.append(["caseID", "Column not found"])
+
+        if stain_col:
+            stats_rows.append(
+                [
+                    "stainID",
+                    f"{stain_valid_count} ({stain_valid_count/N*100:.2f}% if N > 0 else 0)",
+                ]
+            )
+        else:
+            stats_rows.append(["stainID", "Column not found"])
+
+        if region_col:
+            stats_rows.append(
                 [
                     "regionName",
-                    f"{region_valid_count} ({region_valid_count/N*100:.2f}%)",
-                ],
-            ],
-            columns=["Field", "Validated"],
-        )
+                    f"{region_valid_count} ({region_valid_count/N*100:.2f}% if N > 0 else 0)",
+                ]
+            )
+        else:
+            stats_rows.append(["regionName", "Column not found"])
+
+        stats_df = pd.DataFrame(stats_rows, columns=["Field", "Validated"])
 
         # Populate the stain and region tables.
         stain_df = pd.DataFrame(stains.items(), columns=["Stain", "Count"])
@@ -348,3 +656,42 @@ def get_metadata_stats(
         )
 
     return [], [], []
+
+
+@callback(
+    Output("column-visibility-checklist", "value", allow_duplicate=True),
+    Input("select-all-columns-btn", "n_clicks"),
+    State("column-visibility-checklist", "options"),
+    prevent_initial_call=True,
+)
+def select_all_columns(n_clicks, options):
+    """Select all columns."""
+    if not options:
+        return []
+    return [option["value"] for option in options]
+
+
+@callback(
+    Output("column-visibility-checklist", "value", allow_duplicate=True),
+    Input("deselect-all-columns-btn", "n_clicks"),
+    prevent_initial_call=True,
+)
+def deselect_all_columns(n_clicks):
+    """Deselect all columns."""
+    return []
+
+
+@callback(
+    Output("column-visibility-modal", "is_open"),
+    [
+        Input("open-column-modal-button", "n_clicks"),
+        Input("close-column-modal-button", "n_clicks"),
+    ],
+    [State("column-visibility-modal", "is_open")],
+    prevent_initial_call=True,
+)
+def toggle_column_modal(open_clicks, close_clicks, is_open):
+    """Toggle the column visibility modal."""
+    if open_clicks or close_clicks:
+        return not is_open
+    return is_open

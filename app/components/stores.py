@@ -10,5 +10,11 @@ stores = html.Div(
         dcc.Store(
             id="localFileSet_store", data=get_files_with_size(LOCAL_FILESET_PATH)
         ),
+        # New store for column visibility settings
+        dcc.Store(
+            id="column-visibility-store",
+            data={},
+            storage_type="local",  # This will persist across browser restarts
+        ),
     ]
 )

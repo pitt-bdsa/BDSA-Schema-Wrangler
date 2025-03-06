@@ -53,7 +53,7 @@ tab_list = html.Div(
             # dmc.TabsPanel(html.Div("Mapping Data"), value="mapper"),
         ],
         orientation="horizontal",
-        value="export-tab",
+        value="metadataBrowser",
         color="#007dba",
         inverted=True,
         variant="pills",
