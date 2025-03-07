@@ -1,4 +1,4 @@
-from dash import html, callback, Input, Output, no_update, State, dcc, ctx
+from dash import html, callback, Input, Output, no_update, State, dcc, ctx, ALL
 import pandas as pd
 import dash_ag_grid
 import dash_bootstrap_components as dbc
@@ -173,8 +173,51 @@ column_visibility_button = html.Div(
     style={"display": "inline-block", "margin-right": "10px"},
 )
 
+# Add the column mapping button
+column_mapping_button = html.Div(
+    [
+        dbc.Button(
+            "Map Columns to Schema",
+            id="open-mapping-modal-button",
+            color="warning",
+            className="me-1",
+        ),
+        dbc.Modal(
+            [
+                dbc.ModalHeader("Map Columns to Schema Fields"),
+                dbc.ModalBody(
+                    [
+                        html.P(
+                            "Select which columns in your data correspond to schema fields:",
+                            className="mb-3",
+                        ),
+                        html.Div(id="column-mapping-container"),
+                        dbc.Button(
+                            "Apply Mappings",
+                            id="apply-mappings-btn",
+                            color="success",
+                            className="mt-3",
+                        ),
+                    ]
+                ),
+                dbc.ModalFooter(
+                    dbc.Button(
+                        "Close", id="close-mapping-modal-button", className="ms-auto"
+                    )
+                ),
+            ],
+            id="column-mapping-modal",
+            size="lg",
+            is_open=False,
+        ),
+    ],
+    style={"display": "inline-block", "margin-right": "10px"},
+)
+
+# Add the download component to the layout
 metadataBrowser_tab = html.Div(
     [
+        dcc.Download(id="download-dataframe-csv"),
         html.Div(
             [
                 dcc.Upload(
@@ -212,6 +255,7 @@ metadataBrowser_tab = html.Div(
                     color="info",
                     className="me-1",
                 ),
+                column_mapping_button,
                 column_visibility_button,
                 html.Div(
                     "Showing metadata for files for:",
@@ -344,6 +388,11 @@ def update_column_visibility(selected_columns, options, current_visibility):
     for col in all_columns:
         visibility[col] = col in selected_columns
 
+    # Always make standardized columns visible
+    for col in ["bdsaCaseID", "bdsaRegionID", "bdsaStainID"]:
+        if col in all_columns:
+            visibility[col] = True
+
     return visibility
 
 
@@ -409,7 +458,13 @@ def update_table_columns(
         for col_def in existing_column_defs:
             field = col_def["field"]
             new_col_def = col_def.copy()
-            new_col_def["hide"] = not visibility.get(field, True)
+
+            # Always show standardized columns
+            if field in ["bdsaCaseID", "bdsaRegionID", "bdsaStainID"]:
+                new_col_def["hide"] = False
+            else:
+                new_col_def["hide"] = not visibility.get(field, True)
+
             updated_column_defs.append(new_col_def)
 
         return updated_column_defs
@@ -417,15 +472,40 @@ def update_table_columns(
     elif metadata_data:
         # Data changed, create new column definitions
         df = pd.DataFrame(metadata_data).fillna("")
+
+        # Ensure standardized columns exist
+        for col in ["bdsaCaseID", "bdsaRegionID", "bdsaStainID"]:
+            if col not in df.columns:
+                df[col] = ""
+
+        # Reorder columns to put standardized columns first
+        cols = df.columns.tolist()
+        for col in ["bdsaCaseID", "bdsaRegionID", "bdsaStainID"]:
+            if col in cols:
+                cols.remove(col)
+
+        df = df[["bdsaCaseID", "bdsaRegionID", "bdsaStainID"] + cols]
+
+        # Create column definitions
         columnDefs = _get_column_defs(df.columns, existing_column_defs)
 
         # Apply visibility settings if available
         if visibility:
             for col_def in columnDefs:
                 field = col_def["field"]
-                # For existing columns, use stored visibility
-                # For new columns, default to visible
-                col_def["hide"] = not visibility.get(field, True)
+
+                # Always show standardized columns
+                if field in ["bdsaCaseID", "bdsaRegionID", "bdsaStainID"]:
+                    col_def["hide"] = False
+                else:
+                    # For existing columns, use stored visibility
+                    # For new columns, default to visible
+                    col_def["hide"] = not visibility.get(field, True)
+
+        # Ensure standardized columns are pinned to the left
+        for col_def in columnDefs:
+            if col_def["field"] in ["bdsaCaseID", "bdsaRegionID", "bdsaStainID"]:
+                col_def["pinned"] = "left"
 
         return columnDefs
 
@@ -505,22 +585,19 @@ def toggle_collapse(n_clicks: int, is_open: bool) -> bool:
         Input("stains-switch", "checked"),
         Input("regions-switch", "checked"),
     ],
+    [
+        State("column-mapping-store", "data"),
+    ],
     prevent_initial_call=True,
 )
 def get_metadata_stats(
-    table_data: list[dict], _: dict, stain_check: bool, region_check: bool
+    table_data: list[dict],
+    _: dict,
+    stain_check: bool,
+    region_check: bool,
+    column_mappings: dict,
 ):
-    """Get the metadata stats to populate the summary tables.
-
-    Args:
-        table_data (list[dict]): The metadata table data.
-        _ (dict): The cellValueChanged event data.
-        stain_check (bool): The stain switch state.
-        region_check (bool): The region switch state.
-
-    Returns:
-
-    """
+    """Get the metadata stats to populate the summary tables."""
     if len(table_data):
         # Read the schema.
         with open("schemaFiles/adrcNpSchema.json", "r") as fh:
@@ -536,112 +613,142 @@ def get_metadata_stats(
         stains = Counter()
         regions = Counter()
 
-        # Check for stainID column (might be lowercase or have different naming)
-        stain_col = None
-        for possible_name in ["stainID", "stainid", "stain_id", "stain"]:
-            if possible_name in table_data.columns:
-                stain_col = possible_name
-                break
+        # Get mapped column names
+        stain_col = column_mappings.get("stainID")
+        region_col = column_mappings.get("regionName")
+        case_col = column_mappings.get("caseID")
 
-        # Check for regionName column
-        region_col = None
-        for possible_name in ["regionName", "regionname", "region_name", "region"]:
-            if possible_name in table_data.columns:
-                region_col = possible_name
-                break
+        # Use standardized columns if they exist
+        if "bdsaStainID" in table_data.columns:
+            stain_col = "bdsaStainID"
+        elif not stain_col:
+            for col in ["stainID", "stain_id", "stain", "Stain"]:
+                if col in table_data.columns:
+                    stain_col = col
+                    break
 
-        # Check for caseID column
-        case_col = None
-        for possible_name in ["caseID", "caseid", "case_id", "case"]:
-            if possible_name in table_data.columns:
-                case_col = possible_name
-                break
+        if "bdsaRegionID" in table_data.columns:
+            region_col = "bdsaRegionID"
+        elif not region_col:
+            for col in ["regionName", "region_name", "region", "Region"]:
+                if col in table_data.columns:
+                    region_col = col
+                    break
 
-        # Process stains if column exists
-        if stain_col:
-            if stain_check:
-                # Get unmapped stains.
-                df = table_data[~table_data[stain_col].isin(valid_stains)]
-            else:
-                df = table_data[table_data[stain_col].isin(valid_stains)]
+        if "bdsaCaseID" in table_data.columns:
+            case_col = "bdsaCaseID"
+        elif not case_col:
+            for col in ["caseID", "case_id", "case", "Case"]:
+                if col in table_data.columns:
+                    case_col = col
+                    break
 
-            stains = Counter(df[stain_col].tolist())
+        # Calculate stain stats
+        stain_valid_count = 0
+        if stain_col and stain_col in table_data.columns:
+            # Count valid stains
             stain_valid_count = len(
                 table_data[table_data[stain_col].isin(valid_stains)]
             )
-        else:
-            print("Warning: No stain column found in metadata")
-            stain_valid_count = 0
 
-        # Process regions if column exists
-        if region_col:
-            if region_check:
-                # Get unmapped regions.
-                df = table_data[~table_data[region_col].isin(valid_regions)]
-            else:
-                df = table_data[table_data[region_col].isin(valid_regions)]
+            # Count stain frequencies
+            if stain_check:
+                stain_counts = table_data[stain_col].value_counts().to_dict()
+                stains.update(stain_counts)
 
-            regions = Counter(df[region_col].tolist())
+        # Calculate region stats
+        region_valid_count = 0
+        if region_col and region_col in table_data.columns:
+            # Count valid regions
             region_valid_count = len(
                 table_data[table_data[region_col].isin(valid_regions)]
             )
-        else:
-            print("Warning: No region column found in metadata")
-            region_valid_count = 0
 
-        # Calculate valid files count
+            # Count region frequencies
+            if region_check:
+                region_counts = table_data[region_col].value_counts().to_dict()
+                regions.update(region_counts)
+
+        # Calculate file validity
         valid_files = 0
-        if case_col and stain_col and region_col:
+        if (
+            stain_col
+            and region_col
+            and stain_col in table_data.columns
+            and region_col in table_data.columns
+        ):
             valid_files = len(
                 table_data[
-                    (table_data[case_col] != "")
-                    & (table_data[stain_col].isin(valid_stains))
-                    & (table_data[region_col].isin(valid_regions))
+                    table_data[stain_col].isin(valid_stains)
+                    & table_data[region_col].isin(valid_regions)
                 ]
             )
 
         # Calculate case valid count
         case_valid_count = 0
-        if case_col:
+        if case_col and case_col in table_data.columns:
             case_valid_count = len(table_data[table_data[case_col] != ""])
 
         N = len(table_data)
 
-        # Create stats dataframe
+        # Create stats dataframe with proper percentage formatting
         stats_rows = []
-        stats_rows.append(
-            ["Files", f"{valid_files} ({valid_files/N*100:.2f}% if N > 0 else 0)"]
-        )
 
-        if case_col:
-            stats_rows.append(
-                [
-                    "caseID",
-                    f"{case_valid_count} ({case_valid_count/N*100:.2f}% if N > 0 else 0)",
-                ]
+        # Format percentages properly
+        if N > 0:
+            files_pct = f"{valid_files} ({valid_files/N*100:.2f}%)"
+            case_pct = (
+                f"{case_valid_count} ({case_valid_count/N*100:.2f}%)"
+                if case_col and case_col in table_data.columns
+                else "Column not found or not mapped"
+            )
+            stain_pct = (
+                f"{stain_valid_count} ({stain_valid_count/N*100:.2f}%)"
+                if stain_col and stain_col in table_data.columns
+                else "Column not found or not mapped"
+            )
+            region_pct = (
+                f"{region_valid_count} ({region_valid_count/N*100:.2f}%)"
+                if region_col and region_col in table_data.columns
+                else "Column not found or not mapped"
             )
         else:
-            stats_rows.append(["caseID", "Column not found"])
-
-        if stain_col:
-            stats_rows.append(
-                [
-                    "stainID",
-                    f"{stain_valid_count} ({stain_valid_count/N*100:.2f}% if N > 0 else 0)",
-                ]
+            files_pct = "0 (0.00%)"
+            case_pct = (
+                "0 (0.00%)"
+                if case_col and case_col in table_data.columns
+                else "Column not found or not mapped"
             )
-        else:
-            stats_rows.append(["stainID", "Column not found"])
-
-        if region_col:
-            stats_rows.append(
-                [
-                    "regionName",
-                    f"{region_valid_count} ({region_valid_count/N*100:.2f}% if N > 0 else 0)",
-                ]
+            stain_pct = (
+                "0 (0.00%)"
+                if stain_col and stain_col in table_data.columns
+                else "Column not found or not mapped"
             )
+            region_pct = (
+                "0 (0.00%)"
+                if region_col and region_col in table_data.columns
+                else "Column not found or not mapped"
+            )
+
+        stats_rows.append(["Files", files_pct])
+
+        if case_col and case_col in table_data.columns:
+            stats_rows.append(["caseID", case_pct])
+            stats_rows.append(["caseID column", case_col])
         else:
-            stats_rows.append(["regionName", "Column not found"])
+            stats_rows.append(["caseID", "Column not found or not mapped"])
+
+        if stain_col and stain_col in table_data.columns:
+            stats_rows.append(["stainID", stain_pct])
+            stats_rows.append(["stainID column", stain_col])
+        else:
+            stats_rows.append(["stainID", "Column not found or not mapped"])
+
+        if region_col and region_col in table_data.columns:
+            stats_rows.append(["regionName", region_pct])
+            stats_rows.append(["regionName column", region_col])
+        else:
+            stats_rows.append(["regionName", "Column not found or not mapped"])
 
         stats_df = pd.DataFrame(stats_rows, columns=["Field", "Validated"])
 
@@ -695,3 +802,228 @@ def toggle_column_modal(open_clicks, close_clicks, is_open):
     if open_clicks or close_clicks:
         return not is_open
     return is_open
+
+
+@callback(
+    Output("column-mapping-modal", "is_open"),
+    [
+        Input("open-mapping-modal-button", "n_clicks"),
+        Input("close-mapping-modal-button", "n_clicks"),
+        Input("apply-mappings-btn", "n_clicks"),
+    ],
+    [State("column-mapping-modal", "is_open")],
+    prevent_initial_call=True,
+)
+def toggle_mapping_modal(open_clicks, close_clicks, apply_clicks, is_open):
+    """Toggle the column mapping modal."""
+    if open_clicks or close_clicks or apply_clicks:
+        return not is_open
+    return is_open
+
+
+@callback(
+    Output("column-mapping-container", "children"),
+    Input("open-mapping-modal-button", "n_clicks"),
+    [
+        State("metadata-store", "data"),
+        State("column-mapping-store", "data"),
+    ],
+    prevent_initial_call=True,
+)
+def populate_mapping_form(n_clicks, metadata_data, stored_mappings):
+    """Populate the column mapping form with schema fields and data columns."""
+    if not metadata_data:
+        return html.Div("No data loaded. Please load data first.")
+
+    # Load schema
+    try:
+        with open("schemaFiles/adrcNpSchema.json", "r") as f:
+            schema = json.load(f)
+
+        # Get schema fields (top-level properties)
+        schema_fields = list(schema.get("properties", {}).keys())
+
+        # Get data columns
+        df = pd.DataFrame(metadata_data)
+        data_columns = df.columns.tolist()
+
+        # Create dropdown options for data columns
+        column_options = [{"label": col, "value": col} for col in data_columns]
+        column_options.insert(0, {"label": "-- Not Mapped --", "value": ""})
+
+        # Create a mapping form for each schema field
+        mapping_form = []
+        for field in schema_fields:
+            # Get current mapping if it exists
+            current_value = stored_mappings.get(field, "")
+
+            mapping_form.append(
+                dbc.Row(
+                    [
+                        dbc.Col(html.Label(field), width=4),
+                        dbc.Col(
+                            dbc.Select(
+                                id={"type": "schema-field-mapping", "field": field},
+                                options=column_options,
+                                value=current_value,
+                            ),
+                            width=8,
+                        ),
+                    ],
+                    className="mb-2",
+                )
+            )
+
+        return html.Div(mapping_form)
+
+    except Exception as e:
+        return html.Div(f"Error loading schema: {str(e)}")
+
+
+@callback(
+    Output("column-mapping-store", "data"),
+    Input("apply-mappings-btn", "n_clicks"),
+    [
+        State({"type": "schema-field-mapping", "field": ALL}, "value"),
+        State({"type": "schema-field-mapping", "field": ALL}, "id"),
+        State("column-mapping-store", "data"),
+    ],
+    prevent_initial_call=True,
+)
+def update_column_mappings(n_clicks, values, ids, current_mappings):
+    """Update the column mappings based on user selection."""
+    if not n_clicks:
+        return current_mappings
+
+    # Start with existing mappings
+    mappings = current_mappings.copy() if current_mappings else {}
+
+    # Update mappings based on form values
+    for i, id_obj in enumerate(ids):
+        field = id_obj["field"]
+        value = values[i]
+
+        # Only store non-empty mappings
+        if value:
+            mappings[field] = value
+        elif field in mappings:
+            # Remove mapping if set to empty
+            del mappings[field]
+
+    return mappings
+
+
+@callback(
+    Output("metadata-store", "data", allow_duplicate=True),
+    Input("apply-mappings-btn", "n_clicks"),
+    [
+        State("metadata-store", "data"),
+        State("column-mapping-store", "data"),
+    ],
+    prevent_initial_call=True,
+)
+def apply_column_mappings(n_clicks, metadata_data, mappings):
+    """Apply column mappings to the metadata and add standardized columns."""
+    if not n_clicks or not metadata_data or not mappings:
+        return metadata_data
+
+    # Convert to DataFrame for easier manipulation
+    df = pd.DataFrame(metadata_data)
+
+    # Create standardized columns
+    # First, check if the mapped columns exist
+    stain_col = mappings.get("stainID")
+    region_col = mappings.get("regionName")
+    case_col = mappings.get("caseID")
+
+    # Create the standardized columns
+    if stain_col and stain_col in df.columns:
+        df["bdsaStainID"] = df[stain_col]
+    else:
+        df["bdsaStainID"] = ""
+
+    if region_col and region_col in df.columns:
+        df["bdsaRegionID"] = df[region_col]
+    else:
+        df["bdsaRegionID"] = ""
+
+    if case_col and case_col in df.columns:
+        df["bdsaCaseID"] = df[case_col]
+    else:
+        df["bdsaCaseID"] = ""
+
+    # Reorder columns to put standardized columns first
+    cols = df.columns.tolist()
+    for col in ["bdsaCaseID", "bdsaRegionID", "bdsaStainID"]:
+        if col in cols:
+            cols.remove(col)
+
+    # Put standardized columns first
+    new_cols = ["bdsaCaseID", "bdsaRegionID", "bdsaStainID"] + cols
+    df = df[new_cols]
+
+    return df.to_dict("records")
+
+
+@callback(
+    Output("download-dataframe-csv", "data"),
+    Input("export-btn", "n_clicks"),
+    State("metadata-table", "rowData"),
+    prevent_initial_call=True,
+)
+def export_csv(n_clicks, table_data):
+    """Export the metadata table to a CSV file."""
+    if n_clicks and table_data:
+        df = pd.DataFrame(table_data)
+
+        # Ensure standardized columns are first
+        cols = df.columns.tolist()
+        std_cols = ["bdsaCaseID", "bdsaRegionID", "bdsaStainID"]
+        for col in std_cols:
+            if col in cols:
+                cols.remove(col)
+
+        # Reorder columns
+        if any(col in df.columns for col in std_cols):
+            present_std_cols = [col for col in std_cols if col in df.columns]
+            df = df[present_std_cols + cols]
+
+        return dcc.send_data_frame(df.to_csv, "metadata_export.csv", index=False)
+
+    return no_update
+
+
+def add_standardized_columns(df, mappings):
+    """Add standardized columns to the dataframe."""
+    # Get mapped column names
+    stain_col = mappings.get("stainID") if mappings else None
+    region_col = mappings.get("regionName") if mappings else None
+    case_col = mappings.get("caseID") if mappings else None
+
+    # Create the standardized columns
+    if stain_col and stain_col in df.columns:
+        df["bdsaStainID"] = df[stain_col]
+    else:
+        df["bdsaStainID"] = ""
+
+    if region_col and region_col in df.columns:
+        df["bdsaRegionID"] = df[region_col]
+    else:
+        df["bdsaRegionID"] = ""
+
+    if case_col and case_col in df.columns:
+        df["bdsaCaseID"] = df[case_col]
+    else:
+        df["bdsaCaseID"] = ""
+
+    # Reorder columns to put standardized columns first
+    cols = df.columns.tolist()
+    for col in ["bdsaCaseID", "bdsaRegionID", "bdsaStainID"]:
+        if col in cols:
+            cols.remove(col)
+
+    # Put standardized columns first
+    new_cols = ["bdsaCaseID", "bdsaRegionID", "bdsaStainID"] + cols
+    df = df[new_cols]
+
+    return df
