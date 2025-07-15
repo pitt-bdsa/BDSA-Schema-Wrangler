@@ -1,0 +1,212 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://example.com/product.schema.json",
+    "title": "BDSA Slide-Level Schema",
+    "type": "object",
+    "required": [
+        "bdsa_case_id",
+        "bdsa_stain_id",
+        "block_id"
+    ],
+    "properties": {
+        "bdsa_case_id": {
+            "type": "string",
+            "title": "BDSA ID",
+            "pattern": "^BDSA\\d+\\.\\d+$",
+            "description": "Unique BDSA case identifier of specified format: \"BDSA-01-0001\", where 01 is the BDSA institution ID, and 0001 is the BDSA case ID within the institution."
+        },
+        "bdsa_stain_id": {
+            "type": "array",
+            "description": "Choose a single stain for the image.",
+            "items": {
+                "title": "Stain ID",
+                "description": "Stain used on tissue section, with potentially additional information.",
+                "properties": {
+                    "TDP-43": {
+                        "type": "object",
+                        "title": "TDP-43",
+                        "required": ["phospho-specific"],
+                        "properties": {
+                            "phospho-specific": {
+                                "type": "string",
+                                "title": "Phospho-specific",
+                                "enum": [
+                                    "yes",
+                                    "no"
+                                ]
+                            },
+                            "dilution": {
+                                "type": "string",
+                                "title": "Dilution",
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
+                            },
+                            "vendor": {
+                                "type": "string",
+                                "title": "Vendor",
+                                "pattern": "^\\w+$"
+                            }
+                        }
+                    },
+                    "aSyn": {
+                        "type": "object",
+                        "title": "Alpha Synuclein",
+                        "required": ["phospho-specific"],
+                        "properties": {
+                            "phospho-specific": {
+                                "type": "string",
+                                "title": "Phospho-specific",
+                                "enum": [
+                                    "yes",
+                                    "no"
+                                ]
+                            },
+                            "dilution": {
+                                "type": "string",
+                                "title": "Dilution",
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
+                            },
+                            "vendor": {
+                                "type": "string",
+                                "title": "Vendor",
+                                "pattern": "^\\w+$"
+                            }
+                        }
+                    },
+                    "HE": {
+                        "type": "object",
+                        "title": "HE",
+                        "properties": {
+                            "dilution": {
+                                "type": "string",
+                                "title": "Dilution",
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
+                            },
+                            "vendor": {
+                                "type": "string",
+                                "title": "Vendor",
+                                "pattern": "^\\w+$"
+                            }
+                        }
+                    },
+                    "Silver": {
+                        "type": "object",
+                        "title": "Silver",
+                        "required": ["technique"],
+                        "properties": {
+                            "technique": {
+                                "type": "string",
+                                "title": "Silver Stain",
+                                "enum": [
+                                    "Bielschowsky",
+                                    "Gallyas",
+                                    "Campbell-Switzer"
+                                ]
+                            },
+                            "dilution": {
+                                "type": "string",
+                                "title": "Dilution",
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
+                            },
+                            "vendor": {
+                                "type": "string",
+                                "title": "Vendor",
+                                "pattern": "^\\w+$"
+                            }
+                        }
+                    },
+                    "Thioflavin": {
+                        "type": "object",
+                        "title": "Thioflavin"
+                    },
+                    "Tau": {
+                        "type": "object",
+                        "title": "Tau",
+                        "required": ["antibody"],
+                        "properties": {
+                            "antibody": {
+                                "type": "string",
+                                "title": "Antibody",
+                                "enum": [
+                                    "AT8",
+                                    "PHF1",
+                                    "CP13",
+                                    "unknown"
+                                ]
+                            },
+                            "vendor": {
+                                "type": "string",
+                                "title": "Vendor",
+                                "pattern": "^\\w+$"
+                            },
+                            "dilution": {
+                                "type": "string",
+                                "title": "Dilution",
+                                "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
+                            }
+                        }
+                    },
+                    "aBeta": {
+                        "type": "object",
+                        "title": "aBeta",
+                        "required": ["antibody"],
+                        "properties": {
+                            "antibody": {
+                                "type": "string",
+                                "title": "Antibody",
+                                "enum": [
+                                    "4G8",
+                                    "6E10",
+                                    "unknown"
+                                ]
+                            },
+                            "vendor": {
+                                "type": "string",
+                                "title": "Vendor",
+                                "pattern": "^\\w+$"
+                            },
+                            "dilution": {
+                                "type": "string",
+                                "title": "Dilution",
+                                "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "minProperties": 1,
+                "maxProperties": 1
+            }
+        },
+        "block_id": {
+            "type": "string",
+            "title": "Block ID",
+            "pattern": "^\\w+$",
+            "description": "Unique institutional block identifier, can be any format."
+        }
+    }
+}

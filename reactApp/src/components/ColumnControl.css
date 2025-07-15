@@ -1,0 +1,242 @@
+/* Column Control Button */
+.show-columns-btn,
+.mapping-btn {
+    background: #1976d2;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 18px;
+    font-size: 1rem;
+    cursor: pointer;
+    margin-bottom: 8px;
+    margin-right: 10px;
+    transition: background 0.2s;
+}
+
+.show-columns-btn:hover,
+.mapping-btn:hover {
+    background: #125ea2;
+}
+
+.mapping-btn {
+    background: #28a745;
+}
+
+.mapping-btn:hover {
+    background: #218838;
+}
+
+/* Modal styles */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background: #fff;
+    border-radius: 10px;
+    padding: 32px 24px 24px 24px;
+    min-width: 320px;
+    max-width: 90vw;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.modal-content h2 {
+    margin-top: 0;
+    margin-bottom: 16px;
+    font-size: 1.4rem;
+    text-align: center;
+    width: 100%;
+}
+
+.modal-content h3 {
+    margin-top: 24px;
+    margin-bottom: 12px;
+    font-size: 1.2rem;
+    text-align: left;
+    width: 100%;
+    color: #333;
+    border-bottom: 2px solid #e0e0e0;
+    padding-bottom: 8px;
+}
+
+/* Mapping Section Styles */
+.mapping-section {
+    width: 100%;
+    margin-bottom: 24px;
+    text-align: left;
+}
+
+.mapping-description {
+    color: #666;
+    font-size: 0.9rem;
+    margin-bottom: 16px;
+    line-height: 1.4;
+}
+
+.mapping-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.mapping-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.mapping-row label {
+    min-width: 120px;
+    font-weight: 500;
+    color: #333;
+    font-size: 0.95rem;
+}
+
+.mapping-row select {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    background: white;
+    color: #333;
+}
+
+.mapping-row select:focus {
+    outline: none;
+    border-color: #1976d2;
+    box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
+}
+
+/* Visibility Section Styles */
+.visibility-section {
+    width: 100%;
+}
+
+/* Mapped Column Highlighting */
+.mapped-column {
+    color: #1976d2;
+    font-weight: 600;
+    background: rgba(25, 118, 210, 0.1);
+    padding: 2px 6px;
+    border-radius: 3px;
+    border-left: 3px solid #1976d2;
+}
+
+.modal-column-list {
+    max-height: 350px;
+    overflow-y: auto;
+    width: 100%;
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.modal-column-list label {
+    display: block;
+    margin-bottom: 12px;
+    font-size: 1.2rem;
+    font-weight: 400;
+    cursor: pointer;
+    line-height: 1.4;
+    color: #222;
+}
+
+.modal-column-list input[type="checkbox"] {
+    margin-right: 12px;
+    transform: scale(1.2);
+}
+
+.close-modal-btn {
+    align-self: flex-end;
+    background: #1976d2;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 18px;
+    font-size: 1rem;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: background 0.2s;
+}
+
+.close-modal-btn:hover {
+    background: #125ea2;
+}
+
+.column-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.pie-btn {
+    background: #f5f5f5;
+    border: 1px solid #bbb;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    margin-left: 12px;
+    cursor: pointer;
+    transition: background 0.2s, border 0.2s;
+}
+
+.pie-btn:hover:not(:disabled) {
+    background: #e3f2fd;
+    border-color: #1976d2;
+}
+
+.pie-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Pie Chart Modal Specific Styles */
+.pie-modal-content {
+    min-width: 500px !important;
+    min-height: 500px !important;
+    max-width: 700px !important;
+    padding: 40px 30px 30px 30px !important;
+}
+
+.pie-modal-content h2 {
+    margin-bottom: 24px !important;
+    font-size: 1.5rem !important;
+}
+
+.pie-modal-content .recharts-wrapper {
+    margin: 0 auto;
+}
+
+.pie-modal-content .recharts-legend-wrapper {
+    padding-top: 10px;
+}
+
+.pie-modal-content .recharts-legend-item {
+    margin-right: 16px;
+    margin-bottom: 8px;
+}
+
+.pie-modal-content .close-modal-btn {
+    align-self: center !important;
+    margin-top: 20px !important;
+}
