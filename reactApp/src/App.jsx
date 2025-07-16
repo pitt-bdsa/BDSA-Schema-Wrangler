@@ -3,6 +3,7 @@ import TabView from './components/TabView';
 import InputDataTab from './components/InputDataTab';
 import BDSAchemaTab from './components/BDSAchemaTab';
 import ProtocolsTab from './components/ProtocolsTab';
+import CaseManagementTab from './components/CaseManagementTab';
 import './App.css';
 
 function App() {
@@ -16,6 +17,7 @@ function App() {
         <InputDataTab />
         <BDSAchemaTab />
         <ProtocolsTab />
+        <CaseManagementTab />
       </TabView>
     </div>
   );

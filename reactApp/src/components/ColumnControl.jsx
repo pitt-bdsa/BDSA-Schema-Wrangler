@@ -39,6 +39,7 @@ const ColumnControl = ({ allColumns, rowData, onColumnVisibilityChange, onColumn
     const [hiddenColumns, setHiddenColumns] = useState(() => {
         try {
             const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+            console.log('Loading hidden columns from localStorage:', stored);
             return stored ? JSON.parse(stored) : [];
         } catch (error) {
             console.warn('Error loading hidden columns from localStorage:', error);
@@ -48,6 +49,7 @@ const ColumnControl = ({ allColumns, rowData, onColumnVisibilityChange, onColumn
     const [columnMapping, setColumnMapping] = useState(() => {
         try {
             const stored = localStorage.getItem(COLUMN_MAPPING_KEY);
+            console.log('Loading column mapping from localStorage:', stored);
             return stored ? JSON.parse(stored) : {
                 localStainID: '',
                 localCaseId: '',
