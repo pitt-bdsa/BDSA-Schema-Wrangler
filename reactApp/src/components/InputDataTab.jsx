@@ -23,9 +23,17 @@ const InputDataTab = () => {
     });
     const [loading, setLoading] = useState(true);
     const [gridTheme, setGridTheme] = useState('alpine');
+    const [bdsaInstitutionId, setBdsaInstitutionId] = useState('001');
+    const [showBdsaSettings, setShowBdsaSettings] = useState(false);
+    const [caseIdMappings, setCaseIdMappings] = useState({});
+    const [showCaseIdMapping, setShowCaseIdMapping] = useState(false);
+    const [columnWidths, setColumnWidths] = useState({});
+    const [columnOrder, setColumnOrder] = useState([]);
 
     useEffect(() => {
         loadCSVData();
+        loadCaseIdMappings();
+        loadColumnWidths();
     }, []);
 
     const loadCSVData = async () => {
@@ -62,6 +70,82 @@ const InputDataTab = () => {
         }
     };
 
+    const loadCaseIdMappings = () => {
+        try {
+            const stored = localStorage.getItem('bdsa_case_id_mappings');
+            if (stored) {
+                setCaseIdMappings(JSON.parse(stored));
+            }
+        } catch (error) {
+            console.error('Error loading case ID mappings:', error);
+        }
+    };
+
+    const saveCaseIdMappings = (mappings) => {
+        try {
+            localStorage.setItem('bdsa_case_id_mappings', JSON.stringify(mappings));
+            setCaseIdMappings(mappings);
+        } catch (error) {
+            console.error('Error saving case ID mappings:', error);
+        }
+    };
+
+    const loadColumnWidths = () => {
+        try {
+            const stored = localStorage.getItem('bdsa_column_widths');
+            if (stored) {
+                setColumnWidths(JSON.parse(stored));
+            }
+        } catch (error) {
+            console.error('Error loading column widths:', error);
+        }
+    };
+
+    const saveColumnWidths = (widths) => {
+        try {
+            localStorage.setItem('bdsa_column_widths', JSON.stringify(widths));
+            setColumnWidths(widths);
+        } catch (error) {
+            console.error('Error saving column widths:', error);
+        }
+    };
+
+    const addCaseIdMapping = (localCaseId, bdsaCaseId) => {
+        const newMappings = { ...caseIdMappings, [localCaseId]: bdsaCaseId };
+        saveCaseIdMappings(newMappings);
+    };
+
+    const getUniqueCaseIds = () => {
+        if (!columnMapping.localCaseId || !rowData.length) return [];
+
+        const caseIdCounts = {};
+        rowData.forEach(row => {
+            const caseId = row[columnMapping.localCaseId];
+            if (caseId) {
+                caseIdCounts[caseId] = (caseIdCounts[caseId] || 0) + 1;
+            }
+        });
+
+        return Object.entries(caseIdCounts)
+            .map(([caseId, count]) => ({
+                localCaseId: caseId,
+                rowCount: count,
+                bdsaCaseId: caseIdMappings[caseId] || null
+            }))
+            .sort((a, b) => a.localCaseId.localeCompare(b.localCaseId));
+    };
+
+    const updateCaseIdMapping = (localCaseId, bdsaCaseId) => {
+        if (bdsaCaseId) {
+            addCaseIdMapping(localCaseId, bdsaCaseId);
+        } else {
+            // Remove mapping if BDSA case ID is empty
+            const newMappings = { ...caseIdMappings };
+            delete newMappings[localCaseId];
+            saveCaseIdMappings(newMappings);
+        }
+    };
+
     const handleColumnVisibilityChange = useCallback((hiddenCols) => {
         setHiddenColumns(hiddenCols);
     }, []);
@@ -70,12 +154,199 @@ const InputDataTab = () => {
         setColumnMapping(mapping);
     }, []);
 
+    const handleColumnOrderChange = useCallback((order) => {
+        setColumnOrder(order);
+    }, []);
+
+    const handleColumnResized = useCallback((event) => {
+        if (!event.columnApi) return;
+
+        const newWidths = { ...columnWidths };
+        event.columnApi.getAllDisplayedColumns().forEach(col => {
+            newWidths[col.getColId()] = col.getActualWidth();
+        });
+        saveColumnWidths(newWidths);
+    }, [columnWidths]);
+
+    const getDisplayName = (fieldName) => {
+        if (fieldName.startsWith('meta.')) {
+            return fieldName.substring(5); // Remove 'meta.' prefix
+        }
+        return fieldName;
+    };
+
+    const handleGridReady = useCallback((params) => {
+        // Set title attributes for column headers
+        setTimeout(() => {
+            const headerTexts = document.querySelectorAll('.ag-header-cell-text');
+            headerTexts.forEach(headerText => {
+                const fullText = headerText.textContent || headerText.innerText;
+                headerText.setAttribute('title', fullText);
+            });
+        }, 100);
+    }, []);
+
+
+
     const handleThemeChange = (event) => {
         setGridTheme(event.target.value);
     };
 
+    const generateBdsaCaseId = (localCaseId) => {
+        if (!localCaseId || !bdsaInstitutionId) return '';
+
+        // Only return BDSA case ID if we have a stored mapping
+        if (caseIdMappings[localCaseId]) {
+            return caseIdMappings[localCaseId];
+        }
+
+        // Return empty string for unmapped cases
+        return '';
+    };
+
+    const getNextSequentialNumber = () => {
+        // Get all existing BDSA case IDs and find the highest number
+        const existingNumbers = Object.values(caseIdMappings)
+            .filter(id => id && id.startsWith(`BDSA-${bdsaInstitutionId.padStart(3, '0')}-`))
+            .map(id => {
+                const match = id.match(/BDSA-\d{3}-(\d{4})/);
+                return match ? parseInt(match[1], 10) : 0;
+            });
+
+        const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
+        return maxNumber + 1;
+    };
+
+    const generateSequentialBdsaCaseId = (localCaseId) => {
+        if (!localCaseId || !bdsaInstitutionId) return;
+
+        const nextNumber = getNextSequentialNumber();
+        const bdsaCaseId = `BDSA-${bdsaInstitutionId.padStart(3, '0')}-${nextNumber.toString().padStart(4, '0')}`;
+        addCaseIdMapping(localCaseId, bdsaCaseId);
+    };
+
     const getVisibleColumns = () => {
-        return columnDefs.filter(col => !hiddenColumns.includes(col.field));
+        // Map of mapping keys to display names
+        const mappingLabels = {
+            localCaseId: 'localCaseID',
+            localStainID: 'localStainID',
+            localRegionId: 'localRegionID'
+        };
+        // Build an array of { field, label } for mapped columns, in the desired order
+        const mappedColumnsInfo = [
+            { field: columnMapping.localCaseId, label: mappingLabels.localCaseId },
+            { field: columnMapping.localStainID, label: mappingLabels.localStainID },
+            { field: columnMapping.localRegionId, label: mappingLabels.localRegionId }
+        ].filter(item => item.field);
+
+        // Remove duplicates and hidden columns
+        const mappedColumns = mappedColumnsInfo
+            .filter((item, idx, arr) => arr.findIndex(i => i.field === item.field) === idx)
+            .map(item => {
+                const col = columnDefs.find(col => col.field === item.field);
+                if (!col || hiddenColumns.includes(col.field)) return null;
+                // Override headerName for mapped columns and set smaller width
+                const savedWidth = columnWidths[item.field];
+                return {
+                    ...col,
+                    headerName: item.label,
+                    minWidth: 140,
+                    width: savedWidth || 140,
+
+                };
+            })
+            .filter(Boolean);
+
+        // Add BDSA Case ID column if local case ID is mapped
+        let bdsaCaseIdColumn = null;
+        if (columnMapping.localCaseId) {
+            const savedWidth = columnWidths['bdsa_case_id'];
+            bdsaCaseIdColumn = {
+                field: 'bdsa_case_id',
+                headerName: 'BDSA Case ID',
+                sortable: true,
+                filter: true,
+                resizable: true,
+                minWidth: 150,
+                width: savedWidth || 150,
+
+
+                valueGetter: (params) => {
+                    const localCaseId = params.data[columnMapping.localCaseId];
+                    return generateBdsaCaseId(localCaseId);
+                },
+                cellStyle: (params) => {
+                    const localCaseId = params.data[columnMapping.localCaseId];
+                    // Check if this local case ID has been manually mapped
+                    if (localCaseId && caseIdMappings[localCaseId]) {
+                        return { backgroundColor: '#d4edda', color: '#155724' };
+                    }
+                    return { backgroundColor: '#f8d7da', color: '#721c24' }; // Red background for unmapped
+                }
+            };
+        }
+
+        // All other columns, excluding mapped and hidden
+        const mappedSet = new Set(mappedColumnsInfo.map(item => item.field));
+        const otherColumns = columnDefs.filter(
+            col => !mappedSet.has(col.field) && !hiddenColumns.includes(col.field)
+        ).map(col => {
+            const savedWidth = columnWidths[col.field];
+            return {
+                ...col,
+                headerName: getDisplayName(col.field),
+                width: savedWidth || col.width || 150,
+
+            };
+        });
+
+        // Apply custom column order if available
+        if (columnOrder.length > 0) {
+            const orderedColumns = [];
+            const processedFields = new Set();
+
+            // Add BDSA Case ID first if it exists
+            if (bdsaCaseIdColumn) {
+                orderedColumns.push(bdsaCaseIdColumn);
+                processedFields.add('bdsa_case_id');
+            }
+
+            // Add mapped columns in order
+            mappedColumns.forEach(col => {
+                orderedColumns.push(col);
+                processedFields.add(col.field);
+            });
+
+            // Add remaining columns in custom order
+            columnOrder.forEach(field => {
+                if (!processedFields.has(field) && !hiddenColumns.includes(field)) {
+                    const col = otherColumns.find(c => c.field === field);
+                    if (col) {
+                        orderedColumns.push(col);
+                        processedFields.add(field);
+                    }
+                }
+            });
+
+            // Add any remaining columns that weren't in the order
+            otherColumns.forEach(col => {
+                if (!processedFields.has(col.field)) {
+                    orderedColumns.push(col);
+                }
+            });
+
+            return orderedColumns;
+        }
+
+        // Return mapped columns first, then BDSA Case ID, then the rest (default behavior)
+        const result = [];
+        if (bdsaCaseIdColumn) {
+            result.push(bdsaCaseIdColumn);
+        }
+        result.push(...mappedColumns);
+        result.push(...otherColumns);
+
+        return result;
     };
 
     if (loading) {
@@ -90,7 +361,15 @@ const InputDataTab = () => {
                     rowData={rowData}
                     onColumnVisibilityChange={handleColumnVisibilityChange}
                     onColumnMappingChange={handleColumnMappingChange}
+                    onColumnOrderChange={handleColumnOrderChange}
                 />
+
+                <button
+                    className="bdsa-settings-btn"
+                    onClick={() => setShowBdsaSettings(true)}
+                >
+                    BDSA Settings
+                </button>
 
                 <div className="theme-selector">
                     <label htmlFor="grid-theme">Grid Theme:</label>
@@ -108,6 +387,132 @@ const InputDataTab = () => {
                 </div>
             </div>
 
+            {/* BDSA Settings Modal */}
+            {showBdsaSettings && (
+                <div className="modal-overlay">
+                    <div className="modal-content">
+                        <h2>BDSA Settings</h2>
+                        <div className="bdsa-settings-form">
+                            <div className="form-group">
+                                <label htmlFor="bdsa-institution-id">BDSA Institution ID:</label>
+                                <input
+                                    type="text"
+                                    id="bdsa-institution-id"
+                                    value={bdsaInstitutionId}
+                                    onChange={(e) => {
+                                        const value = e.target.value;
+                                        // Only allow 3 digits
+                                        if (/^\d{0,3}$/.test(value)) {
+                                            setBdsaInstitutionId(value.padStart(3, '0'));
+                                        }
+                                    }}
+                                    placeholder="001"
+                                    maxLength={3}
+                                />
+                                <small>3-digit institution ID (e.g., 001, 002, etc.)</small>
+                            </div>
+
+                            <div className="form-group">
+                                <button
+                                    className="case-id-mapping-btn"
+                                    onClick={() => {
+                                        setShowBdsaSettings(false);
+                                        setShowCaseIdMapping(true);
+                                    }}
+                                >
+                                    Manage Case ID Mappings
+                                </button>
+                                <small>Map local case IDs to BDSA case IDs</small>
+                            </div>
+                        </div>
+                        <button
+                            className="close-modal-btn"
+                            onClick={() => setShowBdsaSettings(false)}
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Case ID Mapping Modal */}
+            {showCaseIdMapping && (
+                <div className="modal-overlay">
+                    <div className="modal-content case-id-mapping-modal">
+                        <h2>Manage Case ID Mappings</h2>
+
+                        {!columnMapping.localCaseId ? (
+                            <div className="no-case-id-mapped">
+                                <p>Please map a local case ID column first to view case ID mappings.</p>
+                                <button
+                                    className="close-modal-btn"
+                                    onClick={() => setShowCaseIdMapping(false)}
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="case-id-mapping-content">
+                                <div className="mapping-summary">
+                                    <p>Showing unique case IDs from column: <strong>{columnMapping.localCaseId}</strong></p>
+                                    <p>Total unique cases: <strong>{getUniqueCaseIds().length}</strong></p>
+                                </div>
+
+                                <div className="case-id-table-container">
+                                    <table className="case-id-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Local Case ID</th>
+                                                <th>Row Count</th>
+                                                <th>BDSA Case ID</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {getUniqueCaseIds().map((item, index) => (
+                                                <tr key={index}>
+                                                    <td className={item.bdsaCaseId ? 'mapped-case-id' : ''}>
+                                                        {item.localCaseId}
+                                                    </td>
+                                                    <td>{item.rowCount}</td>
+                                                    <td>
+                                                        <input
+                                                            type="text"
+                                                            value={item.bdsaCaseId || ''}
+                                                            onChange={(e) => updateCaseIdMapping(item.localCaseId, e.target.value)}
+                                                            placeholder="BDSA-001-0001"
+                                                            className="bdsa-case-id-input"
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <button
+                                                            className="generate-bdsa-id-btn"
+                                                            onClick={() => generateSequentialBdsaCaseId(item.localCaseId)}
+                                                            disabled={!!item.bdsaCaseId}
+                                                        >
+                                                            Generate
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div className="mapping-actions">
+                                    <button
+                                        className="close-modal-btn"
+                                        onClick={() => setShowCaseIdMapping(false)}
+                                    >
+                                        Close
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
             <div className="grid-container">
                 <AgGridReact
                     rowData={rowData}
@@ -118,6 +523,10 @@ const InputDataTab = () => {
                     theme="legacy"
                     className={`ag-theme-${gridTheme}`}
                     suppressFieldDotNotation={true}
+                    onColumnResized={handleColumnResized}
+                    onGridReady={handleGridReady}
+                    enableTooltip={true}
+                    tooltipShowDelay={0}
                     defaultColDef={{
                         sortable: true,
                         filter: true,

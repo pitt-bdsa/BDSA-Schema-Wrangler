@@ -6,7 +6,8 @@ const TabView = ({ children }) => {
 
     const tabs = [
         { id: 0, label: 'Input Data' },
-        { id: 1, label: 'BDSA Schema' }
+        { id: 1, label: 'BDSA Schema' },
+        { id: 2, label: 'Protocols' }
     ];
 
     return (

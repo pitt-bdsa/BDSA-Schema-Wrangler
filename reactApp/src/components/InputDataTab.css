@@ -52,6 +52,232 @@
     box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
 }
 
+.bdsa-settings-btn {
+    padding: 8px 16px;
+    background-color: #1976d2;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.bdsa-settings-btn:hover {
+    background-color: #1565c0;
+}
+
+.bdsa-settings-btn:active {
+    background-color: #0d47a1;
+}
+
+.bdsa-settings-form {
+    margin: 20px 0;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    color: #333;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    background-color: white;
+    color: #333;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: #1976d2;
+    box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
+}
+
+.form-group small {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.8rem;
+    color: #666;
+}
+
+.case-id-mapping-btn {
+    padding: 8px 16px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: background-color 0.2s;
+    width: 100%;
+}
+
+.case-id-mapping-btn:hover {
+    background-color: #218838;
+}
+
+.add-mapping-btn {
+    padding: 8px 16px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: background-color 0.2s;
+    margin-right: 10px;
+}
+
+.add-mapping-btn:hover {
+    background-color: #0056b3;
+}
+
+.case-id-mapping-modal {
+    max-width: 800px;
+    max-height: 80vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.case-id-mapping-content {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.mapping-summary {
+    margin-bottom: 15px;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+}
+
+.mapping-summary p {
+    margin: 5px 0;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.case-id-table-container {
+    flex: 1;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.case-id-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    color: #333;
+}
+
+.case-id-table th {
+    background-color: #f8f9fa;
+    padding: 10px;
+    text-align: left;
+    border-bottom: 2px solid #ddd;
+    font-weight: 600;
+    color: #333;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.case-id-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #eee;
+    vertical-align: middle;
+    color: #333;
+}
+
+.case-id-table tr:hover {
+    background-color: #f8f9fa;
+}
+
+.mapped-case-id {
+    color: #28a745 !important;
+    font-weight: 600;
+}
+
+.bdsa-case-id-input {
+    width: 100%;
+    padding: 4px 8px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    font-size: 0.85rem;
+    background-color: white;
+    color: #333;
+}
+
+.bdsa-case-id-input:focus {
+    outline: none;
+    border-color: #1976d2;
+    box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
+}
+
+.generate-bdsa-id-btn {
+    padding: 6px 12px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.generate-bdsa-id-btn:hover:not(:disabled) {
+    background-color: #0056b3;
+}
+
+.generate-bdsa-id-btn:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.mapping-actions {
+    margin-top: 15px;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.no-case-id-mapped {
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.no-case-id-mapped p {
+    margin-bottom: 20px;
+    color: #666;
+    font-size: 1rem;
+}
+
+.modal-content h2 {
+    color: #333;
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 20px;
+    margin-top: 0;
+}
+
 .grid-container {
     flex: 1;
     width: 100%;
@@ -75,4 +301,26 @@
     height: 200px;
     font-size: 1.2rem;
     color: #666;
+}
+
+/* Simple tooltip for column headers */
+.ag-header-cell-text {
+    position: relative;
+}
+
+.ag-header-cell-text:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 9999;
+    pointer-events: none;
+    margin-bottom: 5px;
 }

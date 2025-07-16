@@ -2,6 +2,7 @@ import React from 'react';
 import TabView from './components/TabView';
 import InputDataTab from './components/InputDataTab';
 import BDSAchemaTab from './components/BDSAchemaTab';
+import ProtocolsTab from './components/ProtocolsTab';
 import './App.css';
 
 function App() {
@@ -14,6 +15,7 @@ function App() {
       <TabView>
         <InputDataTab />
         <BDSAchemaTab />
+        <ProtocolsTab />
       </TabView>
     </div>
   );

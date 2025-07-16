@@ -183,6 +183,41 @@
     align-items: center;
     justify-content: space-between;
     margin-bottom: 8px;
+    gap: 8px;
+}
+
+.column-controls {
+    display: flex;
+    flex-direction: row;
+    gap: 2px;
+}
+
+.order-btn {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 3px;
+    width: 24px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.2s, border 0.2s;
+    color: #495057;
+}
+
+.order-btn:hover:not(:disabled) {
+    background: #e9ecef;
+    border-color: #adb5bd;
+}
+
+.order-btn:disabled {
+    background: #f8f9fa;
+    border-color: #dee2e6;
+    color: #adb5bd;
+    cursor: not-allowed;
+    opacity: 0.5;
 }
 
 .pie-btn {

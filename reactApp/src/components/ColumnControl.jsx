@@ -4,6 +4,7 @@ import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recha
 
 const LOCAL_STORAGE_KEY = 'bdsa_hidden_columns';
 const COLUMN_MAPPING_KEY = 'bdsa_column_mapping';
+const COLUMN_ORDER_KEY = 'bdsa_column_order';
 const PIE_COLORS = [
     '#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#A28CFE', '#FF6699', '#33CC99', '#FF6666', '#FFB347', '#B6D7A8', '#C9C9FF', '#FFD1DC'
 ];
@@ -27,34 +28,85 @@ const getValueCounts = (rowData, field) => {
     return top;
 };
 
-const ColumnControl = ({ allColumns, rowData, onColumnVisibilityChange, onColumnMappingChange }) => {
+const getDisplayName = (fieldName) => {
+    if (fieldName.startsWith('meta.')) {
+        return fieldName.substring(5); // Remove 'meta.' prefix
+    }
+    return fieldName;
+};
+
+const ColumnControl = ({ allColumns, rowData, onColumnVisibilityChange, onColumnMappingChange, onColumnOrderChange }) => {
     const [hiddenColumns, setHiddenColumns] = useState(() => {
-        const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
-        return stored ? JSON.parse(stored) : [];
+        try {
+            const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+            return stored ? JSON.parse(stored) : [];
+        } catch (error) {
+            console.warn('Error loading hidden columns from localStorage:', error);
+            return [];
+        }
     });
     const [columnMapping, setColumnMapping] = useState(() => {
-        const stored = localStorage.getItem(COLUMN_MAPPING_KEY);
-        return stored ? JSON.parse(stored) : {
-            localStainID: '',
-            localCaseId: '',
-            localRegionId: ''
-        };
+        try {
+            const stored = localStorage.getItem(COLUMN_MAPPING_KEY);
+            return stored ? JSON.parse(stored) : {
+                localStainID: '',
+                localCaseId: '',
+                localRegionId: ''
+            };
+        } catch (error) {
+            console.warn('Error loading column mapping from localStorage:', error);
+            return {
+                localStainID: '',
+                localCaseId: '',
+                localRegionId: ''
+            };
+        }
     });
     const [columnModalOpen, setColumnModalOpen] = useState(false);
     const [mappingModalOpen, setMappingModalOpen] = useState(false);
     const [pieModal, setPieModal] = useState({ open: false, field: null, data: [] });
+    const [columnOrder, setColumnOrder] = useState(() => {
+        try {
+            const stored = localStorage.getItem(COLUMN_ORDER_KEY);
+            return stored ? JSON.parse(stored) : allColumns;
+        } catch (error) {
+            console.warn('Error loading column order from localStorage:', error);
+            return allColumns;
+        }
+    });
 
     useEffect(() => {
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(hiddenColumns));
-        onColumnVisibilityChange(hiddenColumns);
+        try {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(hiddenColumns));
+            if (onColumnVisibilityChange) {
+                onColumnVisibilityChange(hiddenColumns);
+            }
+        } catch (error) {
+            console.warn('Error saving hidden columns to localStorage:', error);
+        }
     }, [hiddenColumns, onColumnVisibilityChange]);
 
     useEffect(() => {
-        localStorage.setItem(COLUMN_MAPPING_KEY, JSON.stringify(columnMapping));
-        if (onColumnMappingChange) {
-            onColumnMappingChange(columnMapping);
+        try {
+            localStorage.setItem(COLUMN_MAPPING_KEY, JSON.stringify(columnMapping));
+            if (onColumnMappingChange) {
+                onColumnMappingChange(columnMapping);
+            }
+        } catch (error) {
+            console.warn('Error saving column mapping to localStorage:', error);
         }
     }, [columnMapping, onColumnMappingChange]);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem(COLUMN_ORDER_KEY, JSON.stringify(columnOrder));
+            if (onColumnOrderChange) {
+                onColumnOrderChange(columnOrder);
+            }
+        } catch (error) {
+            console.warn('Error saving column order to localStorage:', error);
+        }
+    }, [columnOrder, onColumnOrderChange]);
 
     const handleColumnToggle = (field) => {
         setHiddenColumns(prev =>
@@ -77,10 +129,32 @@ const ColumnControl = ({ allColumns, rowData, onColumnVisibilityChange, onColumn
         setPieModal({ open: true, field, data });
     };
 
+    const moveColumnUp = (field) => {
+        setColumnOrder(prev => {
+            const currentIndex = prev.indexOf(field);
+            if (currentIndex <= 0) return prev;
+
+            const newOrder = [...prev];
+            [newOrder[currentIndex], newOrder[currentIndex - 1]] = [newOrder[currentIndex - 1], newOrder[currentIndex]];
+            return newOrder;
+        });
+    };
+
+    const moveColumnDown = (field) => {
+        setColumnOrder(prev => {
+            const currentIndex = prev.indexOf(field);
+            if (currentIndex === -1 || currentIndex >= prev.length - 1) return prev;
+
+            const newOrder = [...prev];
+            [newOrder[currentIndex], newOrder[currentIndex + 1]] = [newOrder[currentIndex + 1], newOrder[currentIndex]];
+            return newOrder;
+        });
+    };
+
     const closePieModal = () => setPieModal({ open: false, field: null, data: [] });
 
     const getVisibleColumns = () => {
-        return allColumns.filter(col => !hiddenColumns.includes(col));
+        return columnOrder.filter(col => !hiddenColumns.includes(col));
     };
 
     const getMappingStatus = () => {
@@ -104,8 +178,26 @@ const ColumnControl = ({ allColumns, rowData, onColumnVisibilityChange, onColumn
                     <div className="modal-content">
                         <h2>Show/Hide Columns</h2>
                         <div className="modal-column-list">
-                            {allColumns.map(field => (
+                            {columnOrder.map((field, index) => (
                                 <div key={field} className="column-row">
+                                    <div className="column-controls">
+                                        <button
+                                            className="order-btn up-btn"
+                                            title="Move up"
+                                            onClick={() => moveColumnUp(field)}
+                                            disabled={index === 0}
+                                        >
+                                            ↑
+                                        </button>
+                                        <button
+                                            className="order-btn down-btn"
+                                            title="Move down"
+                                            onClick={() => moveColumnDown(field)}
+                                            disabled={index === columnOrder.length - 1}
+                                        >
+                                            ↓
+                                        </button>
+                                    </div>
                                     <label>
                                         <input
                                             type="checkbox"
@@ -115,7 +207,7 @@ const ColumnControl = ({ allColumns, rowData, onColumnVisibilityChange, onColumn
                                         <span className={columnMapping.localStainID === field ||
                                             columnMapping.localCaseId === field ||
                                             columnMapping.localRegionId === field ? 'mapped-column' : ''}>
-                                            {field}
+                                            {getDisplayName(field)}
                                         </span>
                                     </label>
                                     <button
