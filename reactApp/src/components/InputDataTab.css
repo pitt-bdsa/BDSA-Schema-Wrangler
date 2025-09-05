@@ -14,6 +14,113 @@
     gap: 20px;
 }
 
+.data-source-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.data-source-selector label {
+    font-size: 0.9rem;
+    color: #666;
+    font-weight: 500;
+}
+
+.data-source-dropdown {
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+    font-size: 0.9rem;
+    cursor: pointer;
+    min-width: 180px;
+    color: #333;
+}
+
+.data-source-dropdown:hover {
+    border-color: #1976d2;
+}
+
+.data-source-dropdown:focus {
+    outline: none;
+    border-color: #1976d2;
+    box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
+}
+
+.resource-type-dropdown {
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+    font-size: 0.9rem;
+    cursor: pointer;
+    min-width: 120px;
+    color: #333;
+}
+
+.resource-type-dropdown:hover {
+    border-color: #1976d2;
+}
+
+.resource-type-dropdown:focus {
+    outline: none;
+    border-color: #1976d2;
+    box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
+}
+
+.dsa-config-btn {
+    padding: 6px 12px;
+    background-color: #ff9800;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.dsa-config-btn:hover {
+    background-color: #f57c00;
+}
+
+.load-dsa-data-btn {
+    padding: 6px 12px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.load-dsa-data-btn:hover:not(:disabled) {
+    background-color: #218838;
+}
+
+.load-dsa-data-btn:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
+}
+
+.regex-rules-btn {
+    padding: 6px 12px;
+    background-color: #6f42c1;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.regex-rules-btn:hover {
+    background-color: #5a2d91;
+}
+
 .theme-selector {
     display: flex;
     align-items: center;
@@ -72,7 +179,29 @@
     background-color: #0d47a1;
 }
 
-.bdsa-settings-form {
+.export-btn {
+    padding: 8px 16px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.export-btn:hover:not(:disabled) {
+    background-color: #218838;
+}
+
+.export-btn:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
+}
+
+.bdsa-settings-form,
+.dsa-settings-form {
     margin: 20px 0;
 }
 
@@ -323,4 +452,155 @@
     z-index: 9999;
     pointer-events: none;
     margin-bottom: 5px;
+}
+
+/* Modal button styles */
+.close-modal-btn {
+    background-color: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.close-modal-btn:hover {
+    background-color: #5a6268;
+}
+
+.test-resource-access-btn {
+    background-color: #17a2b8;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: background-color 0.2s;
+    margin-right: 8px;
+}
+
+.test-resource-access-btn:hover {
+    background-color: #138496;
+}
+
+.test-resource-access-btn:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
+}
+
+.modal-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+.test-connection-btn {
+    padding: 8px 16px;
+    background-color: #17a2b8;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.test-connection-btn:hover:not(:disabled) {
+    background-color: #138496;
+}
+
+.test-connection-btn:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
+}
+
+.test-no-auth-btn {
+    padding: 8px 16px;
+    background-color: #ffc107;
+    color: #212529;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.test-no-auth-btn:hover:not(:disabled) {
+    background-color: #e0a800;
+}
+
+.test-no-auth-btn:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
+}
+
+.test-api-desc-btn {
+    padding: 8px 16px;
+    background-color: #6f42c1;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.test-api-desc-btn:hover:not(:disabled) {
+    background-color: #5a32a3;
+}
+
+.test-api-desc-btn:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
+}
+
+.exchange-token-btn {
+    padding: 8px 16px;
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.exchange-token-btn:hover:not(:disabled) {
+    background-color: #c82333;
+}
+
+.exchange-token-btn:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
+}
+
+.test-direct-token-btn {
+    padding: 8px 16px;
+    background-color: #20c997;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.test-direct-token-btn:hover:not(:disabled) {
+    background-color: #1aa179;
+}
+
+.test-direct-token-btn:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
 }

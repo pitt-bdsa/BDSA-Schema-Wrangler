@@ -5,3 +5,9 @@ sampleItemSet*
 metadata/
 env/
 example-cohort-wsis/
+.DS_Store
+cache*
+deidCode/forReference/
+*checkpoint*
+node_modules
+notebooks/csvFiles/*

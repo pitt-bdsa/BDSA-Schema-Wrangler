@@ -236,6 +236,15 @@
     background: #218838;
 }
 
+.protocol-btn.ignore {
+    background: #dc3545;
+    color: white;
+}
+
+.protocol-btn.ignore:hover {
+    background: #c82333;
+}
+
 
 
 .protocol-selection optgroup {
@@ -398,6 +407,12 @@
     flex: 1;
 }
 
+.action-buttons {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
 .apply-all-suggestions-btn {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
@@ -418,6 +433,40 @@
 }
 
 .apply-all-suggestions-btn:active {
+    transform: translateY(0);
+}
+
+.hide-mapped-btn {
+    background: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 16px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(108, 117, 125, 0.3);
+}
+
+.hide-mapped-btn:hover {
+    background: #5a6268;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(108, 117, 125, 0.4);
+}
+
+.hide-mapped-btn.active {
+    background: #28a745;
+    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
+}
+
+.hide-mapped-btn.active:hover {
+    background: #218838;
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+}
+
+.hide-mapped-btn:active {
     transform: translateY(0);
 }
 
@@ -447,6 +496,128 @@
     margin-bottom: 15px;
     padding-bottom: 10px;
     border-bottom: 1px solid #e0e0e0;
+}
+
+.slide-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.expand-toggle-btn {
+    background: none;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+}
+
+.expand-toggle-btn:hover {
+    background: #f0f0f0;
+    color: #333;
+}
+
+.individual-slides {
+    margin-top: 10px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border-left: 3px solid #dee2e6;
+}
+
+.individual-slides-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.selection-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.select-all-btn,
+.deselect-all-btn {
+    background: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.select-all-btn:hover,
+.deselect-all-btn:hover {
+    background: #5a6268;
+}
+
+.selected-count {
+    font-size: 0.8rem;
+    color: #666;
+    font-weight: 500;
+}
+
+.slide-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.slide-checkbox input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+}
+
+.selected-indicator {
+    font-size: 0.8rem;
+    opacity: 0.8;
+    font-weight: normal;
+}
+
+.individual-slide {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    font-size: 0.85rem;
+}
+
+.individual-slide:not(:last-child) {
+    border-bottom: 1px solid #e9ecef;
+    padding-bottom: 8px;
+    margin-bottom: 4px;
+}
+
+.slide-detail-id {
+    font-family: monospace;
+    color: #495057;
+    font-size: 0.8rem;
+}
+
+.slide-detail-status {
+    font-size: 0.8rem;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: bold;
+}
+
+.slide-detail-status.mapped {
+    background: #d4edda;
+    color: #155724;
+}
+
+.slide-detail-status.unmapped {
+    background: #fff3cd;
+    color: #856404;
 }
 
 .slide-id {
@@ -554,6 +725,16 @@
     font-weight: 500;
 }
 
+.ignore-protocol {
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+.ignore-protocol-name {
+    color: #721c24;
+    font-weight: bold;
+}
+
 .remove-protocol-btn {
     background: #dc3545;
     color: white;
@@ -599,6 +780,14 @@
 
 .add-protocol-btn-small:hover {
     background: #218838;
+}
+
+.add-protocol-btn-small.ignore-protocol-btn {
+    background: #dc3545;
+}
+
+.add-protocol-btn-small.ignore-protocol-btn:hover {
+    background: #c82333;
 }
 
 .no-case-selected {

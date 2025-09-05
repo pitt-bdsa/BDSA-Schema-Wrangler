@@ -1,0 +1,348 @@
+.regex-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.regex-modal-content {
+    background: white;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 1000px;
+    max-height: 90vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.regex-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid #e0e0e0;
+    background-color: #f8f9fa;
+}
+
+.regex-modal-header h2 {
+    margin: 0;
+    color: #333;
+    font-size: 1.5rem;
+}
+
+.regex-modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #666;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+}
+
+.regex-modal-close:hover {
+    background-color: #e9ecef;
+    color: #333;
+}
+
+.regex-modal-body {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.regex-tabs {
+    display: flex;
+    border-bottom: 1px solid #e0e0e0;
+    background-color: #f8f9fa;
+}
+
+.regex-tab {
+    padding: 12px 20px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    font-weight: 500;
+    color: #666;
+    transition: all 0.2s;
+}
+
+.regex-tab:hover {
+    background-color: #e9ecef;
+    color: #333;
+}
+
+.regex-tab.active {
+    color: #007bff;
+    border-bottom-color: #007bff;
+    background-color: white;
+}
+
+.regex-tab-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    gap: 20px;
+}
+
+.regex-field-config {
+    flex: 1;
+    min-width: 0;
+}
+
+.regex-field-config h3 {
+    margin: 0 0 8px 0;
+    color: #333;
+    font-size: 1.2rem;
+}
+
+.regex-example {
+    margin: 0 0 20px 0;
+    padding: 8px 12px;
+    background-color: #f8f9fa;
+    border-left: 4px solid #007bff;
+    color: #666;
+    font-style: italic;
+}
+
+.regex-input-group {
+    margin-bottom: 20px;
+}
+
+.regex-input-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: #333;
+}
+
+.regex-pattern-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    transition: border-color 0.2s;
+}
+
+.regex-pattern-input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.regex-suggestions {
+    margin-top: 20px;
+}
+
+.regex-suggestions h4 {
+    margin: 0 0 12px 0;
+    color: #333;
+    font-size: 1rem;
+}
+
+.regex-suggestion {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    border: 1px solid #e9ecef;
+}
+
+.regex-suggestion code {
+    background-color: #e9ecef;
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: #d63384;
+    min-width: 120px;
+    flex-shrink: 0;
+}
+
+.regex-suggestion span {
+    flex: 1;
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.regex-use-suggestion {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.regex-use-suggestion:hover {
+    background-color: #0056b3;
+}
+
+.regex-test-section {
+    flex: 1;
+    min-width: 0;
+    border-left: 1px solid #e0e0e0;
+    padding-left: 20px;
+}
+
+.regex-test-section h4 {
+    margin: 0 0 12px 0;
+    color: #333;
+    font-size: 1rem;
+}
+
+.regex-test-btn {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    margin-bottom: 20px;
+    transition: background-color 0.2s;
+}
+
+.regex-test-btn:hover {
+    background-color: #218838;
+}
+
+.regex-test-results {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.regex-test-item {
+    margin-bottom: 16px;
+    padding: 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    background-color: #f8f9fa;
+}
+
+.regex-test-filename {
+    margin-bottom: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    color: #333;
+}
+
+.regex-test-extractions {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.regex-test-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.regex-field-name {
+    font-weight: 500;
+    color: #666;
+    min-width: 100px;
+    font-size: 0.9rem;
+}
+
+.regex-field-value {
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+}
+
+.regex-field-value.success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.regex-field-value.empty {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.regex-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 20px;
+    border-top: 1px solid #e0e0e0;
+    background-color: #f8f9fa;
+}
+
+.regex-cancel-btn {
+    background-color: #6c757d;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.regex-cancel-btn:hover {
+    background-color: #5a6268;
+}
+
+.regex-save-btn {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.regex-save-btn:hover {
+    background-color: #0056b3;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .regex-modal-content {
+        width: 95%;
+        max-height: 95vh;
+    }
+
+    .regex-tab-content {
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .regex-test-section {
+        border-left: none;
+        border-top: 1px solid #e0e0e0;
+        padding-left: 0;
+        padding-top: 16px;
+    }
+}
