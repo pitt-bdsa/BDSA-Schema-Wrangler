@@ -25,7 +25,14 @@ const TabView = ({ children }) => {
                 ))}
             </div>
             <div className="tab-content">
-                {children[activeTab]}
+                {children.map((child, index) => (
+                    <div
+                        key={index}
+                        className={`tab-panel ${activeTab === index ? 'active' : 'hidden'}`}
+                    >
+                        {child}
+                    </div>
+                ))}
             </div>
         </div>
     );

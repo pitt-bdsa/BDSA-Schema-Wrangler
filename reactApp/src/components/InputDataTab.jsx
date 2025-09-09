@@ -9,22 +9,25 @@ import 'ag-grid-community/styles/ag-theme-quartz.css';
 import Papa from 'papaparse';
 import ColumnControl from './ColumnControl';
 import RegexRulesModal from './RegexRulesModal';
-import { applyRegexRules, getDefaultRegexRules } from '../utils/regexExtractor';
+import DsaSyncModal from './DsaSyncModal';
+import { getDefaultRegexRules } from '../utils/regexExtractor';
 import {
-    DATA_SOURCE_TYPES,
+    subscribeToDataStore,
+    getDataStoreSnapshot,
+    setCurrentDataSource,
+    loadCurrentData,
+    updateDsaConfig,
+    setGirderToken as setDataStoreGirderToken,
+    applyRegexRules,
+    DATA_SOURCE_TYPES
+} from '../utils/dataStore';
+import {
     loadColumnWidths,
     saveColumnWidths,
-    loadCaseIdMappings,
-    saveCaseIdMappings,
-    loadCaseProtocolMappings,
-    saveCaseProtocolMappings,
-    loadDsaConfig,
-    saveDsaConfig,
-    loadRegexRules,
-    saveRegexRules,
     loadGridTheme,
     saveGridTheme,
-    migrateOldSettings
+    saveDsaConfig,
+    simpleHash
 } from '../utils/dataSourceManager';
 import './InputDataTab.css';
 
@@ -51,24 +54,67 @@ const InputDataTab = () => {
     const [columnWidths, setColumnWidths] = useState({});
     const [columnOrder, setColumnOrder] = useState([]);
 
-    // Data source selection state
-    const [dataSource, setDataSource] = useState('csv'); // 'csv' or 'dsa'
-    const [dsaConfig, setDsaConfig] = useState({
-        baseUrl: 'http://multiplex.pathology.emory.edu:8080',
-        resourceId: '68bb20d0188a3d83b0a175da', // Your specific folder ID
-        resourceType: 'folder', // 'collection' or 'folder'
-        apiKey: ''
-    });
+    // Data source selection state  
+    const [dataSource, setDataSource] = useState(DATA_SOURCE_TYPES.DSA); // Will be updated from data store
+    const [dsaConfig, setDsaConfig] = useState({}); // Will be loaded from data store
     const [girderToken, setGirderToken] = useState('');
     const [showDsaConfig, setShowDsaConfig] = useState(false);
     const [showRegexRules, setShowRegexRules] = useState(false);
+    const [showDsaSync, setShowDsaSync] = useState(false);
     const [regexRules, setRegexRules] = useState(getDefaultRegexRules());
     const [isInitialized, setIsInitialized] = useState(false);
+    const [regexApplied, setRegexApplied] = useState(false);
+    const [pendingRegexApplication, setPendingRegexApplication] = useState(false);
+    const [showProtocolEditor, setShowProtocolEditor] = useState(null);
+
+    // Subscribe to centralized data store
+    useEffect(() => {
+        const unsubscribe = subscribeToDataStore((event) => {
+            console.log('InputDataTab received data store event:', event.eventType);
+
+            // Update local state with new data store snapshot
+            const snapshot = getDataStoreSnapshot();
+
+
+            // Sync specific values from the centralized store
+            setRowData(snapshot.processedData);
+            setColumnDefs(snapshot.columnDefs);
+            setColumnMapping(snapshot.columnMapping);
+            setCaseIdMappings(snapshot.caseIdMappings);
+            setCaseProtocolMappings(snapshot.caseProtocolMappings);
+            setDataSource(snapshot.currentDataSource);
+            // Only update dsaConfig if it's not a DSA config change event (to prevent overriding user input)
+            if (event.eventType !== 'dsaConfigChanged') {
+                setDsaConfig(snapshot.dsaConfig);
+            }
+            setGirderToken(snapshot.girderToken);
+            setRegexRules(snapshot.regexRules);
+            setLoading(snapshot.isLoading);
+            setRegexApplied(snapshot.regexApplied);
+            setPendingRegexApplication(snapshot.pendingRegexApplication);
+        });
+
+        // Initialize with current data store state
+        const initialSnapshot = getDataStoreSnapshot();
+        setRowData(initialSnapshot.processedData);
+        setColumnDefs(initialSnapshot.columnDefs);
+        setColumnMapping(initialSnapshot.columnMapping);
+        setCaseIdMappings(initialSnapshot.caseIdMappings);
+        setCaseProtocolMappings(initialSnapshot.caseProtocolMappings);
+        setDataSource(initialSnapshot.currentDataSource);
+        setDsaConfig(initialSnapshot.dsaConfig);
+        setGirderToken(initialSnapshot.girderToken);
+        setRegexRules(initialSnapshot.regexRules);
+        setLoading(initialSnapshot.isLoading);
+        setRegexApplied(initialSnapshot.regexApplied);
+        setPendingRegexApplication(initialSnapshot.pendingRegexApplication);
+
+        return unsubscribe;
+    }, []);
 
     useEffect(() => {
         const initializeApp = async () => {
-            // Migrate old settings first
-            migrateOldSettings();
+            // Initialize app settings
 
             // Load initial settings
             setGridTheme(loadGridTheme());
@@ -99,13 +145,8 @@ const InputDataTab = () => {
         // Save current settings before switching
         saveSettingsForDataSource(dataSource);
 
-        // Clear current data and loading state
-        setRowData([]);
-        setColumnDefs([]);
-        setLoading(false);
-
-        // Switch data source
-        setDataSource(newDataSource);
+        // Use centralized store to change data source
+        setCurrentDataSource(newDataSource);
     };
 
     // Load data when mappings are available or when data source changes
@@ -128,6 +169,19 @@ const InputDataTab = () => {
     }, [caseIdMappings, caseProtocolMappings, columnMapping]);
 
     // Refresh protocols when they change
+    // Auto-load DSA data when config is complete
+    useEffect(() => {
+        if (dataSource === DATA_SOURCE_TYPES.DSA &&
+            dsaConfig?.baseUrl &&
+            dsaConfig?.resourceId &&
+            girderToken &&
+            !loading &&
+            rowData.length === 0) {
+            console.log('Auto-loading DSA data - config is complete');
+            loadCurrentData();
+        }
+    }, [dataSource, dsaConfig?.baseUrl, dsaConfig?.resourceId, girderToken, loading, rowData.length]);
+
     useEffect(() => {
         const handleStorageChange = (e) => {
             if (e.key === 'bdsa_stain_protocols' || e.key === 'bdsa_region_protocols' || e.key === 'bdsa_case_mappings') {
@@ -740,11 +794,16 @@ const InputDataTab = () => {
                     const userName = userData?.login || userData?.firstName || userData?.email || 'Admin User';
                     const userId = userData?._id || userData?.id || 'Unknown ID';
 
-                    alert(`SUCCESS! Authentication successful!\n\nUser: ${userName}\nID: ${userId}\n\nGirder token obtained and ready to use for API requests.`);
+                    // Set the obtained Girder token (no annoying modal)
+                    setGirderToken(girderToken); // Update local state
+                    setDataStoreGirderToken(girderToken); // Update centralized data store
+                    console.log('Girder token obtained and set:', girderToken);
 
-                    // Set the obtained Girder token
-                    setGirderToken(girderToken);
-                    console.log('Girder token set to:', girderToken);
+                    // Auto-load data if DSA config is complete
+                    if (dsaConfig?.baseUrl && dsaConfig?.resourceId) {
+                        console.log('Auto-loading DSA data since config is complete');
+                        setTimeout(() => loadCurrentData(), 500); // Small delay to ensure token is set
+                    }
                 } else {
                     console.error('No Girder token found in response:', authData);
                     alert(`Authentication succeeded but no Girder token found in response.\n\nResponse: ${JSON.stringify(authData)}`);
@@ -854,10 +913,29 @@ const InputDataTab = () => {
         // Save to data source specific storage
         saveRegexRules(dataSource, newRules);
 
-        // Re-apply rules to current data if available
-        if (rowData.length > 0) {
-            const updatedData = applyRegexRules(rowData, newRules);
-            setRowData(updatedData);
+        // Note: We no longer auto-apply regex rules here
+        // User must explicitly click "Apply Regex Rules" button
+    };
+
+    const handleApplyRegexRules = async () => {
+        try {
+            console.log('=== APPLYING REGEX RULES ===');
+            console.log('Current data length:', rowData.length);
+            console.log('Current regex rules:', regexRules);
+
+            const result = await applyRegexRules();
+            if (result.success) {
+                console.log(`Regex rules applied successfully. Generated ${result.generatedValuesCount} new values.`);
+                console.log('Result:', result);
+                // The data store will automatically notify subscribers and update the UI
+            } else {
+                console.error('Failed to apply regex rules:', result.error);
+                alert(`Failed to apply regex rules: ${result.error}`);
+            }
+        } catch (error) {
+            console.error('Error applying regex rules:', error);
+            console.error('Error stack:', error.stack);
+            alert(`Error applying regex rules: ${error.message}`);
         }
     };
 
@@ -879,6 +957,17 @@ const InputDataTab = () => {
         setCaseIdMappings(loadCaseIdMappings(source));
         setCaseProtocolMappings(loadCaseProtocolMappings(source));
 
+        // Load hidden columns from localStorage (same key that ColumnControl uses)
+        try {
+            const hiddenColumnsKey = 'bdsa_hidden_columns';
+            const stored = localStorage.getItem(hiddenColumnsKey);
+            if (stored) {
+                setHiddenColumns(JSON.parse(stored));
+            }
+        } catch (error) {
+            console.warn('Error loading hidden columns:', error);
+        }
+
         if (source === DATA_SOURCE_TYPES.DSA) {
             setDsaConfig(loadDsaConfig());
             setRegexRules(loadRegexRules(source));
@@ -886,14 +975,10 @@ const InputDataTab = () => {
     };
 
     const saveSettingsForDataSource = (source) => {
+        // Only save UI-specific settings - data is now handled by centralized store
         saveColumnWidths(source, columnWidths);
-        saveCaseIdMappings(source, caseIdMappings);
-        saveCaseProtocolMappings(source, caseProtocolMappings);
-
-        if (source === DATA_SOURCE_TYPES.DSA) {
-            saveDsaConfig(dsaConfig);
-            saveRegexRules(source, regexRules);
-        }
+        // Note: caseIdMappings, caseProtocolMappings, dsaConfig, and regexRules 
+        // are now automatically persisted by the centralized data store
     };
 
     const loadColumnWidths = () => {
@@ -1034,11 +1119,11 @@ const InputDataTab = () => {
 
 
     const getVisibleColumns = () => {
-        // Map of mapping keys to display names
+        // Map of mapping keys to display names - use BDSA prefix to distinguish from original columns
         const mappingLabels = {
-            localCaseId: 'localCaseID',
-            localStainID: 'localStainID',
-            localRegionId: 'localRegionID'
+            localCaseId: 'BDSA Case ID',
+            localStainID: 'BDSA Stain ID',
+            localRegionId: 'BDSA Region ID'
         };
         // Build an array of { field, label } for mapped columns, in the desired order
         const mappedColumnsInfo = [
@@ -1060,7 +1145,19 @@ const InputDataTab = () => {
                     headerName: item.label,
                     minWidth: 140,
                     width: savedWidth || 140,
+                    headerClass: 'bdsa-column-header',
+                    cellClass: 'bdsa-column-cell',
+                    valueGetter: (params) => {
+                        // Use BDSA values as authoritative source, fallback to original column
+                        const bdsaField = item.field === columnMapping.localCaseId ? 'localCaseId' :
+                            item.field === columnMapping.localStainID ? 'localStainID' :
+                                item.field === columnMapping.localRegionId ? 'localRegionId' : null;
 
+                        if (bdsaField && params.data.BDSA?.[bdsaField]) {
+                            return params.data.BDSA[bdsaField];
+                        }
+                        return params.data[item.field];
+                    }
                 };
             })
             .filter(Boolean);
@@ -1071,18 +1168,20 @@ const InputDataTab = () => {
             const savedWidth = (columnWidths || {})['bdsa_case_id'];
             bdsaCaseIdColumn = {
                 field: 'bdsa_case_id',
-                headerName: 'BDSA Case ID',
+                headerName: 'BDSA Mapped Case ID',
                 sortable: true,
                 filter: true,
                 resizable: true,
                 minWidth: 150,
                 width: savedWidth || 150,
                 valueGetter: (params) => {
-                    const localCaseId = params.data[columnMapping.localCaseId];
+                    // Use BDSA.localCaseId as authoritative source, fallback to original column
+                    const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
                     return generateBdsaCaseId(localCaseId);
                 },
                 cellStyle: (params) => {
-                    const localCaseId = params.data[columnMapping.localCaseId];
+                    // Use BDSA.localCaseId as authoritative source, fallback to original column
+                    const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
                     // Check if this local case ID has been manually mapped
                     if (localCaseId && (caseIdMappings || {})[localCaseId]) {
                         return { backgroundColor: '#d4edda', color: '#155724' };
@@ -1104,8 +1203,37 @@ const InputDataTab = () => {
                 resizable: true,
                 minWidth: 120,
                 width: savedWidth || 120,
+                editable: false,
+                onCellClicked: (params) => {
+                    const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
+                    const filename = params.data['name'];
+                    const bdsaCaseId = (caseIdMappings || {})[localCaseId];
+                    
+                    if (bdsaCaseId && filename) {
+                        const slideId = `${bdsaCaseId}_${filename}`;
+                        const slideProtocols = (caseProtocolMappings || {})[bdsaCaseId]?.[slideId] || [];
+                        
+                        // Get current stain protocols
+                        let currentStainProtocols = [];
+                        if (Array.isArray(slideProtocols)) {
+                            // Old format - assume all are stain protocols
+                            currentStainProtocols = slideProtocols;
+                        } else if (slideProtocols && typeof slideProtocols === 'object') {
+                            // New format - get stain protocols
+                            currentStainProtocols = slideProtocols.stain || [];
+                        }
+                        
+                        setShowProtocolEditor({
+                            type: 'stain',
+                            bdsaCaseId,
+                            slideId,
+                            filename,
+                            protocols: currentStainProtocols
+                        });
+                    }
+                },
                 valueGetter: (params) => {
-                    const localCaseId = params.data[columnMapping.localCaseId];
+                    const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
                     const filename = params.data['name'];
 
                     if (!localCaseId || !filename) return 0;
@@ -1114,62 +1242,59 @@ const InputDataTab = () => {
                     if (!bdsaCaseId) return 0;
 
                     const slideId = `${bdsaCaseId}_${filename}`;
-                    const protocols = (caseProtocolMappings || {})[bdsaCaseId]?.[slideId] || [];
+                    const slideProtocols = (caseProtocolMappings || {})[bdsaCaseId]?.[slideId] || [];
 
-                    return Array.isArray(protocols) ? protocols.length : 0;
+                    // Handle both old format (array) and new format (object with stain/region)
+                    if (Array.isArray(slideProtocols)) {
+                        // Old format - count all protocols (for backward compatibility)
+                        return slideProtocols.length;
+                    } else {
+                        // New format - count only stain protocols
+                        return (slideProtocols.stain || []).length;
+                    }
                 },
                 cellRenderer: (params) => {
                     const count = params.value;
-                    if (count === 0) return '0';
+                    if (count === 0) return '';
 
-                    const localCaseId = params.data[columnMapping.localCaseId];
+                    const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
                     const filename = params.data['name'];
                     const bdsaCaseId = (caseIdMappings || {})[localCaseId];
                     const slideId = `${bdsaCaseId}_${filename}`;
-                    const protocols = (caseProtocolMappings || {})[bdsaCaseId]?.[slideId] || [];
+                    const slideProtocols = (caseProtocolMappings || {})[bdsaCaseId]?.[slideId] || [];
+
+                    // Handle both old format (array) and new format (object with stain/region)
+                    let protocols = [];
+                    if (Array.isArray(slideProtocols)) {
+                        // Old format - assume all protocols are stain protocols
+                        protocols = slideProtocols;
+                    } else if (slideProtocols && typeof slideProtocols === 'object') {
+                        // New format - only show stain protocols for this column
+                        protocols = slideProtocols.stain || [];
+                    }
+
+                    if (!Array.isArray(protocols) || protocols.length === 0) return '';
 
                     // Check if IGNORE protocol is present
-                    const hasIgnore = protocols.includes('ignore');
+                    const hasIgnore = Array.isArray(protocols) && protocols.includes('ignore');
                     const activeProtocols = protocols.filter(p => p !== 'ignore');
 
-                    // Create tooltip with protocol names
+                    // Create protocol names for display
                     const protocolNames = protocols.map(id => {
                         const protocol = stainProtocols.find(p => p.id === id);
                         return protocol ? protocol.name || protocol.id : `Protocol ${id}`;
-                    }).join(', ');
+                    }).join('; ');
 
                     if (hasIgnore) {
-                        return (
-                            <div
-                                title={`Mapped protocols: ${protocolNames}`}
-                                style={{
-                                    cursor: 'help',
-                                    fontWeight: 'bold',
-                                    color: '#dc3545'
-                                }}
-                            >
-                                IGNORE
-                                {activeProtocols.length > 0 && (
-                                    <span style={{ color: '#6c757d', marginLeft: '4px' }}>
-                                        (+{activeProtocols.length})
-                                    </span>
-                                )}
-                            </div>
-                        );
+                        const activeProtocolNames = activeProtocols.map(id => {
+                            const protocol = stainProtocols.find(p => p.id === id);
+                            return protocol ? protocol.name || protocol.id : `Protocol ${id}`;
+                        }).join('; ');
+
+                        return activeProtocols.length > 0 ? `IGNORE (+${activeProtocolNames})` : 'IGNORE';
                     }
 
-                    return (
-                        <div
-                            title={`Mapped protocols: ${protocolNames}`}
-                            style={{
-                                cursor: 'help',
-                                fontWeight: 'bold',
-                                color: count > 0 ? '#28a745' : '#6c757d'
-                            }}
-                        >
-                            {count}
-                        </div>
-                    );
+                    return protocolNames;
                 },
                 cellStyle: (params) => {
                     const count = params.value;
@@ -1178,12 +1303,20 @@ const InputDataTab = () => {
                     }
 
                     // Check if IGNORE protocol is present
-                    const localCaseId = params.data[columnMapping.localCaseId];
+                    const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
                     const filename = params.data['name'];
                     const bdsaCaseId = (caseIdMappings || {})[localCaseId];
                     const slideId = `${bdsaCaseId}_${filename}`;
-                    const protocols = (caseProtocolMappings || {})[bdsaCaseId]?.[slideId] || [];
-                    const hasIgnore = protocols.includes('ignore');
+                    const slideProtocols = (caseProtocolMappings || {})[bdsaCaseId]?.[slideId] || [];
+
+                    // Handle both old format (array) and new format (object with stain/region)
+                    let protocols = [];
+                    if (Array.isArray(slideProtocols)) {
+                        protocols = slideProtocols;
+                    } else if (slideProtocols && typeof slideProtocols === 'object') {
+                        protocols = slideProtocols.stain || [];
+                    }
+                    const hasIgnore = Array.isArray(protocols) && protocols.includes('ignore');
 
                     if (hasIgnore) {
                         return { backgroundColor: '#f8d7da', color: '#721c24' }; // Red for ignored
@@ -1208,8 +1341,37 @@ const InputDataTab = () => {
                 resizable: true,
                 minWidth: 120,
                 width: savedWidth || 120,
+                editable: false,
+                onCellClicked: (params) => {
+                    const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
+                    const filename = params.data['name'];
+                    const bdsaCaseId = (caseIdMappings || {})[localCaseId];
+                    
+                    if (bdsaCaseId && filename) {
+                        const slideId = `${bdsaCaseId}_${filename}`;
+                        const slideProtocols = (caseProtocolMappings || {})[bdsaCaseId]?.[slideId] || [];
+                        
+                        // Get current region protocols
+                        let currentRegionProtocols = [];
+                        if (Array.isArray(slideProtocols)) {
+                            // Old format - assume all are region protocols
+                            currentRegionProtocols = slideProtocols;
+                        } else if (slideProtocols && typeof slideProtocols === 'object') {
+                            // New format - get region protocols
+                            currentRegionProtocols = slideProtocols.region || [];
+                        }
+                        
+                        setShowProtocolEditor({
+                            type: 'region',
+                            bdsaCaseId,
+                            slideId,
+                            filename,
+                            protocols: currentRegionProtocols
+                        });
+                    }
+                },
                 valueGetter: (params) => {
-                    const localCaseId = params.data[columnMapping.localCaseId];
+                    const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
                     const filename = params.data['name'];
 
                     if (!localCaseId || !filename) return 0;
@@ -1218,62 +1380,59 @@ const InputDataTab = () => {
                     if (!bdsaCaseId) return 0;
 
                     const slideId = `${bdsaCaseId}_${filename}`;
-                    const protocols = (caseProtocolMappings || {})[bdsaCaseId]?.[slideId] || [];
+                    const slideProtocols = (caseProtocolMappings || {})[bdsaCaseId]?.[slideId] || [];
 
-                    return Array.isArray(protocols) ? protocols.length : 0;
+                    // Handle both old format (array) and new format (object with stain/region)
+                    if (Array.isArray(slideProtocols)) {
+                        // Old format - count all protocols (for backward compatibility)
+                        return slideProtocols.length;
+                    } else {
+                        // New format - count only region protocols
+                        return (slideProtocols.region || []).length;
+                    }
                 },
                 cellRenderer: (params) => {
                     const count = params.value;
-                    if (count === 0) return '0';
+                    if (count === 0) return '';
 
-                    const localCaseId = params.data[columnMapping.localCaseId];
+                    const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
                     const filename = params.data['name'];
                     const bdsaCaseId = (caseIdMappings || {})[localCaseId];
                     const slideId = `${bdsaCaseId}_${filename}`;
-                    const protocols = (caseProtocolMappings || {})[bdsaCaseId]?.[slideId] || [];
+                    const slideProtocols = (caseProtocolMappings || {})[bdsaCaseId]?.[slideId] || [];
+
+                    // Handle both old format (array) and new format (object with stain/region)
+                    let protocols = [];
+                    if (Array.isArray(slideProtocols)) {
+                        // Old format - assume all protocols are region protocols
+                        protocols = slideProtocols;
+                    } else if (slideProtocols && typeof slideProtocols === 'object') {
+                        // New format - only show region protocols for this column
+                        protocols = slideProtocols.region || [];
+                    }
+
+                    if (!Array.isArray(protocols) || protocols.length === 0) return '';
 
                     // Check if IGNORE protocol is present
-                    const hasIgnore = protocols.includes('ignore');
+                    const hasIgnore = Array.isArray(protocols) && protocols.includes('ignore');
                     const activeProtocols = protocols.filter(p => p !== 'ignore');
 
-                    // Create tooltip with protocol names
+                    // Create protocol names for display
                     const protocolNames = protocols.map(id => {
                         const protocol = regionProtocols.find(p => p.id === id);
                         return protocol ? protocol.name || protocol.id : `Protocol ${id}`;
-                    }).join(', ');
+                    }).join('; ');
 
                     if (hasIgnore) {
-                        return (
-                            <div
-                                title={`Mapped protocols: ${protocolNames}`}
-                                style={{
-                                    cursor: 'help',
-                                    fontWeight: 'bold',
-                                    color: '#dc3545'
-                                }}
-                            >
-                                IGNORE
-                                {activeProtocols.length > 0 && (
-                                    <span style={{ color: '#6c757d', marginLeft: '4px' }}>
-                                        (+{activeProtocols.length})
-                                    </span>
-                                )}
-                            </div>
-                        );
+                        const activeProtocolNames = activeProtocols.map(id => {
+                            const protocol = regionProtocols.find(p => p.id === id);
+                            return protocol ? protocol.name || protocol.id : `Protocol ${id}`;
+                        }).join('; ');
+
+                        return activeProtocols.length > 0 ? `IGNORE (+${activeProtocolNames})` : 'IGNORE';
                     }
 
-                    return (
-                        <div
-                            title={`Mapped protocols: ${protocolNames}`}
-                            style={{
-                                cursor: 'help',
-                                fontWeight: 'bold',
-                                color: count > 0 ? '#28a745' : '#6c757d'
-                            }}
-                        >
-                            {count}
-                        </div>
-                    );
+                    return protocolNames;
                 },
                 cellStyle: (params) => {
                     const count = params.value;
@@ -1282,12 +1441,20 @@ const InputDataTab = () => {
                     }
 
                     // Check if IGNORE protocol is present
-                    const localCaseId = params.data[columnMapping.localCaseId];
+                    const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
                     const filename = params.data['name'];
                     const bdsaCaseId = (caseIdMappings || {})[localCaseId];
                     const slideId = `${bdsaCaseId}_${filename}`;
-                    const protocols = (caseProtocolMappings || {})[bdsaCaseId]?.[slideId] || [];
-                    const hasIgnore = protocols.includes('ignore');
+                    const slideProtocols = (caseProtocolMappings || {})[bdsaCaseId]?.[slideId] || [];
+
+                    // Handle both old format (array) and new format (object with stain/region)
+                    let protocols = [];
+                    if (Array.isArray(slideProtocols)) {
+                        protocols = slideProtocols;
+                    } else if (slideProtocols && typeof slideProtocols === 'object') {
+                        protocols = slideProtocols.stain || [];
+                    }
+                    const hasIgnore = Array.isArray(protocols) && protocols.includes('ignore');
 
                     if (hasIgnore) {
                         return { backgroundColor: '#f8d7da', color: '#721c24' }; // Red for ignored
@@ -1416,10 +1583,18 @@ const InputDataTab = () => {
                             </button>
                             <button
                                 className="load-dsa-data-btn"
-                                onClick={() => loadDsaData()}
+                                onClick={() => loadCurrentData()}
                                 disabled={!dsaConfig?.baseUrl || !dsaConfig?.resourceId || !girderToken}
                             >
                                 Load DSA Data
+                            </button>
+                            <button
+                                className="dsa-sync-btn"
+                                onClick={() => setShowDsaSync(true)}
+                                disabled={!dsaConfig?.baseUrl || !dsaConfig?.resourceId || !girderToken || rowData.length === 0}
+                                title="Sync local metadata to DSA server"
+                            >
+                                🔄 DSA Metadata Sync
                             </button>
                             <button
                                 className="regex-rules-btn"
@@ -1427,6 +1602,21 @@ const InputDataTab = () => {
                             >
                                 Regex Rules
                             </button>
+                            {(() => {
+                                const hasRules = regexRules && Object.values(regexRules).some(rule => rule && rule.pattern && rule.pattern.trim() !== '');
+                                const shouldShow = pendingRegexApplication || hasRules;
+
+                                return shouldShow && (
+                                    <button
+                                        className="apply-regex-btn"
+                                        onClick={handleApplyRegexRules}
+                                        disabled={loading}
+                                        title={regexApplied ? "Regex rules have been applied" : "Apply configured regex rules to current data"}
+                                    >
+                                        {loading ? 'Applying...' : regexApplied ? 'Regex Applied' : 'Apply Regex Rules'}
+                                    </button>
+                                );
+                            })()}
                         </>
                     )}
                 </div>
@@ -1434,7 +1624,7 @@ const InputDataTab = () => {
                 <ColumnControl
                     allColumns={columnDefs.map(col => col.field)}
                     rowData={rowData}
-                    onColumnVisibilityChange={handleColumnVisibilityChange}
+                    onHiddenColumnsChange={handleColumnVisibilityChange}
                     onColumnMappingChange={handleColumnMappingChange}
                     onColumnOrderChange={handleColumnOrderChange}
                 />
@@ -1522,6 +1712,7 @@ const InputDataTab = () => {
                                     onChange={(e) => {
                                         const newConfig = { ...(dsaConfig || {}), baseUrl: e.target.value };
                                         setDsaConfig(newConfig);
+                                        // Save immediately to localStorage (like old version)
                                         saveDsaConfig(newConfig);
                                     }}
                                     placeholder="https://your-dsa-instance.com"
@@ -1535,8 +1726,7 @@ const InputDataTab = () => {
                                     value={dsaConfig?.resourceType || 'folder'}
                                     onChange={(e) => {
                                         const newConfig = { ...(dsaConfig || {}), resourceType: e.target.value };
-                                        setDsaConfig(newConfig);
-                                        saveDsaConfig(newConfig);
+                                        updateDsaConfig(newConfig);
                                     }}
                                     className="resource-type-dropdown"
                                 >
@@ -1554,6 +1744,7 @@ const InputDataTab = () => {
                                     onChange={(e) => {
                                         const newConfig = { ...(dsaConfig || {}), resourceId: e.target.value };
                                         setDsaConfig(newConfig);
+                                        // Save immediately to localStorage (like old version)
                                         saveDsaConfig(newConfig);
                                     }}
                                     placeholder="resource-id"
@@ -1632,6 +1823,11 @@ const InputDataTab = () => {
                     }}
                 />
             </div>
+
+            <DsaSyncModal
+                isOpen={showDsaSync}
+                onClose={() => setShowDsaSync(false)}
+            />
         </div>
     );
 };

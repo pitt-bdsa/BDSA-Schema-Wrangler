@@ -1,5 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import './CaseManagementTab.css';
+import {
+    subscribeToDataStore,
+    getDataStoreSnapshot,
+    updateCaseIdMappings,
+    updateCaseProtocolMappings,
+    generateUnmappedCases,
+    getCurrentData,
+    DATA_CHANGE_EVENTS
+} from '../utils/dataStore';
 
 const STAIN_PROTOCOLS_KEY = 'bdsa_stain_protocols';
 const REGION_PROTOCOLS_KEY = 'bdsa_region_protocols';
@@ -13,19 +22,34 @@ const CaseManagementTab = () => {
     const [activeSubTab, setActiveSubTab] = useState('case-mapping');
     const [unmappedCases, setUnmappedCases] = useState([]);
     const [selectedCase, setSelectedCase] = useState(null);
-    const [caseProtocolMappings, setCaseProtocolMappings] = useState({});
     const [stainProtocols, setStainProtocols] = useState([]);
     const [regionProtocols, setRegionProtocols] = useState([]);
     const [stainSchema, setStainSchema] = useState(null);
     const [regionSchema, setRegionSchema] = useState(null);
-    const [caseIdMappings, setCaseIdMappings] = useState({});
     const [bdsaInstitutionId, setBdsaInstitutionId] = useState('001');
-    const [csvData, setCsvData] = useState([]);
-    const [columnMapping, setColumnMapping] = useState({
-        localStainID: '',
-        localCaseId: '',
-        localRegionId: ''
-    });
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [isGeneratingAll, setIsGeneratingAll] = useState(false);
+    const [generateAllProgress, setGenerateAllProgress] = useState({ current: 0, total: 0 });
+    const [localInputValues, setLocalInputValues] = useState({});
+    const [isEditing, setIsEditing] = useState(false);
+    const previousSortedDataRef = useRef([]);
+    const [generateAllCancelled, setGenerateAllCancelled] = useState(false);
+
+    // Data from centralized store
+    const [dataStore, setDataStore] = useState(getDataStoreSnapshot());
+
+    // Destructure commonly used data from store
+    const {
+        processedData: csvData,
+        columnMapping,
+        caseIdMappings,
+        caseProtocolMappings,
+        currentDataSource,
+        isLoading,
+        regexApplied,
+        regexGeneratedValues,
+        pendingRegexApplication
+    } = dataStore;
 
     const [localAliases, setLocalAliases] = useState({});
     const [regionAliases, setRegionAliases] = useState({});
@@ -34,6 +58,11 @@ const CaseManagementTab = () => {
     const [expandedStainGroups, setExpandedStainGroups] = useState(new Set());
     const [expandedRegionGroups, setExpandedRegionGroups] = useState(new Set());
     const [selectedSlides, setSelectedSlides] = useState(new Set());
+
+    // Case ID table state
+    const [sortField, setSortField] = useState('localCaseId');
+    const [sortDirection, setSortDirection] = useState('asc');
+    const [showMappedCases, setShowMappedCases] = useState(true);
 
     // Migration function to convert old single-protocol format to new array format
     const migrateProtocolMappings = (mappings) => {
@@ -62,17 +91,43 @@ const CaseManagementTab = () => {
         return migrated;
     };
 
-    // Load data from localStorage on component mount
+    // Subscribe to data store changes
     useEffect(() => {
-        loadData();
+        const unsubscribe = subscribeToDataStore((event) => {
+            console.log('CaseManagementTab received data store event:', event.eventType);
+
+            // Update local state with new data store snapshot
+            setDataStore(event.dataStore);
+
+            // Handle specific events
+            switch (event.eventType) {
+                case DATA_CHANGE_EVENTS.DATA_LOADED:
+                case DATA_CHANGE_EVENTS.DATA_UPDATED:
+                case DATA_CHANGE_EVENTS.MAPPINGS_CHANGED:
+                case DATA_CHANGE_EVENTS.PROTOCOLS_CHANGED:
+                    // Regenerate unmapped cases when data changes
+                    setTimeout(() => {
+                        const newUnmappedCases = generateUnmappedCases();
+                        setUnmappedCases(newUnmappedCases);
+                    }, 100);
+                    break;
+                default:
+                    break;
+            }
+        });
+
+        // Load initial data
         loadStainSchema();
-        loadCSVData();
+        loadInitialData();
+
+        return unsubscribe;
     }, []);
 
-    // Regenerate unmapped cases when column mapping or CSV data changes
+    // Generate unmapped cases when data changes
     useEffect(() => {
         if (csvData.length > 0 && (columnMapping.localStainID || columnMapping.localRegionId)) {
-            generateUnmappedCasesFromData();
+            const newUnmappedCases = generateUnmappedCases();
+            setUnmappedCases(newUnmappedCases);
         }
     }, [csvData, columnMapping.localStainID, columnMapping.localRegionId]);
 
@@ -105,8 +160,13 @@ const CaseManagementTab = () => {
         return () => window.removeEventListener('storage', handleStorageChange);
     }, []);
 
-    const loadData = () => {
+    const loadInitialData = () => {
         try {
+            console.log('CaseManagementTab loading initial data...');
+            console.log('Current data source:', currentDataSource);
+            console.log('CSV data length:', csvData.length);
+            console.log('Column mapping:', columnMapping);
+
             // Load stain protocols
             const storedStain = localStorage.getItem(STAIN_PROTOCOLS_KEY);
             if (storedStain) {
@@ -117,31 +177,6 @@ const CaseManagementTab = () => {
             const storedRegion = localStorage.getItem(REGION_PROTOCOLS_KEY);
             if (storedRegion) {
                 setRegionProtocols(JSON.parse(storedRegion));
-            }
-
-            // Load case mappings
-            const storedMappings = localStorage.getItem(CASE_MAPPINGS_KEY);
-            if (storedMappings) {
-                const parsedMappings = JSON.parse(storedMappings);
-                // Migrate from old single-protocol format to new array format
-                const migratedMappings = migrateProtocolMappings(parsedMappings);
-                setCaseProtocolMappings(migratedMappings);
-                localStorage.setItem(CASE_MAPPINGS_KEY, JSON.stringify(migratedMappings));
-            } else {
-                setCaseProtocolMappings({});
-                localStorage.setItem(CASE_MAPPINGS_KEY, JSON.stringify({}));
-            }
-
-            // Load case ID mappings
-            const storedCaseIdMappings = localStorage.getItem(CASE_ID_MAPPINGS_KEY);
-            if (storedCaseIdMappings) {
-                setCaseIdMappings(JSON.parse(storedCaseIdMappings));
-            }
-
-            // Load column mapping
-            const storedColumnMapping = localStorage.getItem('bdsa_column_mapping');
-            if (storedColumnMapping) {
-                setColumnMapping(JSON.parse(storedColumnMapping));
             }
 
             // Load BDSA institution ID
@@ -162,93 +197,18 @@ const CaseManagementTab = () => {
                 setRegionAliases(JSON.parse(storedRegionAliases));
             }
 
-            // Generate unmapped cases from actual data
-            generateUnmappedCasesFromData();
-        } catch (error) {
-            console.error('Error loading case management data from localStorage:', error);
-        }
-    };
-
-    const loadCSVData = async () => {
-        try {
-            const response = await fetch('/year_2020_dsametadata.csv');
-            const csvText = await response.text();
-
-            // Simple CSV parsing (you might want to use Papa Parse for more robust parsing)
-            const lines = csvText.split('\n');
-            const headers = lines[0].split(',').map(h => h.trim());
-            const data = lines.slice(1).map(line => {
-                const values = line.split(',');
-                const row = {};
-                headers.forEach((header, index) => {
-                    row[header] = values[index]?.trim() || '';
-                });
-                return row;
-            }).filter(row => Object.values(row).some(val => val !== ''));
-
-
-
-            setCsvData(data);
-        } catch (error) {
-            console.error('Error loading CSV data:', error);
-        }
-    };
-
-    const generateUnmappedCasesFromData = () => {
-        if (!csvData.length || (!columnMapping.localStainID && !columnMapping.localRegionId)) return;
-
-        // Group data by BDSA case ID only
-        const caseGroups = {};
-
-        csvData.forEach(row => {
-            const localCaseId = row[columnMapping.localCaseId];
-            const localStainId = row[columnMapping.localStainID];
-            const localRegionId = row[columnMapping.localRegionId];
-            // Get the actual filename from the name column
-            const filename = row['name'];
-
-            // If filename is empty, try to construct one from available data
-            const finalFilename = filename || `${localCaseId}_${localStainId || localRegionId}.svs`;
-
-            // Skip if no stain ID or region ID, or no BDSA case ID mapping
-            if ((!localStainId && !localRegionId) || !caseIdMappings[localCaseId]) return;
-
-            const bdsaCaseId = caseIdMappings[localCaseId];
-
-            if (!caseGroups[bdsaCaseId]) {
-                caseGroups[bdsaCaseId] = {
-                    bdsaId: bdsaCaseId,
-                    localCaseId: localCaseId,
-                    slides: []
-                };
+            // Generate unmapped cases from current data store
+            if (csvData.length > 0) {
+                const newUnmappedCases = generateUnmappedCases();
+                setUnmappedCases(newUnmappedCases);
             }
-
-            const slideId = `${bdsaCaseId}_${finalFilename}`;
-            const stainType = localStainId;
-            const regionType = localRegionId;
-
-            // Check if this slide is already mapped to any protocols (now stored as array)
-            const slideProtocols = caseProtocolMappings[bdsaCaseId]?.[slideId] || [];
-            const isMapped = Array.isArray(slideProtocols) ? slideProtocols.length > 0 : Boolean(slideProtocols);
-
-            caseGroups[bdsaCaseId].slides.push({
-                id: slideId,
-                stainType: stainType,
-                regionType: regionType,
-                status: isMapped ? 'mapped' : 'unmapped',
-                localStainId: localStainId,
-                localRegionId: localRegionId,
-                filename: finalFilename // Store the final filename
-            });
-        });
-
-        const unmappedCasesList = Object.values(caseGroups).filter(caseData =>
-            caseData.slides.some(slide => slide.status === 'unmapped')
-        );
-
-        setUnmappedCases(unmappedCasesList);
-        localStorage.setItem(UNMAPPED_CASES_KEY, JSON.stringify(unmappedCasesList));
+        } catch (error) {
+            console.error('Error loading case management data:', error);
+        }
     };
+
+    // Note: Data loading is now handled by the centralized data store
+    // The generateUnmappedCases function is now imported from dataStore
 
     const loadStainSchema = async () => {
         try {
@@ -275,101 +235,187 @@ const CaseManagementTab = () => {
         setSelectedCase(caseData);
     };
 
+    // Helper function to get protocols for a slide (handles both old and new format)
+    const getSlideProtocols = (slideId, protocolType = null) => {
+        const slideProtocols = caseProtocolMappings[selectedCase?.bdsaId]?.[slideId] || { stain: [], region: [] };
+
+        // Handle old format (array) - return all protocols
+        if (Array.isArray(slideProtocols)) {
+            return slideProtocols;
+        }
+
+        // Handle new format (segregated object)
+        if (protocolType) {
+            return slideProtocols[protocolType] || [];
+        }
+
+        // If no protocol type specified, return all protocols (for backward compatibility)
+        return [...(slideProtocols.stain || []), ...(slideProtocols.region || [])];
+    };
+
     const handleProtocolMapping = (slideId, protocolId) => {
         if (!selectedCase) return;
 
-        // Get current protocols for this slide (initialize as empty array if none)
-        const currentProtocols = caseProtocolMappings[selectedCase.bdsaId]?.[slideId] || [];
+        console.log('=== ADDING PROTOCOL MAPPING (SEGREGATED) ===');
+        console.log('Slide ID:', slideId, 'Protocol ID:', protocolId);
 
-        // Add the new protocol if it's not already there
-        const updatedProtocols = currentProtocols.includes(protocolId)
-            ? currentProtocols
-            : [...currentProtocols, protocolId];
+        // Get current protocols for this slide (segregated structure)
+        const currentSlideProtocols = caseProtocolMappings[selectedCase.bdsaId]?.[slideId] || { stain: [], region: [] };
+        console.log('Current slide protocols (segregated):', currentSlideProtocols);
+
+        // Determine protocol type based on available protocols
+        const isStainProtocol = stainProtocols.some(p => p.id === protocolId);
+        const isRegionProtocol = regionProtocols.some(p => p.id === protocolId);
+
+        console.log('Protocol type detection:', { isStainProtocol, isRegionProtocol });
+
+        // Update the appropriate protocol type
+        let updatedSlideProtocols;
+        if (isStainProtocol) {
+            const currentStainProtocols = Array.isArray(currentSlideProtocols) ? currentSlideProtocols : currentSlideProtocols.stain || [];
+            const updatedStainProtocols = currentStainProtocols.includes(protocolId)
+                ? currentStainProtocols
+                : [...currentStainProtocols, protocolId];
+
+            updatedSlideProtocols = {
+                stain: updatedStainProtocols,
+                region: Array.isArray(currentSlideProtocols) ? [] : (currentSlideProtocols.region || [])
+            };
+        } else if (isRegionProtocol) {
+            const currentRegionProtocols = Array.isArray(currentSlideProtocols) ? currentSlideProtocols : currentSlideProtocols.region || [];
+            const updatedRegionProtocols = currentRegionProtocols.includes(protocolId)
+                ? currentRegionProtocols
+                : [...currentRegionProtocols, protocolId];
+
+            updatedSlideProtocols = {
+                stain: Array.isArray(currentSlideProtocols) ? [] : (currentSlideProtocols.stain || []),
+                region: updatedRegionProtocols
+            };
+        } else {
+            console.error('Unknown protocol type for ID:', protocolId);
+            return;
+        }
+
+        console.log('Updated slide protocols (segregated):', updatedSlideProtocols);
 
         const updatedMappings = {
             ...caseProtocolMappings,
             [selectedCase.bdsaId]: {
                 ...caseProtocolMappings[selectedCase.bdsaId],
-                [slideId]: updatedProtocols
+                [slideId]: updatedSlideProtocols
             }
         };
 
-        setCaseProtocolMappings(updatedMappings);
-        localStorage.setItem(CASE_MAPPINGS_KEY, JSON.stringify(updatedMappings));
+        console.log('Updated mappings:', updatedMappings);
 
-        // Dispatch custom event to notify other components
-        window.dispatchEvent(new CustomEvent('protocolMappingsChanged'));
+        // Use centralized data store update function
+        updateCaseProtocolMappings(updatedMappings);
 
-        // Update the unmapped cases to mark this slide as mapped
-        const updatedUnmappedCases = unmappedCases.map(caseData => {
-            if (caseData.bdsaId === selectedCase.bdsaId) {
-                return {
-                    ...caseData,
-                    slides: caseData.slides.map(slide =>
-                        slide.id === slideId
-                            ? { ...slide, status: 'mapped' }
-                            : slide
-                    )
-                };
-            }
-            return caseData;
-        });
-
-        setUnmappedCases(updatedUnmappedCases);
-        localStorage.setItem(UNMAPPED_CASES_KEY, JSON.stringify(updatedUnmappedCases));
-
-        // Also update the selectedCase to ensure UI updates immediately
-        const updatedSelectedCase = updatedUnmappedCases.find(caseData => caseData.bdsaId === selectedCase.bdsaId);
-        if (updatedSelectedCase) {
-            setSelectedCase(updatedSelectedCase);
-        }
+        // The data store will handle localStorage saving and event notifications
+        // UI updates will happen automatically via the subscription
     };
 
     const removeProtocolMapping = (slideId, protocolId) => {
         if (!selectedCase) return;
 
-        // Get current protocols for this slide
-        const currentProtocols = caseProtocolMappings[selectedCase.bdsaId]?.[slideId] || [];
+        console.log('=== REMOVING PROTOCOL MAPPING (SEGREGATED) ===');
+        console.log('Slide ID:', slideId, 'Protocol ID:', protocolId, 'Selected Case:', selectedCase.bdsaId);
+        console.log('Current protocol mappings:', caseProtocolMappings);
 
-        // Remove the specified protocol
-        const updatedProtocols = currentProtocols.filter(id => id !== protocolId);
+        // Get current protocols for this slide (segregated structure)
+        const currentSlideProtocols = caseProtocolMappings[selectedCase.bdsaId]?.[slideId] || { stain: [], region: [] };
+        console.log('Current slide protocols (segregated):', currentSlideProtocols);
 
-        const updatedMappings = {
-            ...caseProtocolMappings,
-            [selectedCase.bdsaId]: {
-                ...caseProtocolMappings[selectedCase.bdsaId],
-                [slideId]: updatedProtocols
+        // Determine protocol type and remove from appropriate array
+        const isStainProtocol = stainProtocols.some(p => p.id === protocolId);
+        const isRegionProtocol = regionProtocols.some(p => p.id === protocolId);
+
+        console.log('Protocol type detection:', { isStainProtocol, isRegionProtocol });
+
+        let updatedSlideProtocols;
+        if (isStainProtocol) {
+            const currentStainProtocols = Array.isArray(currentSlideProtocols) ? currentSlideProtocols : currentSlideProtocols.stain || [];
+            const updatedStainProtocols = currentStainProtocols.filter(id => String(id) !== String(protocolId));
+
+            updatedSlideProtocols = {
+                stain: updatedStainProtocols,
+                region: Array.isArray(currentSlideProtocols) ? [] : (currentSlideProtocols.region || [])
+            };
+
+            console.log(`Removed stain protocol ${protocolId}, remaining stain protocols:`, updatedStainProtocols);
+        } else if (isRegionProtocol) {
+            const currentRegionProtocols = Array.isArray(currentSlideProtocols) ? currentSlideProtocols : currentSlideProtocols.region || [];
+            const updatedRegionProtocols = currentRegionProtocols.filter(id => String(id) !== String(protocolId));
+
+            updatedSlideProtocols = {
+                stain: Array.isArray(currentSlideProtocols) ? [] : (currentSlideProtocols.stain || []),
+                region: updatedRegionProtocols
+            };
+
+            console.log(`Removed region protocol ${protocolId}, remaining region protocols:`, updatedRegionProtocols);
+        } else {
+            console.error('Unknown protocol type for ID:', protocolId);
+            return;
+        }
+
+        console.log('Updated slide protocols (segregated):', updatedSlideProtocols);
+
+        // Create updated mappings
+        const updatedMappings = { ...caseProtocolMappings };
+
+        if (!updatedMappings[selectedCase.bdsaId]) {
+            updatedMappings[selectedCase.bdsaId] = {};
+        }
+
+        // Check if both stain and region arrays are empty
+        if (updatedSlideProtocols.stain.length === 0 && updatedSlideProtocols.region.length === 0) {
+            // Remove the slide entry entirely if no protocols remain
+            delete updatedMappings[selectedCase.bdsaId][slideId];
+            console.log(`Removed slide ${slideId} entirely (no protocols remaining)`);
+        } else {
+            // Update with remaining protocols
+            updatedMappings[selectedCase.bdsaId][slideId] = updatedSlideProtocols;
+        }
+
+        console.log('Updated mappings after removal:', updatedMappings);
+
+        // Use centralized data store update function
+        updateCaseProtocolMappings(updatedMappings);
+
+        // The data store will handle localStorage saving and event notifications
+        // UI updates will happen automatically via the subscription
+    };
+
+    const cleanupOrphanedProtocolMappings = () => {
+        if (!selectedCase) return;
+
+        console.log('Cleaning up orphaned protocol mappings for case:', selectedCase.bdsaId);
+
+        const updatedMappings = { ...caseProtocolMappings };
+        let hasChanges = false;
+
+        // Get all valid protocol IDs
+        const validStainProtocolIds = new Set(stainProtocols.map(p => p.id));
+        const validRegionProtocolIds = new Set(regionProtocols.map(p => p.id));
+        const allValidProtocolIds = new Set([...validStainProtocolIds, ...validRegionProtocolIds]);
+
+        // Clean up each slide's protocol mappings
+        Object.keys(updatedMappings[selectedCase.bdsaId] || {}).forEach(slideId => {
+            const currentProtocols = updatedMappings[selectedCase.bdsaId][slideId] || [];
+            const validProtocols = currentProtocols.filter(protocolId => allValidProtocolIds.has(protocolId));
+
+            if (validProtocols.length !== currentProtocols.length) {
+                console.log(`Cleaned up slide ${slideId}: removed ${currentProtocols.length - validProtocols.length} orphaned protocols`);
+                updatedMappings[selectedCase.bdsaId][slideId] = validProtocols;
+                hasChanges = true;
             }
-        };
-
-        setCaseProtocolMappings(updatedMappings);
-        localStorage.setItem(CASE_MAPPINGS_KEY, JSON.stringify(updatedMappings));
-
-        // Dispatch custom event to notify other components
-        window.dispatchEvent(new CustomEvent('protocolMappingsChanged'));
-
-        // Update the unmapped cases - mark as unmapped if no protocols remain
-        const updatedUnmappedCases = unmappedCases.map(caseData => {
-            if (caseData.bdsaId === selectedCase.bdsaId) {
-                return {
-                    ...caseData,
-                    slides: caseData.slides.map(slide =>
-                        slide.id === slideId
-                            ? { ...slide, status: updatedProtocols.length > 0 ? 'mapped' : 'unmapped' }
-                            : slide
-                    )
-                };
-            }
-            return caseData;
         });
 
-        setUnmappedCases(updatedUnmappedCases);
-        localStorage.setItem(UNMAPPED_CASES_KEY, JSON.stringify(updatedUnmappedCases));
-
-        // Also update the selectedCase to ensure UI updates immediately
-        const updatedSelectedCase = updatedUnmappedCases.find(caseData => caseData.bdsaId === selectedCase.bdsaId);
-        if (updatedSelectedCase) {
-            setSelectedCase(updatedSelectedCase);
+        if (hasChanges) {
+            console.log('Updated mappings after cleanup:', updatedMappings);
+            updateCaseProtocolMappings(updatedMappings);
+        } else {
+            console.log('No orphaned protocols found');
         }
     };
 
@@ -673,28 +719,156 @@ const CaseManagementTab = () => {
         return group.slides.filter(slide => selectedSlides.has(slide.id));
     };
 
+    // Helper function to check if a value was generated by regex
+    const isValueRegexGenerated = (rowIndex, fieldName) => {
+        return regexGeneratedValues.has(`${rowIndex}_${fieldName}`);
+    };
+
     // Case ID Mapping Functions
     const getUniqueCaseIds = () => {
         if (!columnMapping.localCaseId || !csvData.length) return [];
 
         const caseIdCounts = {};
-        csvData.forEach(row => {
-            const caseId = row[columnMapping.localCaseId];
+        const caseIdSources = {}; // Track which rows have regex-generated case IDs
+
+        csvData.forEach((row, index) => {
+            // Use BDSA.localCaseId as the authoritative source
+            const caseId = row.BDSA?.localCaseId || row[columnMapping.localCaseId];
             if (caseId) {
                 caseIdCounts[caseId] = (caseIdCounts[caseId] || 0) + 1;
+
+                // Check if this case ID was generated by regex
+                if (isValueRegexGenerated(index, 'localCaseId')) {
+                    if (!caseIdSources[caseId]) {
+                        caseIdSources[caseId] = { hasRegexGenerated: false, hasStored: false, hasConflict: false };
+                    }
+                    caseIdSources[caseId].hasRegexGenerated = true;
+                } else {
+                    if (!caseIdSources[caseId]) {
+                        caseIdSources[caseId] = { hasRegexGenerated: false, hasStored: false, hasConflict: false };
+                    }
+                    caseIdSources[caseId].hasStored = true;
+                }
+
+                // Check for data source conflicts
+                if (row._dataSource?.localCaseId === 'regex' && columnMapping.localCaseId && row[columnMapping.localCaseId]) {
+                    const sourceValue = row[columnMapping.localCaseId];
+                    const storedValue = row.BDSA?.localCaseId;
+                    if (sourceValue !== storedValue) {
+                        caseIdSources[caseId].hasConflict = true;
+                    }
+                }
             }
         });
 
-        return Object.entries(caseIdCounts)
+        let cases = Object.entries(caseIdCounts)
             .map(([caseId, count]) => ({
                 localCaseId: caseId,
                 rowCount: count,
-                bdsaCaseId: caseIdMappings[caseId] || null
-            }))
-            .sort((a, b) => a.localCaseId.localeCompare(b.localCaseId));
+                bdsaCaseId: caseIdMappings[caseId] || null,
+                isMapped: Boolean(caseIdMappings[caseId]),
+                hasRegexGenerated: caseIdSources[caseId]?.hasRegexGenerated || false,
+                hasStored: caseIdSources[caseId]?.hasStored || false,
+                hasConflict: caseIdSources[caseId]?.hasConflict || false,
+                isMixed: (caseIdSources[caseId]?.hasRegexGenerated && caseIdSources[caseId]?.hasStored) || false
+            }));
+
+        // Filter mapped/unmapped cases
+        if (!showMappedCases) {
+            cases = cases.filter(caseItem => !caseItem.isMapped);
+        }
+
+        // Sort cases
+        cases.sort((a, b) => {
+            let aValue, bValue;
+
+            switch (sortField) {
+                case 'localCaseId':
+                    aValue = a.localCaseId;
+                    bValue = b.localCaseId;
+                    break;
+                case 'rowCount':
+                    aValue = a.rowCount;
+                    bValue = b.rowCount;
+                    break;
+                case 'bdsaCaseId':
+                    aValue = a.bdsaCaseId || '';
+                    bValue = b.bdsaCaseId || '';
+                    break;
+                default:
+                    aValue = a.localCaseId;
+                    bValue = b.localCaseId;
+            }
+
+            if (sortField === 'rowCount') {
+                // Numeric sort for row count
+                return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+            } else {
+                // String sort for other fields
+                const comparison = aValue.localeCompare(bValue);
+                return sortDirection === 'asc' ? comparison : -comparison;
+            }
+        });
+
+        return cases;
+    };
+
+    // Memoized sorted case IDs - only recalculates when actual data changes, not during editing
+    const sortedCaseIds = useMemo(() => {
+        // If currently editing, don't re-sort to prevent disorienting jumps
+        if (isEditing) {
+            return previousSortedDataRef.current;
+        }
+        const newData = getUniqueCaseIds();
+        previousSortedDataRef.current = newData;
+        return newData;
+    }, [csvData, caseIdMappings, columnMapping.localCaseId, showMappedCases, sortField, sortDirection, isEditing]);
+
+    // Memoized duplicate detection - only recalculates when sorted case IDs change
+    const duplicateBdsaCaseIds = useMemo(() => {
+        const bdsaCaseIdCounts = new Map();
+
+        // Count occurrences of each BDSA Case ID
+        sortedCaseIds.forEach(caseData => {
+            if (caseData.bdsaCaseId) {
+                const count = bdsaCaseIdCounts.get(caseData.bdsaCaseId) || 0;
+                bdsaCaseIdCounts.set(caseData.bdsaCaseId, count + 1);
+            }
+        });
+
+        // Find duplicates (BDSA Case IDs that appear more than once)
+        const duplicates = new Set();
+        bdsaCaseIdCounts.forEach((count, bdsaCaseId) => {
+            if (count > 1) {
+                duplicates.add(bdsaCaseId);
+            }
+        });
+
+        return duplicates;
+    }, [sortedCaseIds]);
+
+    const handleSort = (field) => {
+        if (sortField === field) {
+            // Toggle direction if same field
+            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+        } else {
+            // Set new field with ascending direction
+            setSortField(field);
+            setSortDirection('asc');
+        }
+    };
+
+    const getSortIcon = (field) => {
+        if (sortField !== field) return '↕️';
+        return sortDirection === 'asc' ? '↑' : '↓';
     };
 
     const updateCaseIdMapping = (localCaseId, bdsaCaseId) => {
+        console.log('=== UPDATE CASE ID MAPPING ===');
+        console.log('localCaseId:', localCaseId);
+        console.log('bdsaCaseId:', bdsaCaseId);
+        console.log('current caseIdMappings:', caseIdMappings);
+
         const newMappings = { ...caseIdMappings };
         if (bdsaCaseId) {
             newMappings[localCaseId] = bdsaCaseId;
@@ -702,11 +876,22 @@ const CaseManagementTab = () => {
             delete newMappings[localCaseId];
         }
 
-        setCaseIdMappings(newMappings);
-        localStorage.setItem(CASE_ID_MAPPINGS_KEY, JSON.stringify(newMappings));
+        console.log('newMappings:', newMappings);
+        console.log('Calling updateCaseIdMappings from data store...');
 
-        // Regenerate unmapped cases after mapping change
-        setTimeout(() => generateUnmappedCasesFromData(), 100);
+        // Use centralized data store update function
+        updateCaseIdMappings(newMappings);
+
+        console.log('updateCaseIdMappings called successfully');
+
+        // If we just generated a BDSA Case ID, temporarily show all cases so the user can see their change
+        if (bdsaCaseId && showMappedCases === false) {
+            console.log('Temporarily showing all cases to display the newly generated BDSA Case ID');
+            setShowMappedCases(true);
+        }
+
+        // The data store will handle localStorage saving and event notifications
+        // Unmapped cases will be regenerated automatically via the subscription
     };
 
     const getNextSequentialNumber = () => {
@@ -722,11 +907,105 @@ const CaseManagementTab = () => {
     };
 
     const generateSequentialBdsaCaseId = (localCaseId) => {
-        if (!localCaseId || !bdsaInstitutionId) return;
+        console.log('=== GENERATE BDSA CASE ID ===');
+        console.log('localCaseId:', localCaseId);
+        console.log('bdsaInstitutionId:', bdsaInstitutionId);
+        console.log('current caseIdMappings:', caseIdMappings);
+        console.log('isGenerating:', isGenerating);
 
-        const nextNumber = getNextSequentialNumber();
-        const bdsaCaseId = `BDSA-${bdsaInstitutionId.padStart(3, '0')}-${nextNumber.toString().padStart(4, '0')}`;
-        updateCaseIdMapping(localCaseId, bdsaCaseId);
+        if (!localCaseId || !bdsaInstitutionId) {
+            console.log('Missing required values - localCaseId:', localCaseId, 'bdsaInstitutionId:', bdsaInstitutionId);
+            return;
+        }
+
+        // Prevent multiple simultaneous generations
+        if (isGenerating) {
+            console.log('Already generating, skipping...');
+            return;
+        }
+
+        // Check if this case already has a BDSA Case ID
+        if (caseIdMappings[localCaseId]) {
+            console.log('Case already has BDSA Case ID:', caseIdMappings[localCaseId]);
+            return;
+        }
+
+        setIsGenerating(true);
+
+        try {
+            const nextNumber = getNextSequentialNumber();
+            const bdsaCaseId = `BDSA-${bdsaInstitutionId.padStart(3, '0')}-${nextNumber.toString().padStart(4, '0')}`;
+
+            console.log('Generated BDSA Case ID:', bdsaCaseId);
+            console.log('Calling updateCaseIdMapping with:', localCaseId, bdsaCaseId);
+
+            updateCaseIdMapping(localCaseId, bdsaCaseId);
+        } finally {
+            // Reset the generating flag after a short delay to allow the UI to update
+            setTimeout(() => {
+                setIsGenerating(false);
+            }, 100);
+        }
+    };
+
+
+
+    const generateAllBdsaCaseIds = async () => {
+        console.log('=== GENERATE ALL BDSA CASE IDS ===');
+
+        const allCases = getUniqueCaseIds();
+        const unmappedCases = allCases.filter(caseItem => !caseItem.isMapped);
+
+        console.log(`Found ${unmappedCases.length} unmapped cases out of ${allCases.length} total cases`);
+
+        if (unmappedCases.length === 0) {
+            console.log('No unmapped cases to generate BDSA Case IDs for');
+            return;
+        }
+
+        setIsGeneratingAll(true);
+        setGenerateAllProgress({ current: 0, total: unmappedCases.length });
+        setGenerateAllCancelled(false);
+
+        try {
+            for (let i = 0; i < unmappedCases.length; i++) {
+                // Check if generation was cancelled
+                if (generateAllCancelled) {
+                    console.log('Generation cancelled by user');
+                    break;
+                }
+
+                const caseItem = unmappedCases[i];
+                console.log(`Generating BDSA Case ID for case ${i + 1}/${unmappedCases.length}: ${caseItem.localCaseId}`);
+
+                // Generate the BDSA Case ID
+                const nextNumber = getNextSequentialNumber();
+                const bdsaCaseId = `BDSA-${bdsaInstitutionId.padStart(3, '0')}-${nextNumber.toString().padStart(4, '0')}`;
+
+                // Update the mapping
+                updateCaseIdMapping(caseItem.localCaseId, bdsaCaseId);
+
+                // Update progress
+                setGenerateAllProgress({ current: i + 1, total: unmappedCases.length });
+
+                // Small delay to keep UI responsive and allow data store updates
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+
+            if (!generateAllCancelled) {
+                console.log(`Successfully generated BDSA Case IDs for ${unmappedCases.length} cases`);
+            }
+        } catch (error) {
+            console.error('Error during bulk generation:', error);
+        } finally {
+            setIsGeneratingAll(false);
+            setGenerateAllProgress({ current: 0, total: 0 });
+        }
+    };
+
+    const cancelGenerateAll = () => {
+        console.log('Cancelling bulk generation...');
+        setGenerateAllCancelled(true);
     };
 
     return (
@@ -749,6 +1028,7 @@ const CaseManagementTab = () => {
                         <span className="stat-label">BDSA Case IDs</span>
                     </div>
                 </div>
+
             </div>
 
             {/* Sub-tabs */}
@@ -774,51 +1054,192 @@ const CaseManagementTab = () => {
                         <div className="no-case-id-mapped">
                             <h3>No Case ID Column Selected</h3>
                             <p>Please configure case ID settings in the BDSA Settings tab to view and manage case ID mappings.</p>
+                            <div style={{ fontSize: '12px', color: '#666', marginTop: '10px' }}>
+                                Debug: columnMapping = {JSON.stringify(columnMapping)}
+                            </div>
                         </div>
                     ) : (
                         <div className="case-id-mapping-table">
                             <div className="mapping-summary">
-                                <p>Showing unique case IDs from column: <strong>{columnMapping.localCaseId}</strong></p>
-                                <p>Total unique cases: <strong>{getUniqueCaseIds().length}</strong></p>
+                                <div className="summary-info">
+                                    <p>Showing unique case IDs from column: <strong>{columnMapping.localCaseId}</strong></p>
+                                    <p>Total unique cases: <strong>{sortedCaseIds.length}</strong></p>
+                                    {(() => {
+                                        if (duplicateBdsaCaseIds.size > 0) {
+                                            return (
+                                                <div className="duplicate-warning">
+                                                    <p style={{ color: '#dc3545', fontWeight: 'bold' }}>
+                                                        ⚠️ Warning: {duplicateBdsaCaseIds.size} duplicate BDSA Case ID{duplicateBdsaCaseIds.size !== 1 ? 's' : ''} detected!
+                                                    </p>
+                                                    <details style={{ marginTop: '5px' }}>
+                                                        <summary style={{ cursor: 'pointer', color: '#dc3545' }}>
+                                                            View duplicates ({duplicateBdsaCaseIds.size})
+                                                        </summary>
+                                                        <ul style={{ marginTop: '5px', paddingLeft: '20px' }}>
+                                                            {Array.from(duplicateBdsaCaseIds).map(bdsaCaseId => (
+                                                                <li key={bdsaCaseId} style={{ color: '#dc3545' }}>
+                                                                    {bdsaCaseId}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </details>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
+                                </div>
+                                <div className="mapping-controls">
+                                    <button
+                                        type="button"
+                                        className={`toggle-mapped-btn ${showMappedCases ? 'active' : ''}`}
+                                        onClick={() => setShowMappedCases(!showMappedCases)}
+                                        title={showMappedCases ? 'Hide already mapped cases' : 'Show already mapped cases'}
+                                    >
+                                        {showMappedCases ? '🙈 Hide Mapped' : '👁️ Show All'}
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        className={`generate-all-btn ${isGeneratingAll ? 'generating' : ''}`}
+                                        onClick={isGeneratingAll ? cancelGenerateAll : generateAllBdsaCaseIds}
+                                        disabled={isGenerating || (isGeneratingAll && generateAllCancelled)}
+                                        title={isGeneratingAll ? 'Cancel bulk generation' : 'Generate BDSA Case IDs for all unmapped cases'}
+                                    >
+                                        {isGeneratingAll ? '⏹️ Cancel' : '🚀 Generate All'}
+                                    </button>
+                                </div>
                             </div>
+
+                            {/* Progress indicator for bulk generation */}
+                            {isGeneratingAll && (
+                                <div className="bulk-generation-progress">
+                                    <div className="progress-info">
+                                        <span>🚀 Generating BDSA Case IDs...</span>
+                                        <span>{generateAllProgress.current} of {generateAllProgress.total} completed</span>
+                                    </div>
+                                    <div className="progress-bar">
+                                        <div
+                                            className="progress-fill"
+                                            style={{
+                                                width: `${(generateAllProgress.current / generateAllProgress.total) * 100}%`
+                                            }}
+                                        ></div>
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="table-container">
                                 <table className="case-id-table">
                                     <thead>
                                         <tr>
-                                            <th>Local Case ID</th>
-                                            <th>Row Count</th>
-                                            <th>BDSA Case ID</th>
+                                            <th
+                                                className="sortable-header"
+                                                onClick={() => handleSort('localCaseId')}
+                                                title="Click to sort by Local Case ID"
+                                            >
+                                                Local Case ID {getSortIcon('localCaseId')}
+                                            </th>
+                                            <th
+                                                className="sortable-header"
+                                                onClick={() => handleSort('rowCount')}
+                                                title="Click to sort by Row Count"
+                                            >
+                                                Row Count {getSortIcon('rowCount')}
+                                            </th>
+                                            <th
+                                                className="sortable-header"
+                                                onClick={() => handleSort('bdsaCaseId')}
+                                                title="Click to sort by BDSA Case ID"
+                                            >
+                                                BDSA Case ID {getSortIcon('bdsaCaseId')}
+                                            </th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {getUniqueCaseIds().map((item, index) => (
-                                            <tr key={index}>
-                                                <td className={item.bdsaCaseId ? 'mapped-case-id' : ''}>
-                                                    {item.localCaseId}
-                                                </td>
-                                                <td>{item.rowCount}</td>
-                                                <td>
-                                                    <input
-                                                        type="text"
-                                                        value={item.bdsaCaseId || ''}
-                                                        onChange={(e) => updateCaseIdMapping(item.localCaseId, e.target.value)}
-                                                        placeholder="BDSA-001-0001"
-                                                        className="bdsa-case-id-input"
-                                                    />
-                                                </td>
-                                                <td>
-                                                    <button
-                                                        className="generate-bdsa-id-btn"
-                                                        onClick={() => generateSequentialBdsaCaseId(item.localCaseId)}
-                                                        disabled={!!item.bdsaCaseId}
-                                                    >
-                                                        Generate
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
+                                        {sortedCaseIds.map((item, index) => {
+                                            const isDuplicate = item.bdsaCaseId && duplicateBdsaCaseIds.has(item.bdsaCaseId);
+
+                                            return (
+                                                <tr key={index} className={isDuplicate ? 'duplicate-bdsa-case' : ''}>
+                                                    <td className={`${item.bdsaCaseId ? 'mapped-case-id' : ''} ${item.hasRegexGenerated ? 'regex-generated' : ''} ${item.isMixed ? 'mixed-source' : ''} ${item.hasConflict ? 'data-conflict' : ''}`}>
+                                                        <div className="case-id-cell">
+                                                            <span className="case-id-value">{item.localCaseId}</span>
+                                                            {item.hasRegexGenerated && (
+                                                                <span className="regex-indicator" title="This value was generated by regex rules">
+                                                                    🔧
+                                                                </span>
+                                                            )}
+                                                            {item.hasConflict && (
+                                                                <span className="conflict-indicator" title="Data source conflict: original data differs from stored value">
+                                                                    ⚠️
+                                                                </span>
+                                                            )}
+                                                            {item.isMixed && !item.hasConflict && (
+                                                                <span className="mixed-indicator" title="This case ID appears in both stored data and regex-generated data">
+                                                                    📊
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td>{item.rowCount}</td>
+                                                    <td>
+                                                        <input
+                                                            type="text"
+                                                            value={localInputValues[item.localCaseId] !== undefined ? localInputValues[item.localCaseId] : (item.bdsaCaseId || '')}
+                                                            onChange={(e) => {
+                                                                // Update local state only - no data store updates until blur/enter
+                                                                setLocalInputValues(prev => ({
+                                                                    ...prev,
+                                                                    [item.localCaseId]: e.target.value
+                                                                }));
+                                                                // Set editing state to prevent auto-sorting
+                                                                setIsEditing(true);
+                                                            }}
+                                                            onBlur={(e) => {
+                                                                console.log('Input blurred, saving value:', e.target.value);
+                                                                updateCaseIdMapping(item.localCaseId, e.target.value);
+                                                                // Clear local state after saving
+                                                                setLocalInputValues(prev => {
+                                                                    const newState = { ...prev };
+                                                                    delete newState[item.localCaseId];
+                                                                    return newState;
+                                                                });
+                                                                // Clear editing state to allow re-sorting
+                                                                setIsEditing(false);
+                                                            }}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter') {
+                                                                    console.log('Enter pressed, saving value:', e.target.value);
+                                                                    updateCaseIdMapping(item.localCaseId, e.target.value);
+                                                                    // Clear local state after saving
+                                                                    setLocalInputValues(prev => {
+                                                                        const newState = { ...prev };
+                                                                        delete newState[item.localCaseId];
+                                                                        return newState;
+                                                                    });
+                                                                    // Clear editing state to allow re-sorting
+                                                                    setIsEditing(false);
+                                                                    e.target.blur(); // Remove focus after Enter
+                                                                }
+                                                            }}
+                                                            placeholder="BDSA-001-0001"
+                                                            className="bdsa-case-id-input"
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <button
+                                                            className="generate-bdsa-id-btn"
+                                                            onClick={() => generateSequentialBdsaCaseId(item.localCaseId)}
+                                                            disabled={!!item.bdsaCaseId || isGenerating}
+                                                        >
+                                                            {isGenerating ? 'Generating...' : 'Generate'}
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>
@@ -944,6 +1365,70 @@ const CaseManagementTab = () => {
                                         >
                                             {hideMappedProtocols ? '👁️ Show All' : '🙈 Hide Mapped'}
                                         </button>
+
+                                        <button
+                                            type="button"
+                                            className="cleanup-orphaned-btn"
+                                            onClick={() => {
+                                                console.log('=== CLEANUP ORPHANED PROTOCOLS ===');
+                                                console.log('Current protocol mappings:', caseProtocolMappings);
+
+                                                // Get all valid protocol IDs
+                                                const validStainProtocolIds = new Set(stainProtocols.map(p => String(p.id)));
+                                                const validRegionProtocolIds = new Set(regionProtocols.map(p => String(p.id)));
+                                                const allValidProtocolIds = new Set([...validStainProtocolIds, ...validRegionProtocolIds]);
+
+                                                console.log('Valid protocol IDs:', Array.from(allValidProtocolIds));
+
+                                                const updatedMappings = { ...caseProtocolMappings };
+                                                let hasChanges = false;
+
+                                                // Clean up each case
+                                                Object.keys(updatedMappings).forEach(caseId => {
+                                                    Object.keys(updatedMappings[caseId] || {}).forEach(slideId => {
+                                                        const currentProtocols = updatedMappings[caseId][slideId] || [];
+                                                        const validProtocols = currentProtocols.filter(id => allValidProtocolIds.has(String(id)));
+
+                                                        if (validProtocols.length !== currentProtocols.length) {
+                                                            console.log(`Cleaned slide ${slideId}: removed ${currentProtocols.length - validProtocols.length} orphaned protocols`);
+                                                            updatedMappings[caseId][slideId] = validProtocols;
+                                                            hasChanges = true;
+                                                        }
+                                                    });
+                                                });
+
+                                                if (hasChanges) {
+                                                    console.log('Updated mappings after cleanup:', updatedMappings);
+                                                    updateCaseProtocolMappings(updatedMappings);
+
+                                                    // Force refresh the grid to show updated state
+                                                    setTimeout(() => {
+                                                        if (gridRef.current && gridRef.current.api) {
+                                                            gridRef.current.api.refreshCells({ force: true });
+                                                            console.log('Grid refreshed after cleanup');
+                                                        }
+                                                    }, 100);
+
+                                                    alert('Orphaned protocols removed!');
+                                                } else {
+                                                    console.log('No orphaned protocols found');
+                                                    alert('No orphaned protocols found');
+                                                }
+                                            }}
+                                            title="Remove orphaned protocol mappings that reference non-existent protocols"
+                                            style={{
+                                                marginLeft: '8px',
+                                                padding: '6px 12px',
+                                                backgroundColor: '#ffc107',
+                                                color: '#000',
+                                                border: '1px solid #ffc107',
+                                                borderRadius: '4px',
+                                                cursor: 'pointer',
+                                                fontSize: '0.9rem'
+                                            }}
+                                        >
+                                            🧹 Cleanup Orphaned
+                                        </button>
                                     </div>
                                 </div>
                                 <div className="slides-mapping">
@@ -971,7 +1456,7 @@ const CaseManagementTab = () => {
                                                         // Count total protocols for this group
                                                         const allProtocols = new Set();
                                                         group.slides.forEach(slide => {
-                                                            const slideProtocols = caseProtocolMappings[selectedCase.bdsaId]?.[slide.id] || [];
+                                                            const slideProtocols = getSlideProtocols(slide.id, 'stain');
                                                             if (Array.isArray(slideProtocols)) {
                                                                 slideProtocols.forEach(protocolId => allProtocols.add(protocolId));
                                                             }
@@ -1042,7 +1527,7 @@ const CaseManagementTab = () => {
 
                                                                 // Check if this protocol is already applied to any slide in this group
                                                                 const isApplied = group.slides.some(slide => {
-                                                                    const slideProtocols = caseProtocolMappings[selectedCase.bdsaId]?.[slide.id] || [];
+                                                                    const slideProtocols = getSlideProtocols(slide.id, 'stain');
                                                                     return Array.isArray(slideProtocols) && slideProtocols.includes(protocol.id);
                                                                 });
 
@@ -1117,7 +1602,7 @@ const CaseManagementTab = () => {
                                                             // Get all unique protocols for this group
                                                             const allProtocols = new Set();
                                                             group.slides.forEach(slide => {
-                                                                const slideProtocols = caseProtocolMappings[selectedCase.bdsaId]?.[slide.id] || [];
+                                                                const slideProtocols = getSlideProtocols(slide.id, 'stain');
                                                                 if (Array.isArray(slideProtocols)) {
                                                                     slideProtocols.forEach(protocolId => allProtocols.add(protocolId));
                                                                 }
@@ -1126,6 +1611,12 @@ const CaseManagementTab = () => {
                                                             return Array.from(allProtocols).map(protocolId => {
                                                                 const protocol = stainProtocols.find(p => p.id === protocolId);
                                                                 const isIgnoreProtocol = protocolId === 'ignore';
+
+                                                                // Debug protocol lookup
+                                                                if (!protocol) {
+                                                                    console.log(`Stain protocol not found for ID: ${protocolId}`, 'Available protocols:', stainProtocols);
+                                                                    console.log('Protocol ID type:', typeof protocolId, 'Protocol ID value:', protocolId);
+                                                                }
 
                                                                 return (
                                                                     <div key={protocolId} className={`mapped-protocol-item ${isIgnoreProtocol ? 'ignore-protocol' : ''}`}>
@@ -1140,11 +1631,28 @@ const CaseManagementTab = () => {
                                                                             type="button"
                                                                             className="remove-protocol-btn"
                                                                             onClick={() => {
-                                                                                group.slides.forEach(slide => {
+                                                                                console.log('=== STAIN PROTOCOL REMOVAL BUTTON CLICKED ===');
+                                                                                console.log('Protocol ID to remove:', protocolId);
+                                                                                console.log('Group slides:', group.slides);
+                                                                                console.log('Selected case:', selectedCase);
+                                                                                console.log('Current protocol mappings:', caseProtocolMappings);
+
+                                                                                group.slides.forEach((slide, index) => {
+                                                                                    console.log(`=== Processing stain slide ${index + 1}/${group.slides.length} ===`);
+                                                                                    console.log(`Slide ID: ${slide.id}`);
+                                                                                    console.log(`About to call removeProtocolMapping for slide: ${slide.id}, protocol: ${protocolId}`);
                                                                                     removeProtocolMapping(slide.id, protocolId);
                                                                                 });
                                                                             }}
-                                                                            title={`Remove "${protocol?.name || 'Unknown Protocol'}" from all slides in this group`}
+                                                                            title={`Force remove "${protocol?.name || 'Unknown Protocol'}" from all slides in this group`}
+                                                                            style={{
+                                                                                backgroundColor: '#dc3545',
+                                                                                color: 'white',
+                                                                                border: '1px solid #dc3545',
+                                                                                borderRadius: '3px',
+                                                                                cursor: 'pointer',
+                                                                                fontWeight: 'bold'
+                                                                            }}
                                                                         >
                                                                             ×
                                                                         </button>
@@ -1164,7 +1672,7 @@ const CaseManagementTab = () => {
 
                                                                 // Check if this protocol is already applied to all slides in the group
                                                                 const isAlreadyApplied = group.slides.every(slide => {
-                                                                    const slideProtocols = caseProtocolMappings[selectedCase.bdsaId]?.[slide.id] || [];
+                                                                    const slideProtocols = getSlideProtocols(slide.id, 'stain');
                                                                     return Array.isArray(slideProtocols) && slideProtocols.includes(protocol.id);
                                                                 });
 
@@ -1233,7 +1741,7 @@ const CaseManagementTab = () => {
                                                                 // Count total protocols for this group
                                                                 const allProtocols = new Set();
                                                                 group.slides.forEach(slide => {
-                                                                    const slideProtocols = caseProtocolMappings[selectedCase.bdsaId]?.[slide.id] || [];
+                                                                    const slideProtocols = getSlideProtocols(slide.id, 'region');
                                                                     if (Array.isArray(slideProtocols)) {
                                                                         slideProtocols.forEach(protocolId => allProtocols.add(protocolId));
                                                                     }
@@ -1300,7 +1808,7 @@ const CaseManagementTab = () => {
 
                                                                         // Check if this protocol is already applied to any slide in this group
                                                                         const isApplied = group.slides.some(slide => {
-                                                                            const slideProtocols = caseProtocolMappings[selectedCase.bdsaId]?.[slide.id] || [];
+                                                                            const slideProtocols = getSlideProtocols(slide.id, 'region');
                                                                             return Array.isArray(slideProtocols) && slideProtocols.includes(protocol.id);
                                                                         });
 
@@ -1371,7 +1879,7 @@ const CaseManagementTab = () => {
                                                                     // Get all unique protocols for this group
                                                                     const allProtocols = new Set();
                                                                     group.slides.forEach(slide => {
-                                                                        const slideProtocols = caseProtocolMappings[selectedCase.bdsaId]?.[slide.id] || [];
+                                                                        const slideProtocols = getSlideProtocols(slide.id, 'region');
                                                                         if (Array.isArray(slideProtocols)) {
                                                                             slideProtocols.forEach(protocolId => allProtocols.add(protocolId));
                                                                         }
@@ -1380,6 +1888,15 @@ const CaseManagementTab = () => {
                                                                     return Array.from(allProtocols).map(protocolId => {
                                                                         const protocol = regionProtocols.find(p => p.id === protocolId);
                                                                         const isIgnoreProtocol = protocolId === 'ignore';
+
+                                                                        // Debug protocol lookup
+                                                                        if (!protocol) {
+                                                                            console.log(`Region protocol not found for ID: ${protocolId}`, 'Available protocols:', regionProtocols);
+                                                                            console.log('Protocol ID type:', typeof protocolId, 'Protocol ID value:', protocolId);
+                                                                            console.log('Available protocol IDs:', regionProtocols.map(p => ({ id: p.id, name: p.name, type: typeof p.id })));
+                                                                            console.log('Available protocol ID strings:', regionProtocols.map(p => String(p.id)));
+                                                                            console.log('Looking for:', String(protocolId));
+                                                                        }
 
                                                                         return (
                                                                             <div key={protocolId} className={`mapped-protocol-item ${isIgnoreProtocol ? 'ignore-protocol' : ''}`}>
@@ -1394,11 +1911,32 @@ const CaseManagementTab = () => {
                                                                                     type="button"
                                                                                     className="remove-protocol-btn"
                                                                                     onClick={() => {
-                                                                                        group.slides.forEach(slide => {
+                                                                                        console.log('=== REGION PROTOCOL REMOVAL BUTTON CLICKED ===');
+                                                                                        console.log('Protocol ID to remove:', protocolId);
+                                                                                        console.log('Current protocol mappings:', caseProtocolMappings);
+
+                                                                                        // Use the centralized removeProtocolMapping function for each slide
+                                                                                        console.log('=== REGION PROTOCOL DELETE BUTTON (SEGREGATED) ===');
+                                                                                        console.log('Protocol ID to remove:', protocolId);
+                                                                                        console.log('Selected case:', selectedCase);
+                                                                                        console.log('Current protocol mappings:', caseProtocolMappings);
+
+                                                                                        group.slides.forEach((slide, index) => {
+                                                                                            console.log(`=== Processing region slide ${index + 1}/${group.slides.length} ===`);
+                                                                                            console.log(`Slide ID: ${slide.id}`);
+                                                                                            console.log(`About to call removeProtocolMapping for slide: ${slide.id}, protocol: ${protocolId}`);
                                                                                             removeProtocolMapping(slide.id, protocolId);
                                                                                         });
                                                                                     }}
-                                                                                    title={`Remove "${protocol?.name || 'Unknown Protocol'}" from all slides in this group`}
+                                                                                    title={`Force remove "${protocol?.name || 'Unknown Protocol'}" from all slides in this group`}
+                                                                                    style={{
+                                                                                        backgroundColor: '#dc3545',
+                                                                                        color: 'white',
+                                                                                        border: '1px solid #dc3545',
+                                                                                        borderRadius: '3px',
+                                                                                        cursor: 'pointer',
+                                                                                        fontWeight: 'bold'
+                                                                                    }}
                                                                                 >
                                                                                     ×
                                                                                 </button>
@@ -1418,7 +1956,7 @@ const CaseManagementTab = () => {
 
                                                                         // Check if this protocol is already applied to all slides in the group
                                                                         const isAlreadyApplied = group.slides.every(slide => {
-                                                                            const slideProtocols = caseProtocolMappings[selectedCase.bdsaId]?.[slide.id] || [];
+                                                                            const slideProtocols = getSlideProtocols(slide.id, 'region');
                                                                             return Array.isArray(slideProtocols) && slideProtocols.includes(protocol.id);
                                                                         });
 
