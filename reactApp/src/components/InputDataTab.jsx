@@ -19,6 +19,7 @@ import {
     updateDsaConfig,
     setGirderToken as setDataStoreGirderToken,
     applyRegexRules,
+    clearCaseProtocolMappings,
     DATA_SOURCE_TYPES
 } from '../utils/dataStore';
 import {
@@ -47,7 +48,16 @@ const InputDataTab = () => {
     const [bdsaInstitutionId, setBdsaInstitutionId] = useState('001');
     const [showBdsaSettings, setShowBdsaSettings] = useState(false);
     const [caseIdMappings, setCaseIdMappings] = useState({});
-    const [caseProtocolMappings, setCaseProtocolMappings] = useState({});
+    // Get caseProtocolMappings from centralized data store instead of local state
+    const [dataStore, setDataStore] = useState(getDataStoreSnapshot());
+    const caseProtocolMappings = dataStore.caseProtocolMappings || {};
+
+    // DEBUG: Log what's in the data store
+    console.log('INPUT DATA TAB - dataStore caseProtocolMappings:', {
+        hasData: Object.keys(caseProtocolMappings).length > 0,
+        caseIds: Object.keys(caseProtocolMappings),
+        fullMappings: caseProtocolMappings
+    });
     const [stainProtocols, setStainProtocols] = useState([]);
     const [regionProtocols, setRegionProtocols] = useState([]);
 
@@ -72,6 +82,9 @@ const InputDataTab = () => {
         const unsubscribe = subscribeToDataStore((event) => {
             console.log('InputDataTab received data store event:', event.eventType);
 
+            // Update local data store snapshot when changes occur
+            setDataStore(getDataStoreSnapshot());
+
             // Update local state with new data store snapshot
             const snapshot = getDataStoreSnapshot();
 
@@ -81,7 +94,7 @@ const InputDataTab = () => {
             setColumnDefs(snapshot.columnDefs);
             setColumnMapping(snapshot.columnMapping);
             setCaseIdMappings(snapshot.caseIdMappings);
-            setCaseProtocolMappings(snapshot.caseProtocolMappings);
+            // caseProtocolMappings is now read directly from dataStore, no need to set local state
             setDataSource(snapshot.currentDataSource);
             // Only update dsaConfig if it's not a DSA config change event (to prevent overriding user input)
             if (event.eventType !== 'dsaConfigChanged') {
@@ -100,7 +113,7 @@ const InputDataTab = () => {
         setColumnDefs(initialSnapshot.columnDefs);
         setColumnMapping(initialSnapshot.columnMapping);
         setCaseIdMappings(initialSnapshot.caseIdMappings);
-        setCaseProtocolMappings(initialSnapshot.caseProtocolMappings);
+        // caseProtocolMappings is now read directly from dataStore
         setDataSource(initialSnapshot.currentDataSource);
         setDsaConfig(initialSnapshot.dsaConfig);
         setGirderToken(initialSnapshot.girderToken);
@@ -218,7 +231,8 @@ const InputDataTab = () => {
             if (localCaseId && filename) {
                 const bdsaCaseId = caseIdMappings[localCaseId];
                 if (bdsaCaseId) {
-                    const slideId = `${bdsaCaseId}_${filename}`;
+                    // Use dsa_id for DSA data, fallback to constructed format for CSV
+                    const slideId = row.dsa_id || `${bdsaCaseId}_${filename}`;
                     const protocols = (caseProtocolMappings || {})[bdsaCaseId]?.[slideId] || [];
                     return {
                         ...row,
@@ -955,7 +969,7 @@ const InputDataTab = () => {
     const loadSettingsForDataSource = (source) => {
         setColumnWidths(loadColumnWidths(source));
         setCaseIdMappings(loadCaseIdMappings(source));
-        setCaseProtocolMappings(loadCaseProtocolMappings(source));
+        // caseProtocolMappings is now read directly from dataStore
 
         // Load hidden columns from localStorage (same key that ColumnControl uses)
         try {
@@ -1009,7 +1023,7 @@ const InputDataTab = () => {
             const stored = localStorage.getItem('bdsa_case_mappings');
             if (stored) {
                 const mappings = JSON.parse(stored);
-                setCaseProtocolMappings(mappings);
+                // caseProtocolMappings is now read directly from dataStore
                 console.log('Protocol mappings loaded:', mappings);
             }
         } catch (error) {
@@ -1208,11 +1222,12 @@ const InputDataTab = () => {
                     const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
                     const filename = params.data['name'];
                     const bdsaCaseId = (caseIdMappings || {})[localCaseId];
-                    
+
                     if (bdsaCaseId && filename) {
-                        const slideId = `${bdsaCaseId}_${filename}`;
+                        // Use dsa_id for DSA data, fallback to constructed format for CSV
+                        const slideId = params.data.dsa_id || `${bdsaCaseId}_${filename}`;
                         const slideProtocols = (caseProtocolMappings || {})[bdsaCaseId]?.[slideId] || [];
-                        
+
                         // Get current stain protocols
                         let currentStainProtocols = [];
                         if (Array.isArray(slideProtocols)) {
@@ -1222,7 +1237,7 @@ const InputDataTab = () => {
                             // New format - get stain protocols
                             currentStainProtocols = slideProtocols.stain || [];
                         }
-                        
+
                         setShowProtocolEditor({
                             type: 'stain',
                             bdsaCaseId,
@@ -1241,7 +1256,16 @@ const InputDataTab = () => {
                     const bdsaCaseId = (caseIdMappings || {})[localCaseId];
                     if (!bdsaCaseId) return 0;
 
-                    const slideId = `${bdsaCaseId}_${filename}`;
+                    // Use dsa_id for DSA data, fallback to constructed format for CSV
+                    const slideId = params.data.dsa_id || `${bdsaCaseId}_${filename}`;
+
+                    // DEBUG: Log slideId lookup details
+                    if (bdsaCaseId) {
+                        console.log('🔍 INPUT DATA - SlideId format:', slideId.length > 20 ? 'dsa_id format' : 'filename format');
+                        console.log('🔍 INPUT DATA - Looking for slideId:', slideId);
+                        console.log('🔍 INPUT DATA - Available slideIds:', Object.keys((caseProtocolMappings || {})[bdsaCaseId] || {}));
+                    }
+
                     const slideProtocols = (caseProtocolMappings || {})[bdsaCaseId]?.[slideId] || [];
 
                     // Handle both old format (array) and new format (object with stain/region)
@@ -1260,7 +1284,8 @@ const InputDataTab = () => {
                     const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
                     const filename = params.data['name'];
                     const bdsaCaseId = (caseIdMappings || {})[localCaseId];
-                    const slideId = `${bdsaCaseId}_${filename}`;
+                    // Use dsa_id for DSA data, fallback to constructed format for CSV
+                    const slideId = params.data.dsa_id || `${bdsaCaseId}_${filename}`;
                     const slideProtocols = (caseProtocolMappings || {})[bdsaCaseId]?.[slideId] || [];
 
                     // Handle both old format (array) and new format (object with stain/region)
@@ -1306,7 +1331,8 @@ const InputDataTab = () => {
                     const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
                     const filename = params.data['name'];
                     const bdsaCaseId = (caseIdMappings || {})[localCaseId];
-                    const slideId = `${bdsaCaseId}_${filename}`;
+                    // Use dsa_id for DSA data, fallback to constructed format for CSV
+                    const slideId = params.data.dsa_id || `${bdsaCaseId}_${filename}`;
                     const slideProtocols = (caseProtocolMappings || {})[bdsaCaseId]?.[slideId] || [];
 
                     // Handle both old format (array) and new format (object with stain/region)
@@ -1346,11 +1372,12 @@ const InputDataTab = () => {
                     const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
                     const filename = params.data['name'];
                     const bdsaCaseId = (caseIdMappings || {})[localCaseId];
-                    
+
                     if (bdsaCaseId && filename) {
-                        const slideId = `${bdsaCaseId}_${filename}`;
+                        // Use dsa_id for DSA data, fallback to constructed format for CSV
+                        const slideId = params.data.dsa_id || `${bdsaCaseId}_${filename}`;
                         const slideProtocols = (caseProtocolMappings || {})[bdsaCaseId]?.[slideId] || [];
-                        
+
                         // Get current region protocols
                         let currentRegionProtocols = [];
                         if (Array.isArray(slideProtocols)) {
@@ -1360,7 +1387,7 @@ const InputDataTab = () => {
                             // New format - get region protocols
                             currentRegionProtocols = slideProtocols.region || [];
                         }
-                        
+
                         setShowProtocolEditor({
                             type: 'region',
                             bdsaCaseId,
@@ -1379,7 +1406,8 @@ const InputDataTab = () => {
                     const bdsaCaseId = (caseIdMappings || {})[localCaseId];
                     if (!bdsaCaseId) return 0;
 
-                    const slideId = `${bdsaCaseId}_${filename}`;
+                    // Use dsa_id for DSA data, fallback to constructed format for CSV
+                    const slideId = params.data.dsa_id || `${bdsaCaseId}_${filename}`;
                     const slideProtocols = (caseProtocolMappings || {})[bdsaCaseId]?.[slideId] || [];
 
                     // Handle both old format (array) and new format (object with stain/region)
@@ -1398,7 +1426,8 @@ const InputDataTab = () => {
                     const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
                     const filename = params.data['name'];
                     const bdsaCaseId = (caseIdMappings || {})[localCaseId];
-                    const slideId = `${bdsaCaseId}_${filename}`;
+                    // Use dsa_id for DSA data, fallback to constructed format for CSV
+                    const slideId = params.data.dsa_id || `${bdsaCaseId}_${filename}`;
                     const slideProtocols = (caseProtocolMappings || {})[bdsaCaseId]?.[slideId] || [];
 
                     // Handle both old format (array) and new format (object with stain/region)
@@ -1444,7 +1473,8 @@ const InputDataTab = () => {
                     const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
                     const filename = params.data['name'];
                     const bdsaCaseId = (caseIdMappings || {})[localCaseId];
-                    const slideId = `${bdsaCaseId}_${filename}`;
+                    // Use dsa_id for DSA data, fallback to constructed format for CSV
+                    const slideId = params.data.dsa_id || `${bdsaCaseId}_${filename}`;
                     const slideProtocols = (caseProtocolMappings || {})[bdsaCaseId]?.[slideId] || [];
 
                     // Handle both old format (array) and new format (object with stain/region)
@@ -1617,6 +1647,28 @@ const InputDataTab = () => {
                                     </button>
                                 );
                             })()}
+
+                            {/* DEBUG: Temporary button to clear corrupted protocol mappings */}
+                            <button
+                                className="clear-mappings-btn"
+                                onClick={() => {
+                                    if (window.confirm('This will clear ALL protocol mappings. Are you sure? This action cannot be undone.')) {
+                                        clearCaseProtocolMappings();
+                                    }
+                                }}
+                                style={{
+                                    backgroundColor: '#dc3545',
+                                    color: 'white',
+                                    marginLeft: '10px',
+                                    border: 'none',
+                                    padding: '8px 12px',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer'
+                                }}
+                                title="Clear all corrupted protocol mappings to start fresh"
+                            >
+                                🗑️ Clear Mappings (DEBUG)
+                            </button>
                         </>
                     )}
                 </div>
@@ -1828,6 +1880,85 @@ const InputDataTab = () => {
                 isOpen={showDsaSync}
                 onClose={() => setShowDsaSync(false)}
             />
+
+            {/* Protocol Editor Inline */}
+            {showProtocolEditor && (
+                <div className="protocol-editor-overlay">
+                    <div className="protocol-editor-popup">
+                        <div className="protocol-editor-header">
+                            <h3>Edit {showProtocolEditor.type === 'stain' ? 'Stain' : 'Region'} Protocols</h3>
+                            <span className="protocol-editor-filename">{showProtocolEditor.filename}</span>
+                            <button
+                                className="close-protocol-editor"
+                                onClick={() => setShowProtocolEditor(null)}
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        <div className="protocol-buttons-container">
+                            {(showProtocolEditor.type === 'stain' ? stainProtocols : regionProtocols).map((protocol) => {
+                                const isApplied = showProtocolEditor.protocols.includes(protocol.id);
+                                const isIgnoreProtocol = protocol.id === 'ignore';
+
+                                return (
+                                    <button
+                                        key={protocol.id}
+                                        type="button"
+                                        className={`protocol-btn ${isApplied ? 'applied' : isIgnoreProtocol ? 'ignore' : 'standard'}`}
+                                        onClick={() => {
+                                            const updatedMappings = { ...caseProtocolMappings };
+                                            if (!updatedMappings[showProtocolEditor.bdsaCaseId]) {
+                                                updatedMappings[showProtocolEditor.bdsaCaseId] = {};
+                                            }
+
+                                            const slideId = showProtocolEditor.slideId;
+                                            const currentProtocols = updatedMappings[showProtocolEditor.bdsaCaseId][slideId] || {};
+
+                                            let newProtocols;
+                                            if (Array.isArray(currentProtocols)) {
+                                                // Convert old format to new format
+                                                newProtocols = {
+                                                    stain: showProtocolEditor.type === 'stain' ? [] : [],
+                                                    region: showProtocolEditor.type === 'region' ? [] : []
+                                                };
+                                            } else {
+                                                // Use existing new format
+                                                newProtocols = {
+                                                    stain: currentProtocols.stain || [],
+                                                    region: currentProtocols.region || []
+                                                };
+                                            }
+
+                                            // Toggle the protocol
+                                            const protocolArray = newProtocols[showProtocolEditor.type];
+                                            if (isApplied) {
+                                                // Remove protocol
+                                                newProtocols[showProtocolEditor.type] = protocolArray.filter(id => id !== protocol.id);
+                                            } else {
+                                                // Add protocol
+                                                newProtocols[showProtocolEditor.type] = [...protocolArray, protocol.id];
+                                            }
+
+                                            updatedMappings[showProtocolEditor.bdsaCaseId][slideId] = newProtocols;
+                                            updateCaseProtocolMappings(updatedMappings);
+
+                                            // Update the local state for immediate UI feedback
+                                            setShowProtocolEditor({
+                                                ...showProtocolEditor,
+                                                protocols: newProtocols[showProtocolEditor.type]
+                                            });
+                                        }}
+                                        title={`${isApplied ? 'Remove' : 'Add'} "${protocol.name || protocol.id}" ${isApplied ? 'from' : 'to'} this slide`}
+                                    >
+                                        {isApplied ? '✓' : isIgnoreProtocol ? '🚫' : '+'} {protocol.name || protocol.id}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

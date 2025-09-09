@@ -6,39 +6,84 @@
  * Apply regex rules to extract localCaseId, localStainID, and localRegionId from file names
  * @param {Array} data - Array of data items
  * @param {Object} regexRules - Object containing regex patterns for each field
+ * @param {Object} columnMapping - Object mapping field names to column names
  * @returns {Array} - Array of data items with extracted values
  */
-export const applyRegexRules = (data, regexRules) => {
+export const applyRegexRules = (data, regexRules, columnMapping = {}) => {
+    console.log('applyRegexRules called with:', {
+        dataLength: data?.length,
+        regexRules: regexRules,
+        columnMapping: columnMapping,
+        hasData: !!data,
+        isArray: Array.isArray(data)
+    });
+
     if (!data || !Array.isArray(data) || !regexRules) {
+        console.log('applyRegexRules: Early return due to missing data or rules');
         return data;
     }
 
-    return data.map(item => {
+    return data.map((item, index) => {
         const fileName = item.name || item.dsa_name || '';
         const updatedItem = { ...item };
 
-        // Extract localCaseId
-        if (regexRules.localCaseId?.pattern) {
-            const extractedCaseId = extractWithRegex(fileName, regexRules.localCaseId.pattern);
-            if (extractedCaseId && (!updatedItem.localCaseId || updatedItem.localCaseId === '0' || updatedItem.localCaseId === '')) {
-                updatedItem.localCaseId = extractedCaseId;
-            }
+        // Initialize BDSA object if it doesn't exist
+        if (!updatedItem.BDSA) {
+            updatedItem.BDSA = {};
         }
 
-        // Extract localStainID
-        if (regexRules.localStainID?.pattern) {
-            const extractedStainId = extractWithRegex(fileName, regexRules.localStainID.pattern);
-            if (extractedStainId && (!updatedItem.localStainID || updatedItem.localStainID === '0' || updatedItem.localStainID === '')) {
-                updatedItem.localStainID = extractedStainId;
-            }
-        }
+        // Track which fields were extracted by regex vs pre-populated from source
+        const regexExtracted = {};
+        const dataSource = {};
 
-        // Extract localRegionId
-        if (regexRules.localRegionId?.pattern) {
-            const extractedRegionId = extractWithRegex(fileName, regexRules.localRegionId.pattern);
-            if (extractedRegionId && (!updatedItem.localRegionId || updatedItem.localRegionId === '0' || updatedItem.localRegionId === '')) {
-                updatedItem.localRegionId = extractedRegionId;
+        // Process each field type
+        const fieldMappings = [
+            { field: 'localCaseId', sourceColumn: columnMapping.localCaseId },
+            { field: 'localStainID', sourceColumn: columnMapping.localStainID },
+            { field: 'localRegionId', sourceColumn: columnMapping.localRegionId }
+        ];
+
+        fieldMappings.forEach(({ field, sourceColumn }) => {
+            const regexRule = regexRules[field];
+
+            if (!regexRule?.pattern) {
+                // No regex rule defined for this field
+                return;
             }
+
+            // Check if we have a source column for this field
+            const hasSourceColumn = sourceColumn && sourceColumn.trim() !== '';
+            const sourceValue = hasSourceColumn ? item[sourceColumn] : null;
+
+            // Pre-populate BDSA field from source data if available and not empty
+            if (hasSourceColumn && sourceValue && sourceValue !== '' && sourceValue !== '0') {
+                updatedItem.BDSA[field] = sourceValue;
+                dataSource[field] = 'source';
+                console.log(`Pre-populated ${field} from source column ${sourceColumn}: ${sourceValue}`);
+            }
+
+            // Only apply regex if the BDSA field is still empty/null
+            const currentValue = updatedItem.BDSA[field];
+            if (!currentValue || currentValue === '' || currentValue === '0') {
+                const extractedValue = extractWithRegex(fileName, regexRule.pattern);
+                if (extractedValue) {
+                    updatedItem.BDSA[field] = extractedValue;
+                    regexExtracted[field] = true;
+                    dataSource[field] = 'regex';
+                    console.log(`Applied regex to ${field}: ${extractedValue}`);
+                }
+            }
+        });
+
+        // Add metadata for tracking
+        updatedItem._regexExtracted = regexExtracted;
+        updatedItem._dataSource = dataSource;
+
+        // Mark item as modified if any BDSA fields were updated
+        const hasBdsaChanges = Object.keys(regexExtracted).some(field => regexExtracted[field]) ||
+            Object.keys(dataSource).some(field => dataSource[field]);
+        if (hasBdsaChanges) {
+            updatedItem._lastModified = new Date().toISOString();
         }
 
         return updatedItem;

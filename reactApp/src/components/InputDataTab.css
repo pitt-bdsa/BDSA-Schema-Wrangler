@@ -936,3 +936,143 @@
 .modal-footer .btn-primary:hover {
     background: #1565c0;
 }
+
+/* Protocol Editor Popup Styles */
+.protocol-editor-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.protocol-editor-popup {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    margin: 20px;
+    animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.protocol-editor-header {
+    padding: 20px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f8f9fa;
+    border-radius: 8px 8px 0 0;
+}
+
+.protocol-editor-header h3 {
+    margin: 0;
+    color: #333;
+    font-size: 1.2rem;
+}
+
+.protocol-editor-filename {
+    font-size: 0.9rem;
+    color: #666;
+    font-weight: normal;
+    margin-left: 10px;
+}
+
+.close-protocol-editor {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #666;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.close-protocol-editor:hover {
+    background: #f0f0f0;
+    color: #333;
+}
+
+.protocol-buttons-container {
+    padding: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.protocol-btn {
+    padding: 8px 16px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: white;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.protocol-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.protocol-btn.applied {
+    background: #d4edda;
+    border-color: #28a745;
+    color: #155724;
+}
+
+.protocol-btn.applied:hover {
+    background: #c3e6cb;
+}
+
+.protocol-btn.ignore {
+    background: #f8d7da;
+    border-color: #dc3545;
+    color: #721c24;
+}
+
+.protocol-btn.ignore:hover {
+    background: #f1b0b7;
+}
+
+.protocol-btn.standard {
+    background: #e3f2fd;
+    border-color: #1976d2;
+    color: #0d47a1;
+}
+
+.protocol-btn.standard:hover {
+    background: #bbdefb;
+}

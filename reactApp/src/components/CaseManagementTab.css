@@ -228,12 +228,13 @@
 }
 
 .protocol-btn.applied {
-    background: #28a745;
+    background: #007bff;
     color: white;
+    border-color: #0056b3;
 }
 
 .protocol-btn.applied:hover {
-    background: #218838;
+    background: #0056b3;
 }
 
 .protocol-btn.ignore {
@@ -253,7 +254,7 @@
 }
 
 .protocol-selection optgroup[label*="Suggested"] {
-    color: #28a745;
+    color: #007bff;
 }
 
 
@@ -262,9 +263,9 @@
     display: inline-block;
     margin-top: 10px;
     padding: 8px 16px;
-    border: 1px solid #28a745;
+    border: 1px solid #007bff;
     border-radius: 4px;
-    background: #28a745;
+    background: #007bff;
     color: white;
     font-size: 0.9rem;
     cursor: pointer;
@@ -374,9 +375,9 @@
 }
 
 .slide-badge.mapped {
-    background: #d4edda;
-    color: #155724;
-    border-color: #c3e6cb;
+    background: #d1ecf1;
+    color: #0c5460;
+    border-color: #b8daff;
 }
 
 .slide-badge.unmapped {
@@ -457,13 +458,13 @@
 }
 
 .hide-mapped-btn.active {
-    background: #28a745;
-    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
+    background: #007bff;
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
 }
 
 .hide-mapped-btn.active:hover {
-    background: #218838;
-    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+    background: #0056b3;
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.4);
 }
 
 .hide-mapped-btn:active {
@@ -611,8 +612,8 @@
 }
 
 .slide-detail-status.mapped {
-    background: #d4edda;
-    color: #155724;
+    background: #d1ecf1;
+    color: #0c5460;
 }
 
 .slide-detail-status.unmapped {
@@ -639,8 +640,8 @@
 }
 
 .status.mapped {
-    background: #d4edda;
-    color: #155724;
+    background: #d1ecf1;
+    color: #0c5460;
 }
 
 .status.unmapped {
@@ -695,11 +696,11 @@
 }
 
 .mapped-protocol {
-    background: #d4edda;
-    border: 1px solid #c3e6cb;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
     border-radius: 4px;
     padding: 10px;
-    color: #155724;
+    color: #495057;
     font-size: 0.9rem;
 }
 
@@ -714,8 +715,8 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    background: #c3e6cb;
-    border: 1px solid #a8d5b3;
+    background: #e2e6ea;
+    border: 1px solid #adb5bd;
     border-radius: 4px;
     padding: 4px 8px;
     font-size: 0.85rem;
@@ -758,7 +759,7 @@
 .add-more-protocols {
     margin-top: 10px;
     padding-top: 10px;
-    border-top: 1px solid #c3e6cb;
+    border-top: 1px solid #dee2e6;
 }
 
 .add-more-protocols small {
@@ -767,7 +768,7 @@
 }
 
 .add-protocol-btn-small {
-    background: #28a745;
+    background: #007bff;
     color: white;
     border: none;
     border-radius: 4px;
@@ -973,11 +974,11 @@
 }
 
 .toggle-mapped-btn.active {
-    background-color: #28a745;
+    background-color: #007bff;
 }
 
 .toggle-mapped-btn.active:hover {
-    background-color: #218838;
+    background-color: #0056b3;
 }
 
 .table-container {
@@ -1028,7 +1029,7 @@
 }
 
 .mapped-case-id {
-    color: #28a745 !important;
+    color: #007bff !important;
     font-weight: 600;
 }
 
@@ -1271,7 +1272,7 @@
 
 /* Generate All Button Styles */
 .generate-all-btn {
-    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
     color: white;
     border: none;
     padding: 10px 20px;
@@ -1346,7 +1347,7 @@
 
 .progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, #28a745 0%, #20c997 100%);
+    background: linear-gradient(90deg, #007bff 0%, #0056b3 100%);
     border-radius: 4px;
     transition: width 0.3s ease;
     position: relative;
