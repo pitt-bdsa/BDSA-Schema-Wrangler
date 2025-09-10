@@ -20,6 +20,7 @@ import {
     setGirderToken as setDataStoreGirderToken,
     applyRegexRules,
     clearCaseProtocolMappings,
+    updateCaseProtocolMappings,
     DATA_SOURCE_TYPES
 } from '../utils/dataStore';
 import {
@@ -1189,13 +1190,13 @@ const InputDataTab = () => {
                 minWidth: 150,
                 width: savedWidth || 150,
                 valueGetter: (params) => {
-                    // Use BDSA.localCaseId as authoritative source, fallback to original column
-                    const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
+                    // Use the original localCaseId column as the source
+                    const localCaseId = params.data[columnMapping.localCaseId];
                     return generateBdsaCaseId(localCaseId);
                 },
                 cellStyle: (params) => {
-                    // Use BDSA.localCaseId as authoritative source, fallback to original column
-                    const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
+                    // Use the original localCaseId column as the source
+                    const localCaseId = params.data[columnMapping.localCaseId];
                     // Check if this local case ID has been manually mapped
                     if (localCaseId && (caseIdMappings || {})[localCaseId]) {
                         return { backgroundColor: '#d4edda', color: '#155724' };
@@ -1219,7 +1220,7 @@ const InputDataTab = () => {
                 width: savedWidth || 120,
                 editable: false,
                 onCellClicked: (params) => {
-                    const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
+                    const localCaseId = params.data[columnMapping.localCaseId];
                     const filename = params.data['name'];
                     const bdsaCaseId = (caseIdMappings || {})[localCaseId];
 
@@ -1248,7 +1249,7 @@ const InputDataTab = () => {
                     }
                 },
                 valueGetter: (params) => {
-                    const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
+                    const localCaseId = params.data[columnMapping.localCaseId];
                     const filename = params.data['name'];
 
                     if (!localCaseId || !filename) return 0;
@@ -1259,12 +1260,12 @@ const InputDataTab = () => {
                     // Use dsa_id for DSA data, fallback to constructed format for CSV
                     const slideId = params.data.dsa_id || `${bdsaCaseId}_${filename}`;
 
-                    // DEBUG: Log slideId lookup details
-                    if (bdsaCaseId) {
-                        console.log('🔍 INPUT DATA - SlideId format:', slideId.length > 20 ? 'dsa_id format' : 'filename format');
-                        console.log('🔍 INPUT DATA - Looking for slideId:', slideId);
-                        console.log('🔍 INPUT DATA - Available slideIds:', Object.keys((caseProtocolMappings || {})[bdsaCaseId] || {}));
-                    }
+                    // DEBUG: Log slideId lookup details (disabled to reduce console spam)
+                    // if (bdsaCaseId) {
+                    //     console.log('🔍 INPUT DATA - SlideId format:', slideId.length > 20 ? 'dsa_id format' : 'filename format');
+                    //     console.log('🔍 INPUT DATA - Looking for slideId:', slideId);
+                    //     console.log('🔍 INPUT DATA - Available slideIds:', Object.keys((caseProtocolMappings || {})[bdsaCaseId] || {}));
+                    // }
 
                     const slideProtocols = (caseProtocolMappings || {})[bdsaCaseId]?.[slideId] || [];
 
@@ -1281,7 +1282,7 @@ const InputDataTab = () => {
                     const count = params.value;
                     if (count === 0) return '';
 
-                    const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
+                    const localCaseId = params.data[columnMapping.localCaseId];
                     const filename = params.data['name'];
                     const bdsaCaseId = (caseIdMappings || {})[localCaseId];
                     // Use dsa_id for DSA data, fallback to constructed format for CSV
@@ -1328,7 +1329,7 @@ const InputDataTab = () => {
                     }
 
                     // Check if IGNORE protocol is present
-                    const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
+                    const localCaseId = params.data[columnMapping.localCaseId];
                     const filename = params.data['name'];
                     const bdsaCaseId = (caseIdMappings || {})[localCaseId];
                     // Use dsa_id for DSA data, fallback to constructed format for CSV
@@ -1369,7 +1370,7 @@ const InputDataTab = () => {
                 width: savedWidth || 120,
                 editable: false,
                 onCellClicked: (params) => {
-                    const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
+                    const localCaseId = params.data[columnMapping.localCaseId];
                     const filename = params.data['name'];
                     const bdsaCaseId = (caseIdMappings || {})[localCaseId];
 
@@ -1398,7 +1399,7 @@ const InputDataTab = () => {
                     }
                 },
                 valueGetter: (params) => {
-                    const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
+                    const localCaseId = params.data[columnMapping.localCaseId];
                     const filename = params.data['name'];
 
                     if (!localCaseId || !filename) return 0;
@@ -1423,7 +1424,7 @@ const InputDataTab = () => {
                     const count = params.value;
                     if (count === 0) return '';
 
-                    const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
+                    const localCaseId = params.data[columnMapping.localCaseId];
                     const filename = params.data['name'];
                     const bdsaCaseId = (caseIdMappings || {})[localCaseId];
                     // Use dsa_id for DSA data, fallback to constructed format for CSV
@@ -1470,7 +1471,7 @@ const InputDataTab = () => {
                     }
 
                     // Check if IGNORE protocol is present
-                    const localCaseId = params.data.BDSA?.localCaseId || params.data[columnMapping.localCaseId];
+                    const localCaseId = params.data[columnMapping.localCaseId];
                     const filename = params.data['name'];
                     const bdsaCaseId = (caseIdMappings || {})[localCaseId];
                     // Use dsa_id for DSA data, fallback to constructed format for CSV

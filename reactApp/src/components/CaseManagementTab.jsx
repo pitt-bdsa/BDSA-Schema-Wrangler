@@ -114,7 +114,6 @@ const CaseManagementTab = () => {
     // Subscribe to data store changes
     useEffect(() => {
         const unsubscribe = subscribeToDataStore((event) => {
-
             // Update local state with new data store snapshot
             const newDataStore = getDataStoreSnapshot();
             setDataStore(newDataStore);
@@ -281,8 +280,12 @@ const CaseManagementTab = () => {
     const handleProtocolMapping = (slideId, protocolId) => {
         if (!selectedCase) return;
 
+        // Get protocol name from ID
+        const protocol = [...stainProtocols, ...regionProtocols].find(p => p.id === protocolId);
+        const protocolName = protocol?.name || protocolId.toString();
+
         console.log('=== ADDING PROTOCOL MAPPING (SEGREGATED) ===');
-        console.log('Slide ID:', slideId, 'Protocol ID:', protocolId);
+        console.log('Slide ID:', slideId, 'Protocol:', protocolName);
         console.log('🔍 CASE MGMT - SlideId format:', slideId.length > 20 ? 'dsa_id format' : 'filename format');
 
         // Get current protocols for this slide (segregated structure)
@@ -299,9 +302,9 @@ const CaseManagementTab = () => {
         let updatedSlideProtocols;
         if (isStainProtocol) {
             const currentStainProtocols = Array.isArray(currentSlideProtocols) ? currentSlideProtocols : currentSlideProtocols.stain || [];
-            const updatedStainProtocols = currentStainProtocols.includes(protocolId)
+            const updatedStainProtocols = currentStainProtocols.includes(protocolName)
                 ? currentStainProtocols
-                : [...currentStainProtocols, protocolId];
+                : [...currentStainProtocols, protocolName];
 
             updatedSlideProtocols = {
                 stain: updatedStainProtocols,
@@ -309,9 +312,9 @@ const CaseManagementTab = () => {
             };
         } else if (isRegionProtocol) {
             const currentRegionProtocols = Array.isArray(currentSlideProtocols) ? currentSlideProtocols : currentSlideProtocols.region || [];
-            const updatedRegionProtocols = currentRegionProtocols.includes(protocolId)
+            const updatedRegionProtocols = currentRegionProtocols.includes(protocolName)
                 ? currentRegionProtocols
-                : [...currentRegionProtocols, protocolId];
+                : [...currentRegionProtocols, protocolName];
 
             updatedSlideProtocols = {
                 stain: Array.isArray(currentSlideProtocols) ? [] : (currentSlideProtocols.stain || []),
@@ -345,8 +348,12 @@ const CaseManagementTab = () => {
     const removeProtocolMapping = (slideId, protocolId) => {
         if (!selectedCase) return;
 
+        // Get protocol name from ID
+        const protocol = [...stainProtocols, ...regionProtocols].find(p => p.id === protocolId);
+        const protocolName = protocol?.name || protocolId.toString();
+
         console.log('=== REMOVING PROTOCOL MAPPING (SEGREGATED) ===');
-        console.log('Slide ID:', slideId, 'Protocol ID:', protocolId, 'Selected Case:', selectedCase.bdsaId);
+        console.log('Slide ID:', slideId, 'Protocol:', protocolName, 'Selected Case:', selectedCase.bdsaId);
         console.log('Current protocol mappings:', caseProtocolMappings);
 
         // Get current protocols for this slide (segregated structure)
@@ -362,24 +369,24 @@ const CaseManagementTab = () => {
         let updatedSlideProtocols;
         if (isStainProtocol) {
             const currentStainProtocols = Array.isArray(currentSlideProtocols) ? currentSlideProtocols : currentSlideProtocols.stain || [];
-            const updatedStainProtocols = currentStainProtocols.filter(id => String(id) !== String(protocolId));
+            const updatedStainProtocols = currentStainProtocols.filter(name => String(name) !== String(protocolName));
 
             updatedSlideProtocols = {
                 stain: updatedStainProtocols,
                 region: Array.isArray(currentSlideProtocols) ? [] : (currentSlideProtocols.region || [])
             };
 
-            console.log(`Removed stain protocol ${protocolId}, remaining stain protocols:`, updatedStainProtocols);
+            console.log(`Removed stain protocol ${protocolName}, remaining stain protocols:`, updatedStainProtocols);
         } else if (isRegionProtocol) {
             const currentRegionProtocols = Array.isArray(currentSlideProtocols) ? currentSlideProtocols : currentSlideProtocols.region || [];
-            const updatedRegionProtocols = currentRegionProtocols.filter(id => String(id) !== String(protocolId));
+            const updatedRegionProtocols = currentRegionProtocols.filter(name => String(name) !== String(protocolName));
 
             updatedSlideProtocols = {
                 stain: Array.isArray(currentSlideProtocols) ? [] : (currentSlideProtocols.stain || []),
                 region: updatedRegionProtocols
             };
 
-            console.log(`Removed region protocol ${protocolId}, remaining region protocols:`, updatedRegionProtocols);
+            console.log(`Removed region protocol ${protocolName}, remaining region protocols:`, updatedRegionProtocols);
         } else {
             console.error('Unknown protocol type for ID:', protocolId);
             return;
@@ -763,8 +770,8 @@ const CaseManagementTab = () => {
         const caseIdSources = {}; // Track which rows have regex-generated case IDs
 
         csvData.forEach((row, index) => {
-            // Use BDSA.localCaseId as the authoritative source
-            const caseId = row.BDSA?.localCaseId || row[columnMapping.localCaseId];
+            // Use the original localCaseId column as the source
+            const caseId = row[columnMapping.localCaseId];
             if (caseId) {
                 caseIdCounts[caseId] = (caseIdCounts[caseId] || 0) + 1;
 
@@ -844,16 +851,35 @@ const CaseManagementTab = () => {
         return cases;
     };
 
-    // Memoized sorted case IDs - only recalculates when actual data changes, not during editing
-    const sortedCaseIds = useMemo(() => {
-        // If currently editing, don't re-sort to prevent disorienting jumps
-        if (isEditing) {
-            return previousSortedDataRef.current;
+    // Static reference to prevent auto-resorting - only updates when user manually changes sort/filter
+    const [staticSortedCaseIds, setStaticSortedCaseIds] = useState([]);
+    const tableInitializedRef = useRef(false);
+
+    // Initialize table data only once when component loads
+    useEffect(() => {
+        if (!tableInitializedRef.current && csvData.length > 0) {
+            const newData = getUniqueCaseIds();
+            setStaticSortedCaseIds(newData);
+            tableInitializedRef.current = true;
         }
+    }, [csvData, columnMapping.localCaseId]);
+
+    // Only update table data when user manually changes sort/filter settings
+    useEffect(() => {
+        if (tableInitializedRef.current) {
+            const newData = getUniqueCaseIds();
+            setStaticSortedCaseIds(newData);
+        }
+    }, [showMappedCases, sortField, sortDirection]);
+
+    // Also update static data when protocols change (but don't re-sort, just refresh data)
+    useEffect(() => {
+        console.log('Refreshing static data due to protocol changes...');
         const newData = getUniqueCaseIds();
-        previousSortedDataRef.current = newData;
-        return newData;
-    }, [csvData, caseIdMappings, columnMapping.localCaseId, showMappedCases, sortField, sortDirection, isEditing]);
+        setStaticSortedCaseIds(newData);
+    }, [protocolUpdateCounter]);
+
+    const sortedCaseIds = staticSortedCaseIds;
 
     // Memoized duplicate detection - only recalculates when sorted case IDs change
     const duplicateBdsaCaseIds = useMemo(() => {
@@ -897,23 +923,58 @@ const CaseManagementTab = () => {
     const updateCaseIdMapping = (localCaseId, bdsaCaseId) => {
         console.log('=== UPDATE CASE ID MAPPING ===');
         console.log('localCaseId:', localCaseId);
-        console.log('bdsaCaseId:', bdsaCaseId);
+        console.log('bdsaCaseId:', `"${bdsaCaseId}"`); // Show quotes to see exact value
+        console.log('bdsaCaseId type:', typeof bdsaCaseId);
+        console.log('bdsaCaseId length:', bdsaCaseId ? bdsaCaseId.length : 'null/undefined');
         console.log('current caseIdMappings:', caseIdMappings);
 
         const newMappings = { ...caseIdMappings };
-        if (bdsaCaseId) {
-            newMappings[localCaseId] = bdsaCaseId;
+        // Trim whitespace and check if value is empty
+        const trimmedValue = bdsaCaseId ? bdsaCaseId.trim() : '';
+        // console.log('trimmedValue:', `"${trimmedValue}"`);
+        // console.log('trimmedValue length:', trimmedValue.length);
+
+        if (trimmedValue) {
+            console.log('Setting mapping:', localCaseId, '→', trimmedValue);
+            newMappings[localCaseId] = trimmedValue;
         } else {
+            console.log('Deleting mapping for:', localCaseId);
             delete newMappings[localCaseId];
         }
 
-        console.log('newMappings:', newMappings);
+        console.log('newMappings after update:', newMappings);
+        console.log('Current dataStore.caseIdMappings before update:', dataStore.caseIdMappings);
         console.log('Calling updateCaseIdMappings from data store...');
 
-        // Use centralized data store update function
-        updateCaseIdMappings(newMappings);
+        // Create a targeted update that only changes the specific case ID
+        const targetedUpdate = { ...dataStore.caseIdMappings };
+        if (trimmedValue) {
+            targetedUpdate[localCaseId] = trimmedValue;
+        } else {
+            delete targetedUpdate[localCaseId];
+        }
 
-        console.log('updateCaseIdMappings called successfully');
+        console.log('Targeted update:', targetedUpdate);
+        console.log('Specific change:', localCaseId, '→', trimmedValue);
+
+        // Use the proper data store function with the targeted update
+        updateCaseIdMappings(targetedUpdate, {
+            saveToStorage: true,
+            syncToServer: false
+        });
+
+        // Update only the specific item that was changed, not the entire table
+        setStaticSortedCaseIds(prevData => {
+            return prevData.map(item => {
+                if (item.localCaseId === localCaseId) {
+                    // Update only the specific item that was changed
+                    const updatedItem = { ...item, bdsaCaseId: trimmedValue || null, isMapped: Boolean(trimmedValue) };
+                    console.log(`Updating item ${item.localCaseId}: ${item.bdsaCaseId} → ${updatedItem.bdsaCaseId}`);
+                    return updatedItem;
+                }
+                return item;
+            });
+        });
 
         // If we just generated a BDSA Case ID, temporarily show all cases so the user can see their change
         if (bdsaCaseId && showMappedCases === false) {
@@ -981,6 +1042,84 @@ const CaseManagementTab = () => {
 
 
 
+    const clearDuplicateCaseIds = () => {
+        console.log('=== CLEAR DUPLICATE CASE IDS ===');
+
+        // Get fresh data to ensure we have current duplicates
+        const freshCaseIds = getUniqueCaseIds();
+        console.log('Fresh case IDs:', freshCaseIds);
+
+        // Recalculate duplicates from fresh data
+        const bdsaCaseIdCounts = new Map();
+        freshCaseIds.forEach(caseData => {
+            if (caseData.bdsaCaseId) {
+                const count = bdsaCaseIdCounts.get(caseData.bdsaCaseId) || 0;
+                bdsaCaseIdCounts.set(caseData.bdsaCaseId, count + 1);
+            }
+        });
+
+        // Find duplicate BDSA Case IDs
+        const freshDuplicates = new Set();
+        bdsaCaseIdCounts.forEach((count, bdsaCaseId) => {
+            if (count > 1) {
+                freshDuplicates.add(bdsaCaseId);
+            }
+        });
+
+        console.log('Fresh duplicates found:', Array.from(freshDuplicates));
+
+        // Get all local case IDs that have duplicate BDSA Case IDs
+        const duplicateCaseIds = [];
+        freshCaseIds.forEach(caseData => {
+            if (caseData.bdsaCaseId && freshDuplicates.has(caseData.bdsaCaseId)) {
+                duplicateCaseIds.push(caseData.localCaseId);
+            }
+        });
+
+        console.log(`Found ${duplicateCaseIds.length} cases with duplicate BDSA Case IDs:`, duplicateCaseIds);
+
+        if (duplicateCaseIds.length === 0) {
+            console.log('No duplicates found to clear');
+            return;
+        }
+
+        // Clear all duplicate mappings
+        const newMappings = { ...caseIdMappings };
+        duplicateCaseIds.forEach(localCaseId => {
+            console.log(`Clearing mapping for ${localCaseId}`);
+            delete newMappings[localCaseId];
+        });
+
+        console.log('New mappings after clearing:', newMappings);
+        console.log('Calling updateCaseIdMappings...');
+
+        // Temporarily allow data store updates for this operation
+        setIsEditing(false);
+
+        updateCaseIdMappings(newMappings);
+
+        // Force multiple refresh attempts to ensure UI updates
+        const forceRefresh = () => {
+            console.log('Forcing comprehensive refresh...');
+            const refreshedData = getUniqueCaseIds();
+            setStaticSortedCaseIds(refreshedData);
+
+            // Also update the main data store state to trigger re-render
+            const newDataStore = getDataStoreSnapshot();
+            setDataStore(newDataStore);
+
+            // Force a component re-render by updating a counter
+            setProtocolUpdateCounter(prev => prev + 1);
+        };
+
+        // Try multiple refresh attempts
+        setTimeout(forceRefresh, 100);
+        setTimeout(forceRefresh, 300);
+        setTimeout(forceRefresh, 500);
+
+        console.log(`Successfully cleared ${duplicateCaseIds.length} duplicate case IDs`);
+    };
+
     const generateAllBdsaCaseIds = async () => {
         console.log('=== GENERATE ALL BDSA CASE IDS ===');
 
@@ -999,6 +1138,9 @@ const CaseManagementTab = () => {
         setGenerateAllCancelled(false);
 
         try {
+            // Get the starting sequential number once, then increment locally
+            let nextNumber = getNextSequentialNumber();
+
             for (let i = 0; i < unmappedCases.length; i++) {
                 // Check if generation was cancelled
                 if (generateAllCancelled) {
@@ -1009,12 +1151,14 @@ const CaseManagementTab = () => {
                 const caseItem = unmappedCases[i];
                 console.log(`Generating BDSA Case ID for case ${i + 1}/${unmappedCases.length}: ${caseItem.localCaseId}`);
 
-                // Generate the BDSA Case ID
-                const nextNumber = getNextSequentialNumber();
+                // Generate the BDSA Case ID using the current nextNumber
                 const bdsaCaseId = `BDSA-${bdsaInstitutionId.padStart(3, '0')}-${nextNumber.toString().padStart(4, '0')}`;
 
                 // Update the mapping
                 updateCaseIdMapping(caseItem.localCaseId, bdsaCaseId);
+
+                // Increment for the next iteration
+                nextNumber++;
 
                 // Update progress
                 setGenerateAllProgress({ current: i + 1, total: unmappedCases.length });
@@ -1139,6 +1283,18 @@ const CaseManagementTab = () => {
                                     >
                                         {isGeneratingAll ? '⏹️ Cancel' : '🚀 Generate All'}
                                     </button>
+
+                                    {duplicateBdsaCaseIds.size > 0 && (
+                                        <button
+                                            type="button"
+                                            className="clear-duplicates-btn"
+                                            onClick={clearDuplicateCaseIds}
+                                            disabled={isGenerating || isGeneratingAll}
+                                            title={`Clear all ${duplicateBdsaCaseIds.size} duplicate BDSA Case IDs`}
+                                        >
+                                            🗑️ Clear Duplicates ({duplicateBdsaCaseIds.size})
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 
@@ -1193,7 +1349,7 @@ const CaseManagementTab = () => {
                                             const isDuplicate = item.bdsaCaseId && duplicateBdsaCaseIds.has(item.bdsaCaseId);
 
                                             return (
-                                                <tr key={index} className={isDuplicate ? 'duplicate-bdsa-case' : ''}>
+                                                <tr key={`${item.localCaseId}-${index}`} className={isDuplicate ? 'duplicate-bdsa-case' : ''}>
                                                     <td className={`${item.bdsaCaseId ? 'mapped-case-id' : ''} ${item.hasRegexGenerated ? 'regex-generated' : ''} ${item.isMixed ? 'mixed-source' : ''} ${item.hasConflict ? 'data-conflict' : ''}`}>
                                                         <div className="case-id-cell">
                                                             <span className="case-id-value">{item.localCaseId}</span>
@@ -1219,14 +1375,16 @@ const CaseManagementTab = () => {
                                                         <input
                                                             type="text"
                                                             value={localInputValues[item.localCaseId] !== undefined ? localInputValues[item.localCaseId] : (item.bdsaCaseId || '')}
+                                                            onFocus={() => {
+                                                                console.log('🎯 INPUT FOCUSED - Case ID:', item.localCaseId);
+                                                            }}
                                                             onChange={(e) => {
+                                                                console.log('🔄 INPUT CHANGE - Case ID:', item.localCaseId, 'New value:', e.target.value);
                                                                 // Update local state only - no data store updates until blur/enter
                                                                 setLocalInputValues(prev => ({
                                                                     ...prev,
                                                                     [item.localCaseId]: e.target.value
                                                                 }));
-                                                                // Set editing state to prevent auto-sorting
-                                                                setIsEditing(true);
                                                             }}
                                                             onBlur={(e) => {
                                                                 console.log('Input blurred, saving value:', e.target.value);
@@ -1237,12 +1395,11 @@ const CaseManagementTab = () => {
                                                                     delete newState[item.localCaseId];
                                                                     return newState;
                                                                 });
-                                                                // Clear editing state to allow re-sorting
-                                                                setIsEditing(false);
                                                             }}
                                                             onKeyDown={(e) => {
+                                                                console.log('⌨️ KEY DOWN - Key:', e.key, 'Value:', e.target.value);
                                                                 if (e.key === 'Enter') {
-                                                                    console.log('Enter pressed, saving value:', e.target.value);
+                                                                    console.log('✅ ENTER PRESSED - Saving value:', e.target.value);
                                                                     updateCaseIdMapping(item.localCaseId, e.target.value);
                                                                     // Clear local state after saving
                                                                     setLocalInputValues(prev => {
@@ -1250,8 +1407,6 @@ const CaseManagementTab = () => {
                                                                         delete newState[item.localCaseId];
                                                                         return newState;
                                                                     });
-                                                                    // Clear editing state to allow re-sorting
-                                                                    setIsEditing(false);
                                                                     e.target.blur(); // Remove focus after Enter
                                                                 }
                                                             }}
@@ -1361,10 +1516,22 @@ const CaseManagementTab = () => {
                                     <h3>Mapping Protocols for {selectedCase.bdsaId} (Updates: {protocolUpdateCounter})</h3>
                                     <div className="action-buttons">
                                         {(() => {
-                                            // Check if there are unmapped slides with suggestions
-                                            const unmappedSlidesWithSuggestions = selectedCase.slides.filter(slide =>
-                                                slide.status === 'unmapped' && getAutoSuggestedProtocol(slide.stainType)
-                                            );
+                                            // Check if there are unmapped slides with suggestions (using dynamic status)
+                                            const unmappedSlidesWithSuggestions = selectedCase.slides.filter(slide => {
+                                                // Calculate dynamic status - same logic as individual slide display
+                                                const slideProtocols = dataStore.caseProtocolMappings[selectedCase?.bdsaId]?.[slide.id] || { stain: [], region: [] };
+                                                const hasStainProtocols = Array.isArray(slideProtocols) ? slideProtocols.length > 0 : (slideProtocols.stain || []).length > 0;
+                                                const isUnmapped = !hasStainProtocols;
+
+                                                // Debug logs disabled to reduce console spam
+                                                // console.log(`Apply All Debug - Slide ${slide.id}:`, {
+                                                //     slideProtocols, hasStainProtocols, isUnmapped, hasSuggestion, suggestion
+                                                // });
+
+                                                return isUnmapped && getAutoSuggestedProtocol(slide.stainType);
+                                            });
+
+                                            // console.log('Apply All Debug - Total unmapped with suggestions:', unmappedSlidesWithSuggestions.length);
 
                                             if (unmappedSlidesWithSuggestions.length === 0) return null;
 
@@ -1800,317 +1967,387 @@ const CaseManagementTab = () => {
                                 </div>
 
                                 {/* Region Protocol Mapping Section */}
-                                {columnMapping.localRegionId && (
-                                    <div className="region-protocols-section">
-                                        <h3>Region Protocol Mapping</h3>
-                                        <div className="region-slides-mapping">
-                                            {getGroupedRegionSlides(selectedCase.slides).map((group, groupIndex) => (
-                                                <div key={`${group.regionType}-${groupIndex}`} className="slide-mapping">
-                                                    <div className="slide-info">
-                                                        <div className="slide-header">
-                                                            <span className="slide-id">
-                                                                {group.regionType} ({group.count} slides)
-                                                            </span>
-                                                            {group.count > 1 && (
-                                                                <button
-                                                                    type="button"
-                                                                    className="expand-toggle-btn"
-                                                                    onClick={() => toggleRegionGroupExpansion(group.regionType)}
-                                                                    title={expandedRegionGroups.has(group.regionType) ? 'Collapse individual slides' : 'Show individual slides'}
-                                                                >
-                                                                    {expandedRegionGroups.has(group.regionType) ? '▼' : '▶'}
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                        <span className="region-type">{getRegionTypeDisplayName(group.regionType)}</span>
-                                                        <span className={`status ${group.status}`}>
-                                                            {group.status === 'mapped' ? (() => {
-                                                                // Count total protocols for this group
-                                                                const allProtocols = new Set();
-                                                                group.slides.forEach(slide => {
-                                                                    const slideProtocols = getSlideProtocols(slide.id, 'region');
-                                                                    if (Array.isArray(slideProtocols)) {
-                                                                        slideProtocols.forEach(protocolId => allProtocols.add(protocolId));
+                                {(() => {
+                                    // Debug logs disabled to reduce console spam
+                                    // console.log('Region Debug - columnMapping.localRegionId:', columnMapping.localRegionId);
+                                    // console.log('Region Debug - selectedCase.slides:', selectedCase.slides.length, 'slides');
+                                    return columnMapping.localRegionId;
+                                })() && (
+                                        <div className="region-protocols-section">
+                                            <h3>Region Protocol Mapping</h3>
+                                            <div className="action-buttons">
+                                                {(() => {
+                                                    // Check if there are unmapped region slides with suggestions
+                                                    const unmappedRegionSlidesWithSuggestions = selectedCase.slides.filter(slide => {
+                                                        // Calculate dynamic status for region protocols
+                                                        const slideProtocols = dataStore.caseProtocolMappings[selectedCase?.bdsaId]?.[slide.id] || { stain: [], region: [] };
+                                                        const hasRegionProtocols = Array.isArray(slideProtocols) ? slideProtocols.length > 0 : (slideProtocols.region || []).length > 0;
+                                                        const isUnmapped = !hasRegionProtocols;
+
+                                                        // Check for region aliases (suggestions) instead of getAutoSuggestedProtocol
+                                                        const regionSuggestions = regionAliases[slide.regionType] || [];
+                                                        const hasSuggestion = regionSuggestions.length > 0;
+
+                                                        // Debug logs disabled to reduce console spam
+                                                        // console.log(`Apply All Region Debug - Slide ${slide.id}:`, {
+                                                        //     slideProtocols, hasRegionProtocols, isUnmapped, regionType, regionSuggestions, hasSuggestion
+                                                        // });
+
+                                                        return isUnmapped && slide.regionType && hasSuggestion;
+                                                    });
+
+                                                    // console.log('Apply All Region Debug - Total unmapped with suggestions:', unmappedRegionSlidesWithSuggestions.length);
+
+                                                    if (unmappedRegionSlidesWithSuggestions.length === 0) return null;
+
+                                                    return (
+                                                        <button
+                                                            type="button"
+                                                            className="apply-all-suggestions-btn"
+                                                            onClick={() => {
+                                                                console.log('Applying region suggestions to slides:', unmappedRegionSlidesWithSuggestions);
+                                                                // Apply suggested protocols to each unmapped region slide
+                                                                unmappedRegionSlidesWithSuggestions.forEach(slide => {
+                                                                    const regionSuggestions = regionAliases[slide.regionType] || [];
+                                                                    // Apply the first suggested protocol for this region type
+                                                                    if (regionSuggestions.length > 0) {
+                                                                        const suggestedProtocolId = regionSuggestions[0]; // Take the first suggestion
+                                                                        console.log(`Applying region protocol ${suggestedProtocolId} to slide ${slide.id}`);
+                                                                        handleProtocolMapping(slide.id, suggestedProtocolId);
                                                                     }
                                                                 });
-                                                                const protocolCount = allProtocols.size;
-                                                                return `✓ Mapped (${protocolCount} protocol${protocolCount !== 1 ? 's' : ''})`;
-                                                            })() : '⏳ Unmapped'}
-                                                        </span>
-                                                    </div>
-
-                                                    {/* Individual slides when expanded */}
-                                                    {expandedRegionGroups.has(group.regionType) && group.slides.length > 1 && (
-                                                        <div className="individual-slides">
-                                                            <div className="individual-slides-header">
-                                                                <div className="selection-controls">
-                                                                    <button
-                                                                        type="button"
-                                                                        className="select-all-btn"
-                                                                        onClick={() => selectAllSlidesInGroup(group)}
-                                                                    >
-                                                                        Select All
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        className="deselect-all-btn"
-                                                                        onClick={() => deselectAllSlidesInGroup(group)}
-                                                                    >
-                                                                        Deselect All
-                                                                    </button>
-                                                                </div>
-                                                                <span className="selected-count">
-                                                                    {getSelectedSlidesInGroup(group).length} of {group.slides.length} selected
+                                                            }}
+                                                            title={`Apply suggested region protocols to ${unmappedRegionSlidesWithSuggestions.length} unmapped slide${unmappedRegionSlidesWithSuggestions.length !== 1 ? 's' : ''}`}
+                                                        >
+                                                            🚀 Apply All Region Suggestions ({unmappedRegionSlidesWithSuggestions.length})
+                                                        </button>
+                                                    );
+                                                })()}
+                                            </div>
+                                            <div className="region-slides-mapping">
+                                                {getGroupedRegionSlides(selectedCase.slides).map((group, groupIndex) => (
+                                                    <div key={`${group.regionType}-${groupIndex}`} className="slide-mapping">
+                                                        <div className="slide-info">
+                                                            <div className="slide-header">
+                                                                <span className="slide-id">
+                                                                    {group.regionType} ({group.count} slides)
                                                                 </span>
+                                                                {group.count > 1 && (
+                                                                    <button
+                                                                        type="button"
+                                                                        className="expand-toggle-btn"
+                                                                        onClick={() => toggleRegionGroupExpansion(group.regionType)}
+                                                                        title={expandedRegionGroups.has(group.regionType) ? 'Collapse individual slides' : 'Show individual slides'}
+                                                                    >
+                                                                        {expandedRegionGroups.has(group.regionType) ? '▼' : '▶'}
+                                                                    </button>
+                                                                )}
                                                             </div>
-                                                            {group.slides.map(slide => (
-                                                                <div key={slide.id} className="individual-slide">
-                                                                    <label className="slide-checkbox">
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            checked={selectedSlides.has(slide.id)}
-                                                                            onChange={() => toggleSlideSelection(slide.id)}
-                                                                        />
-                                                                        <span className="slide-detail-id">{slide.filename || slide.localRegionId}</span>
-                                                                    </label>
-                                                                    <span className={`slide-detail-status ${(() => {
-                                                                        // Calculate slide status dynamically based on actual protocols
+                                                            <span className="region-type">{getRegionTypeDisplayName(group.regionType)}</span>
+                                                            <span className={`status ${(() => {
+                                                                // Use same dynamic logic as stain groups
+                                                                const hasAnyMappedSlide = group.slides.some(slide => {
+                                                                    const slideProtocols = dataStore.caseProtocolMappings[selectedCase?.bdsaId]?.[slide.id] || { stain: [], region: [] };
+                                                                    const hasRegionProtocols = Array.isArray(slideProtocols) ? slideProtocols.length > 0 : (slideProtocols.region || []).length > 0;
+                                                                    return hasRegionProtocols;
+                                                                });
+                                                                return hasAnyMappedSlide ? 'mapped' : 'unmapped';
+                                                            })()}`}>
+                                                                {(() => {
+                                                                    // Use same dynamic logic as stain groups
+                                                                    const hasAnyMappedSlide = group.slides.some(slide => {
                                                                         const slideProtocols = dataStore.caseProtocolMappings[selectedCase?.bdsaId]?.[slide.id] || { stain: [], region: [] };
                                                                         const hasRegionProtocols = Array.isArray(slideProtocols) ? slideProtocols.length > 0 : (slideProtocols.region || []).length > 0;
-                                                                        return hasRegionProtocols ? 'mapped' : 'unmapped';
-                                                                    })()}`}>
-                                                                        {(() => {
+                                                                        return hasRegionProtocols;
+                                                                    });
+                                                                    return hasAnyMappedSlide;
+                                                                })() ? (() => {
+                                                                    // Count total protocols for this group
+                                                                    const allProtocols = new Set();
+                                                                    group.slides.forEach(slide => {
+                                                                        const slideProtocols = getSlideProtocols(slide.id, 'region');
+                                                                        if (Array.isArray(slideProtocols)) {
+                                                                            slideProtocols.forEach(protocolId => allProtocols.add(protocolId));
+                                                                        }
+                                                                    });
+                                                                    const protocolCount = allProtocols.size;
+                                                                    return `✓ Mapped (${protocolCount} protocol${protocolCount !== 1 ? 's' : ''})`;
+                                                                })() : '⏳ Unmapped'}
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Individual slides when expanded */}
+                                                        {expandedRegionGroups.has(group.regionType) && group.slides.length > 1 && (
+                                                            <div className="individual-slides">
+                                                                <div className="individual-slides-header">
+                                                                    <div className="selection-controls">
+                                                                        <button
+                                                                            type="button"
+                                                                            className="select-all-btn"
+                                                                            onClick={() => selectAllSlidesInGroup(group)}
+                                                                        >
+                                                                            Select All
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            className="deselect-all-btn"
+                                                                            onClick={() => deselectAllSlidesInGroup(group)}
+                                                                        >
+                                                                            Deselect All
+                                                                        </button>
+                                                                    </div>
+                                                                    <span className="selected-count">
+                                                                        {getSelectedSlidesInGroup(group).length} of {group.slides.length} selected
+                                                                    </span>
+                                                                </div>
+                                                                {group.slides.map(slide => (
+                                                                    <div key={slide.id} className="individual-slide">
+                                                                        <label className="slide-checkbox">
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={selectedSlides.has(slide.id)}
+                                                                                onChange={() => toggleSlideSelection(slide.id)}
+                                                                            />
+                                                                            <span className="slide-detail-id">{slide.filename || slide.localRegionId}</span>
+                                                                        </label>
+                                                                        <span className={`slide-detail-status ${(() => {
                                                                             // Calculate slide status dynamically based on actual protocols
                                                                             const slideProtocols = dataStore.caseProtocolMappings[selectedCase?.bdsaId]?.[slide.id] || { stain: [], region: [] };
                                                                             const hasRegionProtocols = Array.isArray(slideProtocols) ? slideProtocols.length > 0 : (slideProtocols.region || []).length > 0;
-                                                                            return hasRegionProtocols ? '✓' : '⏳';
-                                                                        })()}
-                                                                    </span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-
-                                                    {(() => {
-                                                        // Only show Quick Actions if group is unmapped (no protocols applied)
-                                                        const hasAnyMappedSlide = group.slides.some(slide => {
-                                                            const slideProtocols = dataStore.caseProtocolMappings[selectedCase?.bdsaId]?.[slide.id] || { stain: [], region: [] };
-                                                            const hasRegionProtocols = Array.isArray(slideProtocols) ? slideProtocols.length > 0 : (slideProtocols.region || []).length > 0;
-                                                            return hasRegionProtocols;
-                                                        });
-                                                        return !hasAnyMappedSlide; // Show only when unmapped
-                                                    })() && (
-                                                            <div className="protocol-selection">
-                                                                {/* Auto-suggest and Alias management */}
-                                                                <div className="alias-management">
-                                                                    <small>
-                                                                        <strong>Quick Actions:</strong>
-
-                                                                        {/* Region Protocol buttons */}
-                                                                        {regionProtocols.map(protocol => {
-                                                                            const isAlias = (regionAliases[group.regionType] || []).includes(protocol.id);
-                                                                            const isIgnoreProtocol = protocol.id === 'ignore';
-
-                                                                            // Check if this protocol is already applied to ALL slides in this group (dynamic)
-                                                                            const isApplied = group.slides.every(slide => {
+                                                                            return hasRegionProtocols ? 'mapped' : 'unmapped';
+                                                                        })()}`}>
+                                                                            {(() => {
+                                                                                // Calculate slide status dynamically based on actual protocols
                                                                                 const slideProtocols = dataStore.caseProtocolMappings[selectedCase?.bdsaId]?.[slide.id] || { stain: [], region: [] };
-                                                                                const regionProtocols = Array.isArray(slideProtocols) ? slideProtocols : (slideProtocols.region || []);
-                                                                                return Array.isArray(regionProtocols) && regionProtocols.includes(protocol.id);
+                                                                                const hasRegionProtocols = Array.isArray(slideProtocols) ? slideProtocols.length > 0 : (slideProtocols.region || []).length > 0;
+                                                                                return hasRegionProtocols ? '✓' : '⏳';
+                                                                            })()}
+                                                                        </span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+
+                                                        {(() => {
+                                                            // Only show Quick Actions if group is unmapped (no protocols applied)
+                                                            const hasAnyMappedSlide = group.slides.some(slide => {
+                                                                const slideProtocols = dataStore.caseProtocolMappings[selectedCase?.bdsaId]?.[slide.id] || { stain: [], region: [] };
+                                                                const hasRegionProtocols = Array.isArray(slideProtocols) ? slideProtocols.length > 0 : (slideProtocols.region || []).length > 0;
+                                                                return hasRegionProtocols;
+                                                            });
+                                                            return !hasAnyMappedSlide; // Show only when unmapped
+                                                        })() && (
+                                                                <div className="protocol-selection">
+                                                                    {/* Auto-suggest and Alias management */}
+                                                                    <div className="alias-management">
+                                                                        <small>
+                                                                            <strong>Quick Actions:</strong>
+
+                                                                            {/* Region Protocol buttons */}
+                                                                            {regionProtocols.map(protocol => {
+                                                                                const isAlias = (regionAliases[group.regionType] || []).includes(protocol.id);
+                                                                                const isIgnoreProtocol = protocol.id === 'ignore';
+
+                                                                                // Check if this protocol is already applied to ALL slides in this group (dynamic)
+                                                                                const isApplied = group.slides.every(slide => {
+                                                                                    const slideProtocols = dataStore.caseProtocolMappings[selectedCase?.bdsaId]?.[slide.id] || { stain: [], region: [] };
+                                                                                    const regionProtocols = Array.isArray(slideProtocols) ? slideProtocols : (slideProtocols.region || []);
+                                                                                    return Array.isArray(regionProtocols) && regionProtocols.includes(protocol.id);
+                                                                                });
+
+                                                                                // Determine which slides to operate on
+                                                                                const isExpanded = expandedRegionGroups.has(group.regionType);
+                                                                                const selectedSlidesInGroup = getSelectedSlidesInGroup(group);
+                                                                                const slidesToOperateOn = isExpanded && selectedSlidesInGroup.length > 0
+                                                                                    ? selectedSlidesInGroup
+                                                                                    : group.slides;
+
+                                                                                return (
+                                                                                    <button
+                                                                                        key={protocol.id}
+                                                                                        type="button"
+                                                                                        className={`protocol-btn ${isApplied ? 'applied' : isAlias ? 'suggested' : isIgnoreProtocol ? 'ignore' : 'standard'}`}
+                                                                                        onClick={() => {
+                                                                                            if (isApplied) {
+                                                                                                // Remove the protocol from selected slides (or all if not expanded)
+                                                                                                slidesToOperateOn.forEach(slide => {
+                                                                                                    removeProtocolMapping(slide.id, protocol.id);
+                                                                                                });
+                                                                                            } else {
+                                                                                                // Apply the protocol to selected slides (or all if not expanded)
+                                                                                                slidesToOperateOn.forEach(slide => {
+                                                                                                    handleProtocolMapping(slide.id, protocol.id);
+                                                                                                });
+
+                                                                                                // Also add to suggestions if not already there (but not for ignore protocol)
+                                                                                                if (!isAlias && !isIgnoreProtocol) {
+                                                                                                    addRegionAlias(group.regionType, protocol.id);
+                                                                                                }
+                                                                                            }
+                                                                                        }}
+                                                                                        title={`${isApplied ?
+                                                                                            `Remove "${protocol.name}" from ${isExpanded && selectedSlidesInGroup.length > 0 ? `${selectedSlidesInGroup.length} selected slides` : `all ${group.count} slides`}` :
+                                                                                            `Apply "${protocol.name}" to ${isExpanded && selectedSlidesInGroup.length > 0 ? `${selectedSlidesInGroup.length} selected slides` : `all ${group.count} slides`}${isAlias ? ' (suggested)' : isIgnoreProtocol ? ' (exclude from processing)' : ''}`
+                                                                                            }\n\n${getProtocolTooltip(protocol)}`}
+                                                                                    >
+                                                                                        {isApplied ? '✓' : isAlias ? '⭐' : isIgnoreProtocol ? '🚫' : '+'} {protocol.name}
+                                                                                        {isExpanded && selectedSlidesInGroup.length > 0 && (
+                                                                                            <span className="selected-indicator"> ({selectedSlidesInGroup.length})</span>
+                                                                                        )}
+                                                                                    </button>
+                                                                                );
+                                                                            })}
+                                                                        </small>
+                                                                    </div>
+
+                                                                    {regionProtocols.length === 0 && (
+                                                                        <div className="no-protocols">
+                                                                            <p>No region protocols available. Create some protocols first.</p>
+                                                                            <button
+                                                                                className="add-protocol-btn"
+                                                                                onClick={() => window.location.hash = 'protocols'}
+                                                                            >
+                                                                                + Add New Region Protocol
+                                                                            </button>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+
+                                                        {(() => {
+                                                            // Use same logic as group header - if ANY slide is mapped, show removable protocols  
+                                                            const hasAnyMappedSlide = group.slides.some(slide => {
+                                                                const slideProtocols = dataStore.caseProtocolMappings[selectedCase?.bdsaId]?.[slide.id] || { stain: [], region: [] };
+                                                                const hasRegionProtocols = Array.isArray(slideProtocols) ? slideProtocols.length > 0 : (slideProtocols.region || []).length > 0;
+                                                                return hasRegionProtocols;
+                                                            });
+                                                            return hasAnyMappedSlide;
+                                                        })() && (
+                                                                <div className="mapped-protocol">
+                                                                    <strong>Mapped protocols:</strong>
+                                                                    <div className="mapped-protocols-list">
+                                                                        {(() => {
+                                                                            // Get all unique protocols for this group
+                                                                            const allProtocols = new Set();
+                                                                            group.slides.forEach(slide => {
+                                                                                const slideProtocols = getSlideProtocols(slide.id, 'region');
+                                                                                if (Array.isArray(slideProtocols)) {
+                                                                                    slideProtocols.forEach(protocolId => allProtocols.add(protocolId));
+                                                                                }
                                                                             });
 
-                                                                            // Determine which slides to operate on
-                                                                            const isExpanded = expandedRegionGroups.has(group.regionType);
-                                                                            const selectedSlidesInGroup = getSelectedSlidesInGroup(group);
-                                                                            const slidesToOperateOn = isExpanded && selectedSlidesInGroup.length > 0
-                                                                                ? selectedSlidesInGroup
-                                                                                : group.slides;
+                                                                            return Array.from(allProtocols).map(protocolId => {
+                                                                                const protocol = regionProtocols.find(p => p.id === protocolId);
+                                                                                const isIgnoreProtocol = protocolId === 'ignore';
 
-                                                                            return (
-                                                                                <button
-                                                                                    key={protocol.id}
-                                                                                    type="button"
-                                                                                    className={`protocol-btn ${isApplied ? 'applied' : isAlias ? 'suggested' : isIgnoreProtocol ? 'ignore' : 'standard'}`}
-                                                                                    onClick={() => {
-                                                                                        if (isApplied) {
-                                                                                            // Remove the protocol from selected slides (or all if not expanded)
-                                                                                            slidesToOperateOn.forEach(slide => {
-                                                                                                removeProtocolMapping(slide.id, protocol.id);
-                                                                                            });
-                                                                                        } else {
-                                                                                            // Apply the protocol to selected slides (or all if not expanded)
+                                                                                // Debug protocol lookup
+                                                                                if (!protocol) {
+                                                                                    console.log(`Region protocol not found for ID: ${protocolId}`, 'Available protocols:', regionProtocols);
+                                                                                    console.log('Protocol ID type:', typeof protocolId, 'Protocol ID value:', protocolId);
+                                                                                    console.log('Available protocol IDs:', regionProtocols.map(p => ({ id: p.id, name: p.name, type: typeof p.id })));
+                                                                                    console.log('Available protocol ID strings:', regionProtocols.map(p => String(p.id)));
+                                                                                    console.log('Looking for:', String(protocolId));
+                                                                                }
+
+                                                                                return (
+                                                                                    <div key={protocolId} className={`mapped-protocol-item ${isIgnoreProtocol ? 'ignore-protocol' : ''}`}>
+                                                                                        <span
+                                                                                            className={`protocol-name ${isIgnoreProtocol ? 'ignore-protocol-name' : ''}`}
+                                                                                            title={getProtocolTooltip(protocol)}
+                                                                                            style={{ cursor: 'help' }}
+                                                                                        >
+                                                                                            {isIgnoreProtocol ? '🚫 ' : ''}{protocol?.name || 'Unknown Protocol'}
+                                                                                        </span>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            className="remove-protocol-btn"
+                                                                                            onClick={() => {
+                                                                                                console.log('=== REGION PROTOCOL REMOVAL BUTTON CLICKED ===');
+                                                                                                console.log('Protocol ID to remove:', protocolId);
+                                                                                                console.log('Current protocol mappings:', caseProtocolMappings);
+
+                                                                                                // Use the centralized removeProtocolMapping function for each slide
+                                                                                                console.log('=== REGION PROTOCOL DELETE BUTTON (SEGREGATED) ===');
+                                                                                                console.log('Protocol ID to remove:', protocolId);
+                                                                                                console.log('Selected case:', selectedCase);
+                                                                                                console.log('Current protocol mappings:', caseProtocolMappings);
+
+                                                                                                group.slides.forEach((slide, index) => {
+                                                                                                    console.log(`=== Processing region slide ${index + 1}/${group.slides.length} ===`);
+                                                                                                    console.log(`Slide ID: ${slide.id}`);
+                                                                                                    console.log(`About to call removeProtocolMapping for slide: ${slide.id}, protocol: ${protocolId}`);
+                                                                                                    removeProtocolMapping(slide.id, protocolId);
+                                                                                                });
+                                                                                            }}
+                                                                                            title={`Force remove "${protocol?.name || 'Unknown Protocol'}" from all slides in this group`}
+                                                                                            style={{
+                                                                                                backgroundColor: '#dc3545',
+                                                                                                color: 'white',
+                                                                                                border: '1px solid #dc3545',
+                                                                                                borderRadius: '3px',
+                                                                                                cursor: 'pointer',
+                                                                                                fontWeight: 'bold'
+                                                                                            }}
+                                                                                        >
+                                                                                            ×
+                                                                                        </button>
+                                                                                    </div>
+                                                                                );
+                                                                            });
+                                                                        })()}
+                                                                    </div>
+                                                                    {group.count > 1 && <span className="group-count"> (applied to {group.count} slides)</span>}
+
+                                                                    {/* Show option to add more protocols */}
+                                                                    <div className="add-more-protocols">
+                                                                        <small>
+                                                                            <strong>Add more protocols:</strong>
+                                                                            {regionProtocols.map(protocol => {
+                                                                                const isIgnoreProtocol = protocol.id === 'ignore';
+
+                                                                                // Check if this protocol is already applied to all slides in the group
+                                                                                const isAlreadyApplied = group.slides.every(slide => {
+                                                                                    const slideProtocols = getSlideProtocols(slide.id, 'region');
+                                                                                    return Array.isArray(slideProtocols) && slideProtocols.includes(protocol.id);
+                                                                                });
+
+                                                                                if (isAlreadyApplied) return null;
+
+                                                                                // Determine which slides to operate on
+                                                                                const isExpanded = expandedRegionGroups.has(group.regionType);
+                                                                                const selectedSlidesInGroup = getSelectedSlidesInGroup(group);
+                                                                                const slidesToOperateOn = isExpanded && selectedSlidesInGroup.length > 0
+                                                                                    ? selectedSlidesInGroup
+                                                                                    : group.slides;
+
+                                                                                return (
+                                                                                    <button
+                                                                                        key={protocol.id}
+                                                                                        type="button"
+                                                                                        className={`add-protocol-btn-small ${isIgnoreProtocol ? 'ignore-protocol-btn' : ''}`}
+                                                                                        onClick={() => {
                                                                                             slidesToOperateOn.forEach(slide => {
                                                                                                 handleProtocolMapping(slide.id, protocol.id);
                                                                                             });
-
-                                                                                            // Also add to suggestions if not already there (but not for ignore protocol)
-                                                                                            if (!isAlias && !isIgnoreProtocol) {
-                                                                                                addRegionAlias(group.regionType, protocol.id);
-                                                                                            }
-                                                                                        }
-                                                                                    }}
-                                                                                    title={`${isApplied ?
-                                                                                        `Remove "${protocol.name}" from ${isExpanded && selectedSlidesInGroup.length > 0 ? `${selectedSlidesInGroup.length} selected slides` : `all ${group.count} slides`}` :
-                                                                                        `Apply "${protocol.name}" to ${isExpanded && selectedSlidesInGroup.length > 0 ? `${selectedSlidesInGroup.length} selected slides` : `all ${group.count} slides`}${isAlias ? ' (suggested)' : isIgnoreProtocol ? ' (exclude from processing)' : ''}`
-                                                                                        }\n\n${getProtocolTooltip(protocol)}`}
-                                                                                >
-                                                                                    {isApplied ? '✓' : isAlias ? '⭐' : isIgnoreProtocol ? '🚫' : '+'} {protocol.name}
-                                                                                    {isExpanded && selectedSlidesInGroup.length > 0 && (
-                                                                                        <span className="selected-indicator"> ({selectedSlidesInGroup.length})</span>
-                                                                                    )}
-                                                                                </button>
-                                                                            );
-                                                                        })}
-                                                                    </small>
-                                                                </div>
-
-                                                                {regionProtocols.length === 0 && (
-                                                                    <div className="no-protocols">
-                                                                        <p>No region protocols available. Create some protocols first.</p>
-                                                                        <button
-                                                                            className="add-protocol-btn"
-                                                                            onClick={() => window.location.hash = 'protocols'}
-                                                                        >
-                                                                            + Add New Region Protocol
-                                                                        </button>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        )}
-
-                                                    {(() => {
-                                                        // Use same logic as group header - if ANY slide is mapped, show removable protocols  
-                                                        const hasAnyMappedSlide = group.slides.some(slide => {
-                                                            const slideProtocols = dataStore.caseProtocolMappings[selectedCase?.bdsaId]?.[slide.id] || { stain: [], region: [] };
-                                                            const hasRegionProtocols = Array.isArray(slideProtocols) ? slideProtocols.length > 0 : (slideProtocols.region || []).length > 0;
-                                                            return hasRegionProtocols;
-                                                        });
-                                                        return hasAnyMappedSlide;
-                                                    })() && (
-                                                            <div className="mapped-protocol">
-                                                                <strong>Mapped protocols:</strong>
-                                                                <div className="mapped-protocols-list">
-                                                                    {(() => {
-                                                                        // Get all unique protocols for this group
-                                                                        const allProtocols = new Set();
-                                                                        group.slides.forEach(slide => {
-                                                                            const slideProtocols = getSlideProtocols(slide.id, 'region');
-                                                                            if (Array.isArray(slideProtocols)) {
-                                                                                slideProtocols.forEach(protocolId => allProtocols.add(protocolId));
-                                                                            }
-                                                                        });
-
-                                                                        return Array.from(allProtocols).map(protocolId => {
-                                                                            const protocol = regionProtocols.find(p => p.id === protocolId);
-                                                                            const isIgnoreProtocol = protocolId === 'ignore';
-
-                                                                            // Debug protocol lookup
-                                                                            if (!protocol) {
-                                                                                console.log(`Region protocol not found for ID: ${protocolId}`, 'Available protocols:', regionProtocols);
-                                                                                console.log('Protocol ID type:', typeof protocolId, 'Protocol ID value:', protocolId);
-                                                                                console.log('Available protocol IDs:', regionProtocols.map(p => ({ id: p.id, name: p.name, type: typeof p.id })));
-                                                                                console.log('Available protocol ID strings:', regionProtocols.map(p => String(p.id)));
-                                                                                console.log('Looking for:', String(protocolId));
-                                                                            }
-
-                                                                            return (
-                                                                                <div key={protocolId} className={`mapped-protocol-item ${isIgnoreProtocol ? 'ignore-protocol' : ''}`}>
-                                                                                    <span
-                                                                                        className={`protocol-name ${isIgnoreProtocol ? 'ignore-protocol-name' : ''}`}
-                                                                                        title={getProtocolTooltip(protocol)}
-                                                                                        style={{ cursor: 'help' }}
-                                                                                    >
-                                                                                        {isIgnoreProtocol ? '🚫 ' : ''}{protocol?.name || 'Unknown Protocol'}
-                                                                                    </span>
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        className="remove-protocol-btn"
-                                                                                        onClick={() => {
-                                                                                            console.log('=== REGION PROTOCOL REMOVAL BUTTON CLICKED ===');
-                                                                                            console.log('Protocol ID to remove:', protocolId);
-                                                                                            console.log('Current protocol mappings:', caseProtocolMappings);
-
-                                                                                            // Use the centralized removeProtocolMapping function for each slide
-                                                                                            console.log('=== REGION PROTOCOL DELETE BUTTON (SEGREGATED) ===');
-                                                                                            console.log('Protocol ID to remove:', protocolId);
-                                                                                            console.log('Selected case:', selectedCase);
-                                                                                            console.log('Current protocol mappings:', caseProtocolMappings);
-
-                                                                                            group.slides.forEach((slide, index) => {
-                                                                                                console.log(`=== Processing region slide ${index + 1}/${group.slides.length} ===`);
-                                                                                                console.log(`Slide ID: ${slide.id}`);
-                                                                                                console.log(`About to call removeProtocolMapping for slide: ${slide.id}, protocol: ${protocolId}`);
-                                                                                                removeProtocolMapping(slide.id, protocolId);
-                                                                                            });
                                                                                         }}
-                                                                                        title={`Force remove "${protocol?.name || 'Unknown Protocol'}" from all slides in this group`}
-                                                                                        style={{
-                                                                                            backgroundColor: '#dc3545',
-                                                                                            color: 'white',
-                                                                                            border: '1px solid #dc3545',
-                                                                                            borderRadius: '3px',
-                                                                                            cursor: 'pointer',
-                                                                                            fontWeight: 'bold'
-                                                                                        }}
+                                                                                        title={`Add "${protocol.name}" to ${isExpanded && selectedSlidesInGroup.length > 0 ? `${selectedSlidesInGroup.length} selected slides` : `all slides in this group`}${isIgnoreProtocol ? ' (exclude from processing)' : ''}\n\n${getProtocolTooltip(protocol)}`}
                                                                                     >
-                                                                                        ×
+                                                                                        {isIgnoreProtocol ? '🚫' : '+'} {protocol.name}
+                                                                                        {isExpanded && selectedSlidesInGroup.length > 0 && (
+                                                                                            <span className="selected-indicator"> ({selectedSlidesInGroup.length})</span>
+                                                                                        )}
                                                                                     </button>
-                                                                                </div>
-                                                                            );
-                                                                        });
-                                                                    })()}
+                                                                                );
+                                                                            })}
+                                                                        </small>
+                                                                    </div>
                                                                 </div>
-                                                                {group.count > 1 && <span className="group-count"> (applied to {group.count} slides)</span>}
-
-                                                                {/* Show option to add more protocols */}
-                                                                <div className="add-more-protocols">
-                                                                    <small>
-                                                                        <strong>Add more protocols:</strong>
-                                                                        {regionProtocols.map(protocol => {
-                                                                            const isIgnoreProtocol = protocol.id === 'ignore';
-
-                                                                            // Check if this protocol is already applied to all slides in the group
-                                                                            const isAlreadyApplied = group.slides.every(slide => {
-                                                                                const slideProtocols = getSlideProtocols(slide.id, 'region');
-                                                                                return Array.isArray(slideProtocols) && slideProtocols.includes(protocol.id);
-                                                                            });
-
-                                                                            if (isAlreadyApplied) return null;
-
-                                                                            // Determine which slides to operate on
-                                                                            const isExpanded = expandedRegionGroups.has(group.regionType);
-                                                                            const selectedSlidesInGroup = getSelectedSlidesInGroup(group);
-                                                                            const slidesToOperateOn = isExpanded && selectedSlidesInGroup.length > 0
-                                                                                ? selectedSlidesInGroup
-                                                                                : group.slides;
-
-                                                                            return (
-                                                                                <button
-                                                                                    key={protocol.id}
-                                                                                    type="button"
-                                                                                    className={`add-protocol-btn-small ${isIgnoreProtocol ? 'ignore-protocol-btn' : ''}`}
-                                                                                    onClick={() => {
-                                                                                        slidesToOperateOn.forEach(slide => {
-                                                                                            handleProtocolMapping(slide.id, protocol.id);
-                                                                                        });
-                                                                                    }}
-                                                                                    title={`Add "${protocol.name}" to ${isExpanded && selectedSlidesInGroup.length > 0 ? `${selectedSlidesInGroup.length} selected slides` : `all slides in this group`}${isIgnoreProtocol ? ' (exclude from processing)' : ''}\n\n${getProtocolTooltip(protocol)}`}
-                                                                                >
-                                                                                    {isIgnoreProtocol ? '🚫' : '+'} {protocol.name}
-                                                                                    {isExpanded && selectedSlidesInGroup.length > 0 && (
-                                                                                        <span className="selected-indicator"> ({selectedSlidesInGroup.length})</span>
-                                                                                    )}
-                                                                                </button>
-                                                                            );
-                                                                        })}
-                                                                    </small>
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                </div>
-                                            ))}
+                                                            )}
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
                             </div>
                         ) : (
                             <div className="no-case-selected">

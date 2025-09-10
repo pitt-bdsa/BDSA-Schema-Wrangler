@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { syncBdsaMetadataToServer, cancelDsaMetadataSync, getSyncStatus, subscribeToDataStore, getDataStoreSnapshot, DATA_CHANGE_EVENTS } from '../utils/dataStore';
+import { syncBdsaMetadataToServer, cancelDsaMetadataSync, getSyncStatus, subscribeToSyncEvents, getDataStoreSnapshot, DATA_CHANGE_EVENTS } from '../utils/dataStore';
 import './DsaSyncControl.css';
 
 const DsaSyncControl = () => {
@@ -12,28 +12,17 @@ const DsaSyncControl = () => {
     const [dataStore, setDataStore] = useState(null);
 
     useEffect(() => {
-        // Subscribe to data store changes
-        const unsubscribe = subscribeToDataStore((event) => {
-            console.log('DsaSyncControl received data store event:', event.eventType);
-            console.log('DsaSyncControl event data:', event);
+        // Subscribe to sync events only (separate from main data store events)
+        const unsubscribe = subscribeToSyncEvents((event) => {
+            console.log('DsaSyncControl received sync event:', event.eventType);
 
             // Get the latest data store snapshot
-            const latestDataStore = event.dataStore || event;
+            const latestDataStore = event.dataStore || getDataStoreSnapshot();
             setDataStore(latestDataStore);
 
-            // Update sync state for sync-related events
-            if ([
-                DATA_CHANGE_EVENTS.SYNC_STATUS_CHANGED,
-                DATA_CHANGE_EVENTS.SYNC_PROGRESS_UPDATED,
-                DATA_CHANGE_EVENTS.SYNC_COMPLETED,
-                DATA_CHANGE_EVENTS.SYNC_ERROR,
-                DATA_CHANGE_EVENTS.SYNC_CANCELLED
-            ].includes(event.eventType)) {
-                console.log('DSA Sync Control updating sync state for event:', event.eventType);
-                const newSyncState = getSyncStatus();
-                console.log('New sync state:', newSyncState);
-                setSyncState(newSyncState);
-            }
+            // Update sync state - all events from subscribeToSyncEvents are sync-related
+            const newSyncState = getSyncStatus();
+            setSyncState(newSyncState);
         });
 
         // Initialize with current data store state
@@ -101,7 +90,7 @@ const DsaSyncControl = () => {
             </div>
 
             <div className="sync-info">
-                <p>Sync BDSA metadata (BDSA.localCaseId, BDSA.localStainID, BDSA.localRegionId) to DSA server as <code>bdsaLocal</code> field.</p>
+                <p>Sync BDSA metadata (localCaseId, localStainID, localRegionId) to DSA server as <code>bdsaLocal</code> field.</p>
 
                 {dataStore?.processedData?.length > 0 && (
                     <div className="sync-stats">

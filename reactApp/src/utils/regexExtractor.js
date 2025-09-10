@@ -83,7 +83,7 @@ export const applyRegexRules = (data, regexRules, columnMapping = {}) => {
         const hasBdsaChanges = Object.keys(regexExtracted).some(field => regexExtracted[field]) ||
             Object.keys(dataSource).some(field => dataSource[field]);
         if (hasBdsaChanges) {
-            updatedItem._lastModified = new Date().toISOString();
+            updatedItem._localLastModified = new Date().toISOString();
         }
 
         return updatedItem;

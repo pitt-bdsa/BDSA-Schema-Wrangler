@@ -581,10 +581,18 @@ export const syncItemBdsaMetadata = async (baseUrl, item, girderToken, columnMap
             throw new Error('No DSA item ID found in data item');
         }
 
-        // Extract BDSA metadata values (authoritative source)
-        const localCaseId = item.BDSA?.localCaseId || '';
-        const localStainID = item.BDSA?.localStainID || '';
-        const localRegionId = item.BDSA?.localRegionId || '';
+        // Extract BDSA metadata values from the BDSA namespace (authoritative source)
+        const localCaseId = item.BDSA?.localCaseId || item[columnMapping.localCaseId] || '';
+        const localStainID = item.BDSA?.localStainID || item[columnMapping.localStainID] || '';
+        const localRegionId = item.BDSA?.localRegionId || item[columnMapping.localRegionId] || '';
+
+        console.log(`🔍 SYNC VALUES - Item ${itemId}:`, {
+            localCaseId,
+            localStainID,
+            localRegionId,
+            hasBDSAObject: !!item.BDSA,
+            bdsaObject: item.BDSA
+        });
 
         // Create bdsaLocal metadata object
         const bdsaLocal = {
@@ -597,6 +605,13 @@ export const syncItemBdsaMetadata = async (baseUrl, item, girderToken, columnMap
 
         // Only sync if we have at least one local value
         if (!localCaseId && !localStainID && !localRegionId) {
+            console.log(`🚨 SYNC SKIP - Item ${itemId} has no local metadata values:`, {
+                localCaseId,
+                localStainID,
+                localRegionId,
+                itemBDSA: item.BDSA,
+                columnMapping: columnMapping
+            });
             return {
                 success: false,
                 itemId,
@@ -607,20 +622,45 @@ export const syncItemBdsaMetadata = async (baseUrl, item, girderToken, columnMap
 
         // Check if this item has been modified since last sync
         const existingMetadata = item.meta?.bdsaLocal;
-        const lastLocalModification = item._lastModified;
+        const { isItemModified } = await import('./dataStore');
+        const hasBeenModified = isItemModified(itemId);
+
+        console.log(`🔍 SYNC DEBUG - Item ${itemId}:`, {
+            hasExistingMetadata: !!existingMetadata,
+            existingMetadata,
+            hasBeenModified,
+            localCaseId,
+            localStainID,
+            localRegionId
+        });
 
         if (existingMetadata) {
+            // Normalize both values for comparison - handle arrays and strings
+            const normalizeForComparison = (value) => {
+                if (Array.isArray(value)) {
+                    return value.sort().join(','); // Sort to handle order differences
+                }
+                return (value || '').toString();
+            };
+
             const hasChanges =
                 existingMetadata.localCaseId !== localCaseId ||
-                existingMetadata.localStainID !== localStainID ||
-                existingMetadata.localRegionId !== localRegionId;
+                normalizeForComparison(existingMetadata.localStainID) !== normalizeForComparison(localStainID) ||
+                normalizeForComparison(existingMetadata.localRegionId) !== normalizeForComparison(localRegionId);
 
-            // Also check if item was modified locally after last sync
-            const wasModifiedAfterSync = lastLocalModification &&
-                existingMetadata.lastUpdated &&
-                new Date(lastLocalModification) > new Date(existingMetadata.lastUpdated);
+            console.log(`Skip check for item ${itemId}:`, {
+                existingMetadata: {
+                    localCaseId: existingMetadata.localCaseId,
+                    localStainID: existingMetadata.localStainID,
+                    localRegionId: existingMetadata.localRegionId
+                },
+                newValues: { localCaseId, localStainID, localRegionId },
+                hasChanges,
+                hasBeenModified,
+                willSkip: !hasChanges && !hasBeenModified
+            });
 
-            if (!hasChanges && !wasModifiedAfterSync) {
+            if (!hasChanges && !hasBeenModified) {
                 return {
                     success: false,
                     itemId,
@@ -743,7 +783,14 @@ export class DsaBatchProcessor {
             // Wait for batch to complete
             const batchResults = await Promise.all(batchPromises);
 
-            // Process results
+            // Check for cancellation after batch completion
+            if (this.cancelled) {
+                console.log('Batch processing cancelled after batch completion');
+                break;
+            }
+
+            // Process results and track batch activity
+            let batchHadUpdates = false;
             batchResults.forEach(result => {
                 if (result) {
                     this.results.push(result);
@@ -751,10 +798,13 @@ export class DsaBatchProcessor {
 
                     if (result.success) {
                         successCount++;
+                        batchHadUpdates = true; // Track that we had actual updates
                     } else if (result.skipped) {
                         skippedCount++;
+                        // Skipped items don't count as updates
                     } else {
                         errorCount++;
+                        batchHadUpdates = true; // Errors still count as server activity
                     }
                 }
             });
@@ -771,9 +821,18 @@ export class DsaBatchProcessor {
                 });
             }
 
-            // Delay between batches (except for last batch)
-            if (i + this.options.batchSize < items.length && !this.cancelled) {
+            // Check for cancellation before applying delay
+            if (this.cancelled) {
+                console.log('Batch processing cancelled before delay');
+                break;
+            }
+
+            // Only delay between batches if we had actual updates (not just skips)
+            if (i + this.options.batchSize < items.length && !this.cancelled && batchHadUpdates) {
+                console.log(`Batch had ${successCount + errorCount} updates, applying ${this.options.delayBetweenBatches}ms delay...`);
                 await this.delay(this.options.delayBetweenBatches);
+            } else if (i + this.options.batchSize < items.length && !this.cancelled) {
+                console.log('Batch had only skips, no delay needed');
             }
         }
 

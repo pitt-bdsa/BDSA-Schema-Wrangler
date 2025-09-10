@@ -16,5 +16,11 @@ stores = html.Div(
             data={},
             storage_type="local",  # This will persist across browser restarts
         ),
+        # New store for column mappings
+        dcc.Store(
+            id="column-mapping-store",
+            data={},
+            storage_type="local",  # This will persist across browser restarts
+        ),
     ]
 )
