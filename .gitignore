@@ -18,3 +18,6 @@ notebooks/***
 app/year_2020_dsametadata.csv
 app/collections.postmortem_tissue_core.histopathology_images-export-2025-03-07T22:38:56.429767092Z.csv
 .gitignore
+year_2020_dsametadata.csv
+reactApp/src/test/dataStore.test.js
+.gitignore

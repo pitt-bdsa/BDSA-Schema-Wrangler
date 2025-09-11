@@ -7,13 +7,58 @@ const DsaConfigModal = ({ onSave, onClose }) => {
     const [isTesting, setIsTesting] = useState(false);
     const [testResult, setTestResult] = useState(null);
     const [errors, setErrors] = useState({});
+    const [urlNormalized, setUrlNormalized] = useState(false);
 
     useEffect(() => {
         setConfig(dsaAuthStore.config);
     }, []);
 
+    // Normalize DSA server URL to handle common formatting issues
+    const normalizeDsaUrl = (url) => {
+        if (!url || typeof url !== 'string') {
+            return url;
+        }
+
+        let normalizedUrl = url.trim();
+
+        // Remove trailing slashes
+        normalizedUrl = normalizedUrl.replace(/\/+$/, '');
+
+        // Remove /api/v1 if it was accidentally added by the user
+        normalizedUrl = normalizedUrl.replace(/\/api\/v1\/?$/, '');
+
+        // Ensure protocol is present
+        if (!normalizedUrl.match(/^https?:\/\//)) {
+            normalizedUrl = `http://${normalizedUrl}`;
+        }
+
+        // Remove any duplicate slashes
+        normalizedUrl = normalizedUrl.replace(/([^:]\/)\/+/g, '$1');
+
+        return normalizedUrl;
+    };
+
     const handleFieldChange = (field, value) => {
-        setConfig(prev => ({ ...prev, [field]: value }));
+        let processedValue = value;
+        let wasNormalized = false;
+
+        // Apply URL normalization for baseUrl field
+        if (field === 'baseUrl') {
+            const originalValue = value;
+            processedValue = normalizeDsaUrl(value);
+            wasNormalized = originalValue !== processedValue;
+        }
+
+        setConfig(prev => ({ ...prev, [field]: processedValue }));
+
+        // Show normalization indicator
+        if (field === 'baseUrl') {
+            setUrlNormalized(wasNormalized);
+            // Hide the indicator after 3 seconds
+            if (wasNormalized) {
+                setTimeout(() => setUrlNormalized(false), 3000);
+            }
+        }
 
         // Clear field error when user starts typing
         if (errors[field]) {
@@ -101,8 +146,15 @@ const DsaConfigModal = ({ onSave, onClose }) => {
                             className={errors.baseUrl ? 'error' : ''}
                         />
                         {errors.baseUrl && <div className="error-message">{errors.baseUrl}</div>}
+                        {urlNormalized && (
+                            <div className="normalization-indicator">
+                                ✨ URL automatically cleaned up
+                            </div>
+                        )}
                         <div className="field-help">
-                            The base URL of your Digital Slide Archive server
+                            The base URL of your Digital Slide Archive server (e.g., http://multiplex.pathology.emory.edu:8080)
+                            <br />
+                            <small>💡 Tip: Don't include /api/v1 - it will be added automatically</small>
                         </div>
                     </div>
 

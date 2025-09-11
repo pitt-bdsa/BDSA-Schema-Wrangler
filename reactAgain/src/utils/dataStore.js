@@ -124,15 +124,6 @@ class DataStore {
                 item[header] = values[index];
             });
 
-            // Add BDSA structure for consistency
-            item.BDSA = {
-                localCaseId: item.caseId || item.localCaseId || item.case_id || '',
-                localStainID: item.stainId || item.localStainID || item.stain_id || '',
-                localRegionId: item.regionId || item.localRegionId || item.region_id || '',
-                stainProtocols: [],
-                regionProtocols: []
-            };
-
             data.push(item);
         }
 
@@ -203,7 +194,7 @@ class DataStore {
     }
 
     async fetchDsaItems(config, token) {
-        const apiUrl = `${config.baseUrl}/resource/${config.resourceId}/items?type=${config.resourceType || 'folder'}&limit=0`;
+        const apiUrl = `${config.baseUrl}/api/v1/resource/${config.resourceId}/items?type=${config.resourceType || 'folder'}&limit=0`;
 
         const headers = {
             'Content-Type': 'application/json',
@@ -244,20 +235,10 @@ class DataStore {
         });
 
         return dsaData.map((item, index) => {
-            // Flatten the entire item, including nested objects and arrays
+            // Simply flatten the entire item, including nested objects and arrays
             const flattenedItem = this.flattenObject(item);
 
-            // Extract common metadata fields from various possible locations
-            const extractField = (possibleKeys) => {
-                for (const key of possibleKeys) {
-                    if (flattenedItem[key] && flattenedItem[key] !== '') {
-                        return flattenedItem[key];
-                    }
-                }
-                return '';
-            };
-
-            // Create a simplified transformed item
+            // Add basic identification fields
             const transformedItem = {
                 // Basic identification
                 id: flattenedItem._id || flattenedItem.id || `dsa_item_${index}`,
@@ -272,25 +253,7 @@ class DataStore {
                 dsa_created: flattenedItem.created || flattenedItem.createdAt || '',
                 dsa_updated: flattenedItem.updated || flattenedItem.updatedAt || '',
                 dsa_size: flattenedItem.size || flattenedItem.fileSize || '',
-                dsa_mimeType: flattenedItem.mimeType || flattenedItem.contentType || '',
-
-                // Simple BDSA structure - we'll build this out later
-                BDSA: {
-                    localCaseId: extractField([
-                        'meta.caseId', 'meta.localCaseId', 'caseId', 'localCaseId',
-                        'metadata.caseId', 'metadata.localCaseId', 'case_id', 'local_case_id'
-                    ]),
-                    localStainID: extractField([
-                        'meta.stainId', 'meta.localStainID', 'stainId', 'localStainID',
-                        'metadata.stainId', 'metadata.localStainID', 'stain_id', 'local_stain_id'
-                    ]),
-                    localRegionId: extractField([
-                        'meta.regionId', 'meta.localRegionId', 'regionId', 'localRegionId',
-                        'metadata.regionId', 'metadata.localRegionId', 'region_id', 'local_region_id'
-                    ]),
-                    stainProtocols: [],
-                    regionProtocols: []
-                }
+                dsa_mimeType: flattenedItem.mimeType || flattenedItem.contentType || ''
             };
 
             return transformedItem;
@@ -367,54 +330,42 @@ class DataStore {
     }
 
     // Data Query Methods
-    getItemsByCaseId(caseId) {
-        return this.processedData.filter(item => item.BDSA.localCaseId === caseId);
+    getItemsByField(fieldName, value) {
+        return this.processedData.filter(item => item[fieldName] === value);
     }
 
-    getItemsByStainProtocol(protocolName) {
+    getItemsByFieldContains(fieldName, value) {
         return this.processedData.filter(item =>
-            item.BDSA.stainProtocols.includes(protocolName)
-        );
-    }
-
-    getItemsByRegionProtocol(protocolName) {
-        return this.processedData.filter(item =>
-            item.BDSA.regionProtocols.includes(protocolName)
-        );
-    }
-
-    getUnmappedCases() {
-        return this.processedData.filter(item =>
-            item.BDSA.localCaseId && !item.BDSA.bdsaCaseId
-        );
-    }
-
-    getMappedCases() {
-        return this.processedData.filter(item =>
-            item.BDSA.localCaseId && item.BDSA.bdsaCaseId
+            item[fieldName] && item[fieldName].toString().toLowerCase().includes(value.toLowerCase())
         );
     }
 
     // Statistics
     getStatistics() {
         const totalItems = this.processedData.length;
-        const mappedCases = this.getMappedCases().length;
-        const unmappedCases = this.getUnmappedCases().length;
-        const uniqueCases = new Set(this.processedData.map(item => item.BDSA.localCaseId)).size;
-        const uniqueStainProtocols = new Set(
-            this.processedData.flatMap(item => item.BDSA.stainProtocols)
-        ).size;
-        const uniqueRegionProtocols = new Set(
-            this.processedData.flatMap(item => item.BDSA.regionProtocols)
-        ).size;
+        const fieldCounts = {};
+
+        // Count unique values for each field
+        this.processedData.forEach(item => {
+            Object.keys(item).forEach(key => {
+                if (!fieldCounts[key]) {
+                    fieldCounts[key] = new Set();
+                }
+                if (item[key] && item[key] !== '') {
+                    fieldCounts[key].add(item[key]);
+                }
+            });
+        });
+
+        // Convert sets to counts
+        const uniqueFieldCounts = {};
+        Object.keys(fieldCounts).forEach(key => {
+            uniqueFieldCounts[key] = fieldCounts[key].size;
+        });
 
         return {
             totalItems,
-            uniqueCases,
-            mappedCases,
-            unmappedCases,
-            uniqueStainProtocols,
-            uniqueRegionProtocols,
+            uniqueFieldCounts,
             modifiedItems: this.modifiedItems.size
         };
     }

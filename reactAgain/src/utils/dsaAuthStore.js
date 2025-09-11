@@ -155,7 +155,7 @@ class DsaAuthStore {
             }
 
             const credentials = btoa(`${username}:${password}`);
-            const response = await fetch(`${this.config.baseUrl}/user/authentication`, {
+            const response = await fetch(`${this.config.baseUrl}/api/v1/user/authentication`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Basic ${credentials}`,
@@ -210,7 +210,7 @@ class DsaAuthStore {
         try {
             // If we have a token and server URL, try to logout from server
             if (this.token && this.config.baseUrl) {
-                await fetch(`${this.config.baseUrl}/user/authentication`, {
+                await fetch(`${this.config.baseUrl}/api/v1/user/authentication`, {
                     method: 'DELETE',
                     headers: {
                         'Girder-Token': this.token
@@ -244,7 +244,7 @@ class DsaAuthStore {
         }
 
         try {
-            const response = await fetch(`${this.config.baseUrl}/user/me`, {
+            const response = await fetch(`${this.config.baseUrl}/api/v1/user/me`, {
                 headers: {
                     'Girder-Token': this.token
                 }
@@ -333,7 +333,7 @@ class DsaAuthStore {
         }
 
         try {
-            const response = await fetch(`${this.config.baseUrl}/system/version`, {
+            const response = await fetch(`${this.config.baseUrl}/api/v1/system/version`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json'

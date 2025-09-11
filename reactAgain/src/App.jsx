@@ -7,7 +7,7 @@ import DsaLogin from './components/DsaLogin';
 import './App.css';
 
 function App() {
-    const [activeTab, setActiveTab] = useState(0);
+    const [activeTab, setActiveTab] = useState(2);
 
     const tabs = [
         { id: 0, label: 'BDSA Schema', component: <SchemaTab /> },
