@@ -1,0 +1,183 @@
+.protocol-list {
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+    padding: 0 4px;
+}
+
+.protocol-list-header {
+    margin-bottom: 24px;
+    padding: 20px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e0e0e0;
+}
+
+.protocol-list-header h3 {
+    margin: 0 0 8px 0;
+    color: #1976d2;
+    font-size: 1.4rem;
+    font-weight: 600;
+}
+
+.protocol-list-header p {
+    margin: 0;
+    color: #666;
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+.protocols-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 20px;
+    padding-bottom: 20px;
+}
+
+.protocol-card {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e0e0e0;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.protocol-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.protocol-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 16px;
+}
+
+.protocol-title {
+    flex: 1;
+}
+
+.protocol-title h4 {
+    margin: 0 0 8px 0;
+    color: #1976d2;
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+.status-local {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+.status-modified {
+    background: #fff3e0;
+    color: #f57c00;
+}
+
+.status-synced {
+    background: #e8f5e8;
+    color: #2e7d32;
+}
+
+.protocol-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.edit-button,
+.delete-button {
+    background: none;
+    border: none;
+    padding: 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1.2rem;
+    transition: background-color 0.2s ease;
+}
+
+.edit-button:hover {
+    background: #e3f2fd;
+}
+
+.delete-button:hover {
+    background: #ffebee;
+}
+
+.protocol-details {
+    color: #555;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.protocol-details p {
+    margin: 6px 0;
+}
+
+.protocol-details strong {
+    color: #333;
+    font-weight: 600;
+}
+
+.add-protocol-card {
+    background: #f8f9fa;
+    border: 2px dashed #1976d2;
+    border-radius: 8px;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+}
+
+.add-protocol-card:hover {
+    background: #e3f2fd;
+    border-color: #1565c0;
+}
+
+.add-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.add-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #1976d2;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+.add-content h4 {
+    margin: 0;
+    color: #1976d2;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.add-content p {
+    margin: 0;
+    color: #666;
+    font-size: 0.9rem;
+}
