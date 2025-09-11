@@ -138,6 +138,22 @@
     background: #5a6268;
 }
 
+.regex-rules-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    background: #28a745;
+    color: white;
+}
+
+.regex-rules-btn:hover {
+    background: #218838;
+}
+
 /* Column Visibility Modal */
 .column-modal {
     max-width: 500px;

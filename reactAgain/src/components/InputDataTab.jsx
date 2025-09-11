@@ -5,6 +5,8 @@ import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
 import dataStore from '../utils/dataStore';
 import dsaAuthStore from '../utils/dsaAuthStore';
+import RegexRulesModal from './RegexRulesModal';
+import { getDefaultRegexRules, applyRegexRules } from '../utils/regexExtractor';
 import './InputDataTab.css';
 
 // Register AG Grid modules
@@ -26,6 +28,8 @@ const InputDataTab = () => {
     const [showColumnPanel, setShowColumnPanel] = useState(false);
     const [columnVisibility, setColumnVisibility] = useState({});
     const [columnOrder, setColumnOrder] = useState([]);
+    const [showRegexRules, setShowRegexRules] = useState(false);
+    const [regexRules, setRegexRules] = useState(getDefaultRegexRules());
 
     // Generate a unique key for the current data source
     const getDataSourceKey = () => {
@@ -145,11 +149,43 @@ const InputDataTab = () => {
                             setColumnVisibility(config.visibility || {});
                         } else {
                             console.log('🔄 Saved config invalid, using default order');
-                            setColumnOrder(currentColumns);
+                            // Generate nested column keys
+                            const generateNestedKeys = (obj, prefix = '') => {
+                                const keys = [];
+                                for (const key in obj) {
+                                    if (obj.hasOwnProperty(key)) {
+                                        const fullKey = prefix ? `${prefix}.${key}` : key;
+                                        const value = obj[key];
+                                        if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+                                            keys.push(...generateNestedKeys(value, fullKey));
+                                        } else {
+                                            keys.push(fullKey);
+                                        }
+                                    }
+                                }
+                                return keys;
+                            };
+                            setColumnOrder(generateNestedKeys(dataStatus.processedData[0]));
                         }
                     } else {
                         console.log('🔄 No saved config found, using default order');
-                        setColumnOrder(Object.keys(dataStatus.processedData[0]));
+                        // Generate nested column keys
+                        const generateNestedKeys = (obj, prefix = '') => {
+                            const keys = [];
+                            for (const key in obj) {
+                                if (obj.hasOwnProperty(key)) {
+                                    const fullKey = prefix ? `${prefix}.${key}` : key;
+                                    const value = obj[key];
+                                    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+                                        keys.push(...generateNestedKeys(value, fullKey));
+                                    } else {
+                                        keys.push(fullKey);
+                                    }
+                                }
+                            }
+                            return keys;
+                        };
+                        setColumnOrder(generateNestedKeys(dataStatus.processedData[0]));
                     }
                 } catch (error) {
                     console.error('Error loading saved column config:', error);
@@ -293,9 +329,34 @@ const InputDataTab = () => {
 
     const resetColumnOrder = () => {
         if (!dataStatus.processedData || dataStatus.processedData.length === 0) return;
-        const defaultOrder = Object.keys(dataStatus.processedData[0]);
+
+        // Generate nested column keys
+        const generateNestedKeys = (obj, prefix = '') => {
+            const keys = [];
+            for (const key in obj) {
+                if (obj.hasOwnProperty(key)) {
+                    const fullKey = prefix ? `${prefix}.${key}` : key;
+                    const value = obj[key];
+                    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+                        keys.push(...generateNestedKeys(value, fullKey));
+                    } else {
+                        keys.push(fullKey);
+                    }
+                }
+            }
+            return keys;
+        };
+
+        const defaultOrder = generateNestedKeys(dataStatus.processedData[0]);
         setColumnOrder(defaultOrder);
         saveColumnConfig(columnVisibility, defaultOrder);
+    };
+
+    const handleSaveRegexRules = (newRules) => {
+        setRegexRules(newRules);
+        // Save to localStorage for persistence
+        localStorage.setItem('regexRules', JSON.stringify(newRules));
+        console.log('💾 Saved regex rules:', newRules);
     };
 
     // Generate column definitions from the first row of data
@@ -306,25 +367,67 @@ const InputDataTab = () => {
         }
 
         const firstRow = dataStatus.processedData[0];
-        // Use custom column order if available, otherwise use default order
-        const orderedKeys = columnOrder.length > 0 ? columnOrder : Object.keys(firstRow);
 
-        const columnDefs = orderedKeys.map(key => ({
-            field: key,
-            headerName: key,
-            sortable: true,
-            filter: true,
-            resizable: true,
-            minWidth: 150,
-            hide: columnVisibility[key] === false, // Hide column if explicitly set to false
-            cellStyle: (params) => {
-                // Highlight DSA-specific fields
-                if (key.startsWith('dsa_') || key === 'id' || key === 'name') {
-                    return { backgroundColor: '#f0f7ff', fontWeight: 'bold' };
+        // Generate column definitions with proper nested field paths
+        const generateColumnDefs = (obj, prefix = '') => {
+            const columns = [];
+
+            for (const key in obj) {
+                if (obj.hasOwnProperty(key)) {
+                    const fullKey = prefix ? `${prefix}.${key}` : key;
+                    const value = obj[key];
+
+                    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+                        // Recursively process nested objects
+                        columns.push(...generateColumnDefs(value, fullKey));
+                    } else {
+                        // Add column for primitive values
+                        columns.push({
+                            field: fullKey,
+                            headerName: fullKey,
+                            sortable: true,
+                            filter: true,
+                            resizable: true,
+                            minWidth: 150,
+                            hide: columnVisibility[fullKey] === false,
+                            cellStyle: (params) => {
+                                // Highlight DSA-specific fields
+                                if (fullKey.startsWith('dsa_') || fullKey === 'id' || fullKey === 'name') {
+                                    return { backgroundColor: '#f0f7ff', fontWeight: 'bold' };
+                                }
+                                return null;
+                            }
+                        });
+                    }
                 }
-                return null;
             }
-        }));
+
+            return columns;
+        };
+
+        const allColumns = generateColumnDefs(firstRow);
+
+        // Use custom column order if available, otherwise use default order
+        const orderedKeys = columnOrder.length > 0 ? columnOrder : allColumns.map(col => col.field);
+
+        const columnDefs = orderedKeys.map(key => {
+            const existingColumn = allColumns.find(col => col.field === key);
+            return existingColumn || {
+                field: key,
+                headerName: key,
+                sortable: true,
+                filter: true,
+                resizable: true,
+                minWidth: 150,
+                hide: columnVisibility[key] === false,
+                cellStyle: (params) => {
+                    if (key.startsWith('dsa_') || key === 'id' || key === 'name') {
+                        return { backgroundColor: '#f0f7ff', fontWeight: 'bold' };
+                    }
+                    return null;
+                }
+            };
+        });
 
         console.log('🔍 Generated column definitions:', {
             count: columnDefs.length,
@@ -408,6 +511,16 @@ const InputDataTab = () => {
                         title="Show/Hide Columns"
                     >
                         {showColumnPanel ? 'Hide Columns' : 'Show Columns'}
+                    </button>
+                )}
+
+                {dataStatus.processedData && dataStatus.processedData.length > 0 && (
+                    <button
+                        className="regex-rules-btn"
+                        onClick={() => setShowRegexRules(true)}
+                        title="Configure Regex Rules for Data Extraction"
+                    >
+                        Regex Rules
                     </button>
                 )}
             </div>
@@ -524,6 +637,15 @@ const InputDataTab = () => {
                     </div>
                 )}
             </div>
+
+            {/* Regex Rules Modal */}
+            <RegexRulesModal
+                isOpen={showRegexRules}
+                onClose={() => setShowRegexRules(false)}
+                onSave={handleSaveRegexRules}
+                currentRules={regexRules}
+                sampleData={dataStatus.processedData || []}
+            />
         </div>
     );
 };

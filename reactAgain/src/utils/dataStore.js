@@ -180,6 +180,7 @@ class DataStore {
             this.dataLoadTimestamp = new Date().toISOString();
             this.modifiedItems.clear();
 
+
             this.saveToStorage();
             this.notify();
 
@@ -235,25 +236,22 @@ class DataStore {
         });
 
         return dsaData.map((item, index) => {
-            // Simply flatten the entire item, including nested objects and arrays
-            const flattenedItem = this.flattenObject(item);
-
-            // Add basic identification fields
+            // Keep the original data structure - don't flatten it
             const transformedItem = {
                 // Basic identification
-                id: flattenedItem._id || flattenedItem.id || `dsa_item_${index}`,
-                name: flattenedItem.name || flattenedItem.filename || flattenedItem.title || '',
+                id: item._id || item.id || `dsa_item_${index}`,
+                name: item.name || item.filename || item.title || '',
 
-                // Include all flattened fields for exploration
-                ...flattenedItem,
+                // Include the original item data (nested structure preserved)
+                ...item,
 
                 // Add DSA-specific fields for reference
-                dsa_id: flattenedItem._id || flattenedItem.id || '',
-                dsa_name: flattenedItem.name || '',
-                dsa_created: flattenedItem.created || flattenedItem.createdAt || '',
-                dsa_updated: flattenedItem.updated || flattenedItem.updatedAt || '',
-                dsa_size: flattenedItem.size || flattenedItem.fileSize || '',
-                dsa_mimeType: flattenedItem.mimeType || flattenedItem.contentType || ''
+                dsa_id: item._id || item.id || '',
+                dsa_name: item.name || '',
+                dsa_created: item.created || item.createdAt || '',
+                dsa_updated: item.updated || item.updatedAt || '',
+                dsa_size: item.size || item.fileSize || '',
+                dsa_mimeType: item.mimeType || item.contentType || ''
             };
 
             return transformedItem;
@@ -267,6 +265,14 @@ class DataStore {
             if (obj.hasOwnProperty(key)) {
                 const newKey = prefix ? `${prefix}.${key}` : key;
                 const value = obj[key];
+
+                // Debug: Log meta-related fields
+                if (newKey.includes('meta') && prefix === '') {
+                    console.log(`🔍 Flattening meta field: ${newKey} =`, value);
+                    if (value && typeof value === 'object' && value.bdsaLocal) {
+                        console.log(`🔍 Found bdsaLocal in meta:`, value.bdsaLocal);
+                    }
+                }
 
                 if (value === null || value === undefined) {
                     // Handle null/undefined values
@@ -291,7 +297,14 @@ class DataStore {
                     }
                 } else if (typeof value === 'object') {
                     // Recursively flatten nested objects
-                    Object.assign(flattened, this.flattenObject(value, newKey));
+                    if (newKey === 'meta') {
+                        console.log(`🔍 Recursively flattening meta object:`, value);
+                    }
+                    const nestedFlattened = this.flattenObject(value, newKey);
+                    if (newKey === 'meta') {
+                        console.log(`🔍 Meta flattening result:`, nestedFlattened);
+                    }
+                    Object.assign(flattened, nestedFlattened);
                 } else {
                     // Add primitive values directly
                     flattened[newKey] = value;
