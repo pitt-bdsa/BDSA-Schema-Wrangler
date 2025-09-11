@@ -464,28 +464,28 @@ export const loadDsaData = async (dsaConfig, girderToken, regexRules = {}) => {
             const columns = Object.keys(transformedData[0] || {})
                 .filter(key => key !== 'BDSA') // Exclude BDSA object
                 .map(key => {
-                const column = {
-                    field: key,
-                    headerName: key,
-                    sortable: true,
-                    filter: true,
-                    resizable: true,
-                    minWidth: 150
-                };
-
-                // Add orange cell styling for regex-extracted fields
-                if (key === 'localCaseId' || key === 'localStainID' || key === 'localRegionId') {
-                    column.cellStyle = (params) => {
-                        // Check if this field was extracted by regex
-                        if (params.data && params.data._regexExtracted && params.data._regexExtracted[key]) {
-                            return { backgroundColor: '#fff3cd', color: '#856404' }; // Orange background
-                        }
-                        return null;
+                    const column = {
+                        field: key,
+                        headerName: key,
+                        sortable: true,
+                        filter: true,
+                        resizable: true,
+                        minWidth: 150
                     };
-                }
 
-                return column;
-            });
+                    // Add orange cell styling for regex-extracted fields
+                    if (key === 'localCaseId' || key === 'localStainID' || key === 'localRegionId') {
+                        column.cellStyle = (params) => {
+                            // Check if this field was extracted by regex
+                            if (params.data && params.data._regexExtracted && params.data._regexExtracted[key]) {
+                                return { backgroundColor: '#fff3cd', color: '#856404' }; // Orange background
+                            }
+                            return null;
+                        };
+                    }
+
+                    return column;
+                });
 
             return {
                 success: true,
@@ -509,17 +509,40 @@ export const loadDsaData = async (dsaConfig, girderToken, regexRules = {}) => {
 };
 
 /**
- * Updates metadata for a single DSA item
+ * Adds/updates specific metadata fields for a single DSA item using the add metadata endpoint
+ * This only updates the specified metadata fields without replacing the entire metadata object
  * @param {string} baseUrl - DSA base URL
  * @param {string} itemId - DSA item ID
  * @param {string} girderToken - Authentication token
- * @param {Object} metadata - Metadata to update
+ * @param {Object} metadata - Metadata fields to add/update (only meta.BDSA.* fields)
  * @returns {Promise<Object>} Update result
  */
-export const updateItemMetadata = async (baseUrl, itemId, girderToken, metadata) => {
+export const addItemMetadata = async (baseUrl, itemId, girderToken, metadata) => {
     try {
         if (!baseUrl || !itemId || !girderToken) {
             throw new Error('Missing required parameters: baseUrl, itemId, or girderToken');
+        }
+
+        // Ensure we're sending the BDSA metadata structure (stripping off meta. prefix)
+        // The server stores it as meta.BDSA.{} but we send just BDSA.{}
+        let bdsaMetadata = {};
+
+        // If metadata has a BDSA key, use it directly (this is what we want)
+        if (metadata.BDSA) {
+            bdsaMetadata = metadata;
+        } else {
+            // Otherwise, wrap the metadata in BDSA structure
+            bdsaMetadata = { BDSA: metadata };
+        }
+
+        if (!bdsaMetadata.BDSA || Object.keys(bdsaMetadata.BDSA).length === 0) {
+            console.log('No BDSA metadata fields to update for item:', itemId);
+            return {
+                success: true,
+                itemId,
+                skipped: true,
+                reason: 'No BDSA metadata fields to update'
+            };
         }
 
         const apiUrl = `${baseUrl}/api/v1/item/${itemId}/metadata`;
@@ -528,22 +551,25 @@ export const updateItemMetadata = async (baseUrl, itemId, girderToken, metadata)
             'Girder-Token': girderToken
         };
 
-        console.log('Updating item metadata:', {
+        console.log('Adding BDSA metadata to item (sending BDSA.{} which becomes meta.BDSA.{} on server):', {
             itemId,
             apiUrl,
-            metadata,
+            bdsaMetadata,
+            bdsaStructure: bdsaMetadata.BDSA,
             headers: { ...headers, 'Girder-Token': '[REDACTED]' }
         });
 
+        // Use PUT to update metadata fields
+        // Just send the BDSA.{} object - the server will handle it properly
         const response = await fetch(apiUrl, {
             method: 'PUT',
             headers: headers,
-            body: JSON.stringify(metadata)
+            body: JSON.stringify(bdsaMetadata)
         });
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('Failed to update item metadata:', {
+            console.error('Failed to add BDSA metadata to item:', {
                 status: response.status,
                 statusText: response.statusText,
                 itemId,
@@ -553,20 +579,30 @@ export const updateItemMetadata = async (baseUrl, itemId, girderToken, metadata)
         }
 
         const result = await response.json();
-        console.log('Successfully updated metadata for item:', itemId);
+        console.log('Successfully added BDSA metadata to item:', itemId, bdsaMetadata);
         return {
             success: true,
             itemId,
-            data: result
+            data: result,
+            updatedFields: Object.keys(bdsaMetadata)
         };
     } catch (error) {
-        console.error('Error updating item metadata:', error);
+        console.error('Error adding BDSA metadata to item:', error);
         return {
             success: false,
             itemId,
             error: error.message
         };
     }
+};
+
+/**
+ * Legacy function - kept for backward compatibility but now uses addItemMetadata
+ * @deprecated Use addItemMetadata instead
+ */
+export const updateItemMetadata = async (baseUrl, itemId, girderToken, metadata) => {
+    console.warn('updateItemMetadata is deprecated. Use addItemMetadata for BDSA metadata updates.');
+    return addItemMetadata(baseUrl, itemId, girderToken, metadata);
 };
 
 /**
@@ -577,24 +613,38 @@ export const updateItemMetadata = async (baseUrl, itemId, girderToken, metadata)
  * @param {Object} columnMapping - Column mapping configuration
  * @returns {Promise<Object>} Sync result
  */
-export const syncItemBdsaMetadata = async (baseUrl, item, girderToken, columnMapping) => {
+export const syncItemBdsaMetadata = async (baseUrl, item, girderToken, columnMapping, isCancelled = null) => {
     try {
+        // Check for cancellation at the start
+        if (isCancelled && isCancelled()) {
+            console.log(`🚫 Sync cancelled for item ${item._id || item.dsa_id}`);
+            return {
+                success: false,
+                itemId: item._id || item.dsa_id || 'unknown',
+                cancelled: true,
+                reason: 'Sync cancelled by user'
+            };
+        }
+
         const itemId = item._id || item.dsa_id;
         if (!itemId) {
             throw new Error('No DSA item ID found in data item');
         }
 
-        // Extract BDSA metadata values from the BDSA namespace (authoritative source)
-        const localCaseId = item.BDSA?.localCaseId || item[columnMapping.localCaseId] || '';
-        const localStainID = item.BDSA?.localStainID || item[columnMapping.localStainID] || '';
-        const localRegionId = item.BDSA?.localRegionId || item[columnMapping.localRegionId] || '';
+        // Extract BDSA metadata values from the BDSA.bdsaLocal namespace (authoritative source)
+        const localCaseId = item.BDSA?.bdsaLocal?.localCaseId || item[columnMapping.localCaseId] || '';
+        const localStainID = item.BDSA?.bdsaLocal?.localStainID || item[columnMapping.localStainID] || '';
+        const localRegionId = item.BDSA?.bdsaLocal?.localRegionId || item[columnMapping.localRegionId] || '';
 
         console.log(`🔍 SYNC VALUES - Item ${itemId}:`, {
             localCaseId,
             localStainID,
             localRegionId,
             hasBDSAObject: !!item.BDSA,
-            bdsaObject: item.BDSA
+            hasBdsaLocal: !!item.BDSA?.bdsaLocal,
+            bdsaObject: item.BDSA,
+            bdsaLocalObject: item.BDSA?.bdsaLocal,
+            columnMapping: columnMapping
         });
 
         // Create bdsaLocal metadata object
@@ -625,8 +675,8 @@ export const syncItemBdsaMetadata = async (baseUrl, item, girderToken, columnMap
 
         // Check if this item has been modified since last sync
         const existingMetadata = item.meta?.bdsaLocal;
-        const { isItemModified } = await import('./dataStore');
-        const hasBeenModified = isItemModified(itemId);
+        const { default: dataStore } = await import('./dataStore');
+        const hasBeenModified = dataStore.modifiedItems.has(itemId);
 
         console.log(`🔍 SYNC DEBUG - Item ${itemId}:`, {
             hasExistingMetadata: !!existingMetadata,
@@ -673,8 +723,20 @@ export const syncItemBdsaMetadata = async (baseUrl, item, girderToken, columnMap
             }
         }
 
-        // Update the item's metadata with bdsaLocal field
-        const metadata = { bdsaLocal };
+        // Check for cancellation before making API call
+        if (isCancelled && isCancelled()) {
+            console.log(`🚫 Sync cancelled before API call for item ${itemId}`);
+            return {
+                success: false,
+                itemId,
+                cancelled: true,
+                reason: 'Sync cancelled by user before API call'
+            };
+        }
+
+        // Update the item's metadata with BDSA structure
+        // This will create/update meta.BDSA.bdsaLocal on the server
+        const metadata = { BDSA: { bdsaLocal } };
         const result = await updateItemMetadata(baseUrl, itemId, girderToken, metadata);
 
         if (result.success) {
@@ -725,7 +787,9 @@ export class DsaBatchProcessor {
      */
     cancel() {
         this.cancelled = true;
-        console.log('Batch processing cancelled');
+        console.log('🚫 Batch processing cancelled - stopping all future batches');
+        // Force immediate cancellation by throwing an error to break out of any ongoing operations
+        this.cancelError = new Error('Batch processing cancelled by user');
     }
 
     /**
@@ -747,95 +811,164 @@ export class DsaBatchProcessor {
 
         console.log(`Starting batch processing of ${totalItems} items...`);
 
-        // Process items in batches
-        for (let i = 0; i < items.length; i += this.options.batchSize) {
-            if (this.cancelled) {
-                console.log('Batch processing cancelled by user');
-                break;
-            }
+        // Early exit if no items to process
+        if (totalItems === 0) {
+            console.log('No items to process - batch complete');
+            return {
+                completed: true,
+                totalItems: 0,
+                processed: 0,
+                success: 0,
+                errors: 0,
+                skipped: 0,
+                results: []
+            };
+        }
 
-            const batch = items.slice(i, i + this.options.batchSize);
-            console.log(`Processing batch ${Math.floor(i / this.options.batchSize) + 1}, items ${i + 1}-${Math.min(i + this.options.batchSize, totalItems)}`);
+        try {
+            // Process items in batches
+            for (let i = 0; i < items.length; i += this.options.batchSize) {
+                if (this.cancelled) {
+                    console.log('🚫 Batch processing cancelled by user - breaking main loop');
+                    throw this.cancelError;
+                }
 
-            // Process batch items concurrently
-            const batchPromises = batch.map(async (item) => {
-                if (this.cancelled) return null;
+                const batch = items.slice(i, i + this.options.batchSize);
+                console.log(`Processing batch ${Math.floor(i / this.options.batchSize) + 1}, items ${i + 1}-${Math.min(i + this.options.batchSize, totalItems)}`);
 
-                let attempts = 0;
-                while (attempts < this.options.retryAttempts) {
-                    try {
-                        const result = await processor(this.baseUrl, item, this.girderToken, columnMapping);
-                        return result;
-                    } catch (error) {
-                        attempts++;
-                        if (attempts < this.options.retryAttempts) {
-                            console.log(`Retry attempt ${attempts} for item ${item._id || item.dsa_id}`);
-                            await this.delay(this.options.retryDelay);
-                        } else {
-                            console.error(`Failed after ${this.options.retryAttempts} attempts:`, error);
-                            return {
-                                success: false,
-                                itemId: item._id || item.dsa_id || 'unknown',
-                                error: error.message
-                            };
+                // Check for cancellation before starting batch
+                if (this.cancelled) {
+                    console.log('🚫 Batch processing cancelled before starting batch');
+                    throw this.cancelError;
+                }
+
+                // Process batch items concurrently with cancellation support
+                const batchPromises = batch.map(async (item) => {
+                    if (this.cancelled) {
+                        console.log(`🚫 Skipping item ${item._id || item.dsa_id} due to cancellation`);
+                        throw this.cancelError;
+                    }
+
+                    let attempts = 0;
+                    while (attempts < this.options.retryAttempts && !this.cancelled) {
+                        if (this.cancelled) {
+                            console.log(`🚫 Cancelled during retry loop for item ${item._id || item.dsa_id}`);
+                            throw this.cancelError;
+                        }
+
+                        try {
+                            // Pass cancellation check function to the processor
+                            const result = await processor(this.baseUrl, item, this.girderToken, columnMapping, () => this.cancelled);
+                            return result;
+                        } catch (error) {
+                            if (this.cancelled) {
+                                console.log(`🚫 Cancelled during error handling for item ${item._id || item.dsa_id}`);
+                                throw this.cancelError;
+                            }
+
+                            attempts++;
+                            if (attempts < this.options.retryAttempts && !this.cancelled) {
+                                console.log(`Retry attempt ${attempts} for item ${item._id || item.dsa_id}`);
+                                await this.delay(this.options.retryDelay);
+                            } else {
+                                console.error(`Failed after ${this.options.retryAttempts} attempts:`, error);
+                                return {
+                                    success: false,
+                                    itemId: item._id || item.dsa_id || 'unknown',
+                                    error: error.message
+                                };
+                            }
                         }
                     }
-                }
-            });
 
-            // Wait for batch to complete
-            const batchResults = await Promise.all(batchPromises);
+                    if (this.cancelled) {
+                        console.log(`🚫 Cancelled processing item ${item._id || item.dsa_id}`);
+                        throw this.cancelError;
+                    }
+                });
 
-            // Check for cancellation after batch completion
-            if (this.cancelled) {
-                console.log('Batch processing cancelled after batch completion');
-                break;
-            }
-
-            // Process results and track batch activity
-            let batchHadUpdates = false;
-            batchResults.forEach(result => {
-                if (result) {
-                    this.results.push(result);
-                    processedCount++;
-
-                    if (result.success) {
-                        successCount++;
-                        batchHadUpdates = true; // Track that we had actual updates
-                    } else if (result.skipped) {
-                        skippedCount++;
-                        // Skipped items don't count as updates
-                    } else {
-                        errorCount++;
-                        batchHadUpdates = true; // Errors still count as server activity
+                // Wait for batch to complete, but check for cancellation during processing
+                // Use a more aggressive cancellation approach
+                const batchResults = [];
+                for (const promise of batchPromises) {
+                    if (this.cancelled) {
+                        console.log('Batch processing cancelled during promise execution');
+                        break;
+                    }
+                    try {
+                        const result = await promise;
+                        if (result) {
+                            batchResults.push({ status: 'fulfilled', value: result });
+                        }
+                    } catch (error) {
+                        batchResults.push({ status: 'rejected', reason: error });
                     }
                 }
-            });
 
-            // Update progress
-            if (this.progressCallback) {
-                this.progressCallback({
-                    processed: processedCount,
-                    total: totalItems,
-                    success: successCount,
-                    errors: errorCount,
-                    skipped: skippedCount,
-                    percentage: Math.round((processedCount / totalItems) * 100)
+                // Check for cancellation immediately after batch completion
+                if (this.cancelled) {
+                    console.log('Batch processing cancelled after batch completion');
+                    break;
+                }
+
+                // Process results and track batch activity
+                let batchHadUpdates = false;
+                batchResults.forEach(promiseResult => {
+                    // Handle Promise.allSettled format
+                    const result = promiseResult.status === 'fulfilled' ? promiseResult.value : null;
+
+                    if (result) {
+                        this.results.push(result);
+                        processedCount++;
+
+                        if (result.success) {
+                            successCount++;
+                            batchHadUpdates = true; // Track that we had actual updates
+                        } else if (result.skipped) {
+                            skippedCount++;
+                            // Skipped items don't count as updates
+                        } else {
+                            errorCount++;
+                            batchHadUpdates = true; // Errors still count as server activity
+                        }
+                    } else if (promiseResult.status === 'rejected') {
+                        console.error('Promise rejected during batch processing:', promiseResult.reason);
+                        errorCount++;
+                        batchHadUpdates = true;
+                    }
                 });
-            }
 
-            // Check for cancellation before applying delay
-            if (this.cancelled) {
-                console.log('Batch processing cancelled before delay');
-                break;
-            }
+                // Update progress
+                if (this.progressCallback) {
+                    this.progressCallback({
+                        processed: processedCount,
+                        total: totalItems,
+                        success: successCount,
+                        errors: errorCount,
+                        skipped: skippedCount,
+                        percentage: Math.round((processedCount / totalItems) * 100)
+                    });
+                }
 
-            // Only delay between batches if we had actual updates (not just skips)
-            if (i + this.options.batchSize < items.length && !this.cancelled && batchHadUpdates) {
-                console.log(`Batch had ${successCount + errorCount} updates, applying ${this.options.delayBetweenBatches}ms delay...`);
-                await this.delay(this.options.delayBetweenBatches);
-            } else if (i + this.options.batchSize < items.length && !this.cancelled) {
-                console.log('Batch had only skips, no delay needed');
+                // Check for cancellation before applying delay
+                if (this.cancelled) {
+                    console.log('Batch processing cancelled before delay');
+                    break;
+                }
+
+                // Only delay between batches if we had actual updates (not just skips)
+                if (i + this.options.batchSize < items.length && !this.cancelled && batchHadUpdates) {
+                    console.log(`Batch had ${successCount + errorCount} updates, applying ${this.options.delayBetweenBatches}ms delay...`);
+                    await this.delay(this.options.delayBetweenBatches);
+                } else if (i + this.options.batchSize < items.length && !this.cancelled) {
+                    console.log('Batch had only skips, no delay needed - continuing immediately');
+                }
+            }
+        } catch (error) {
+            if (error === this.cancelError) {
+                console.log('🚫 Batch processing cancelled by user');
+            } else {
+                console.error('🚫 Batch processing error:', error);
             }
         }
 
@@ -871,7 +1004,7 @@ export class DsaBatchProcessor {
  * @param {Function} progressCallback - Progress callback function
  * @returns {Promise<Object>} Sync results
  */
-export const syncAllBdsaMetadata = async (baseUrl, items, girderToken, columnMapping, progressCallback = null) => {
+export const syncAllBdsaMetadata = async (baseUrl, items, girderToken, columnMapping, progressCallback = null, processorRef = null) => {
     console.log('Starting sync of BDSA metadata to DSA server:', {
         itemCount: items.length,
         baseUrl,
@@ -883,6 +1016,11 @@ export const syncAllBdsaMetadata = async (baseUrl, items, girderToken, columnMap
         delayBetweenBatches: 1000, // 1 second between batches
         retryAttempts: 3
     });
+
+    // Store processor reference for cancellation
+    if (processorRef) {
+        processorRef.current = processor;
+    }
 
     if (progressCallback) {
         processor.onProgress(progressCallback);
@@ -911,11 +1049,15 @@ export const enhanceDataWithExistingMetadata = (dsaData) => {
             if (!enhancedItem.BDSA) {
                 enhancedItem.BDSA = {};
             }
+            if (!enhancedItem.BDSA.bdsaLocal) {
+                enhancedItem.BDSA.bdsaLocal = {};
+            }
 
             // Use existing metadata values if available, otherwise keep current values
-            enhancedItem.BDSA.localCaseId = bdsaLocal.localCaseId || enhancedItem.BDSA.localCaseId || '';
-            enhancedItem.BDSA.localStainID = bdsaLocal.localStainID || enhancedItem.BDSA.localStainID || '';
-            enhancedItem.BDSA.localRegionId = bdsaLocal.localRegionId || enhancedItem.BDSA.localRegionId || '';
+            // Store in the correct bdsaLocal path that the sync function expects
+            enhancedItem.BDSA.bdsaLocal.localCaseId = bdsaLocal.localCaseId || enhancedItem.BDSA.bdsaLocal.localCaseId || '';
+            enhancedItem.BDSA.bdsaLocal.localStainID = bdsaLocal.localStainID || enhancedItem.BDSA.bdsaLocal.localStainID || '';
+            enhancedItem.BDSA.bdsaLocal.localRegionId = bdsaLocal.localRegionId || enhancedItem.BDSA.bdsaLocal.localRegionId || '';
 
             // Mark that this data came from server metadata
             enhancedItem._hasServerMetadata = true;

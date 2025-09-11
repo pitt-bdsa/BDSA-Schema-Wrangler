@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { syncBdsaMetadataToServer, cancelDsaMetadataSync, getSyncStatus, subscribeToSyncEvents, getDataStoreSnapshot, DATA_CHANGE_EVENTS } from '../utils/dataStore';
+import dsaAuthStore from '../utils/dsaAuthStore';
 import './DsaSyncControl.css';
 
 const DsaSyncControl = () => {
@@ -10,6 +11,7 @@ const DsaSyncControl = () => {
         lastResults: null
     });
     const [dataStore, setDataStore] = useState(null);
+    const [authStatus, setAuthStatus] = useState(dsaAuthStore.getStatus());
 
     useEffect(() => {
         // Subscribe to sync events only (separate from main data store events)
@@ -25,13 +27,21 @@ const DsaSyncControl = () => {
             setSyncState(newSyncState);
         });
 
+        // Subscribe to auth store changes
+        const unsubscribeAuth = dsaAuthStore.subscribe(() => {
+            setAuthStatus(dsaAuthStore.getStatus());
+        });
+
         // Initialize with current data store state
         const initialDataStore = getDataStoreSnapshot();
         console.log('DsaSyncControl initial data store:', initialDataStore);
         setDataStore(initialDataStore);
         setSyncState(getSyncStatus());
 
-        return unsubscribe;
+        return () => {
+            unsubscribe();
+            unsubscribeAuth();
+        };
     }, []);
 
     const handleStartSync = async () => {
@@ -51,21 +61,24 @@ const DsaSyncControl = () => {
         cancelDsaMetadataSync();
     };
 
-    const canStartSync = dataStore?.currentDataSource === 'dsa' &&
-        dataStore?.girderToken &&
-        dataStore?.dsaConfig?.baseUrl &&
+    const canStartSync = dataStore?.dataSource === 'dsa' &&
+        authStatus.isAuthenticated &&
+        authStatus.isConfigured &&
         !syncState.inProgress &&
         dataStore?.processedData?.length > 0;
 
     // Debug logging
     console.log('DSA Sync Debug:', {
-        currentDataSource: dataStore?.currentDataSource,
-        girderToken: dataStore?.girderToken ? 'Present' : 'Missing',
-        dsaConfig: dataStore?.dsaConfig,
+        currentDataSource: dataStore?.dataSource,
+        isAuthenticated: authStatus.isAuthenticated,
+        isConfigured: authStatus.isConfigured,
+        hasToken: authStatus.hasToken,
+        hasConfig: authStatus.hasConfig,
         processedDataLength: dataStore?.processedData?.length || 0,
         syncInProgress: syncState.inProgress,
         canStartSync,
-        fullDataStore: dataStore
+        authStatus,
+        dataStore: dataStore
     });
 
     const getStatusDisplay = () => {
@@ -160,13 +173,13 @@ const DsaSyncControl = () => {
                 <div className="sync-requirements">
                     <h4>Requirements for sync:</h4>
                     <ul>
-                        <li className={dataStore?.currentDataSource === 'dsa' ? 'requirement-met' : 'requirement-missing'}>
+                        <li className={dataStore?.dataSource === 'dsa' ? 'requirement-met' : 'requirement-missing'}>
                             DSA data source selected
                         </li>
-                        <li className={dataStore?.girderToken ? 'requirement-met' : 'requirement-missing'}>
+                        <li className={authStatus.isAuthenticated ? 'requirement-met' : 'requirement-missing'}>
                             DSA authentication (Girder token)
                         </li>
-                        <li className={dataStore?.dsaConfig?.baseUrl ? 'requirement-met' : 'requirement-missing'}>
+                        <li className={authStatus.isConfigured ? 'requirement-met' : 'requirement-missing'}>
                             DSA configuration
                         </li>
                         <li className={dataStore?.processedData?.length > 0 ? 'requirement-met' : 'requirement-missing'}>

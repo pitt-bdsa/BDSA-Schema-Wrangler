@@ -528,7 +528,7 @@ class DataStore {
      * @param {Object} regexRules - Object containing regex patterns for each field
      * @returns {Object} - Result with success status and extracted count
      */
-    applyRegexRules(regexRules) {
+    applyRegexRules(regexRules, markAsModified = true) {
         if (!this.processedData || this.processedData.length === 0) {
             return { success: false, error: 'No data available' };
         }
@@ -554,14 +554,35 @@ class DataStore {
                 };
             }
 
+            // Skip regex processing entirely if this item has server metadata or existing BDSA values
+            if (updatedItem._hasServerMetadata) {
+                console.log(`⏭️ Skipping regex processing for item ${updatedItem.id} - has server metadata`);
+                return; // Skip this item entirely
+            }
+
+            // Also skip if item already has any BDSA values from any source
+            const hasExistingBdsaValues = updatedItem.BDSA?.bdsaLocal && (
+                (updatedItem.BDSA.bdsaLocal.localCaseId && updatedItem.BDSA.bdsaLocal.localCaseId.trim() !== '') ||
+                (updatedItem.BDSA.bdsaLocal.localStainID && updatedItem.BDSA.bdsaLocal.localStainID.trim() !== '') ||
+                (updatedItem.BDSA.bdsaLocal.localRegionId && updatedItem.BDSA.bdsaLocal.localRegionId.trim() !== '')
+            );
+
+            if (hasExistingBdsaValues) {
+                console.log(`⏭️ Skipping regex processing for item ${updatedItem.id} - already has BDSA values`);
+                return; // Skip this item entirely
+            }
+
             // Apply regex rules for each field
             Object.entries(regexRules).forEach(([field, rule]) => {
                 if (rule && rule.pattern && rule.pattern.trim() !== '') {
-                    // Only apply regex if field is not already populated from column mapping
+                    // Only apply regex if field is not already populated
                     const currentValue = updatedItem.BDSA.bdsaLocal?.[field];
                     const currentSource = updatedItem.BDSA._dataSource?.[field];
 
-                    if (!currentValue || currentSource === 'regex') {
+                    // Don't apply regex if:
+                    // 1. Field already has a value from any source other than regex
+                    // 2. Field has a value from regex but we're not re-applying regex
+                    if (!currentValue || (currentSource === 'regex' && markAsModified)) {
                         try {
                             const regex = new RegExp(rule.pattern);
                             const match = fileName.match(regex);
@@ -591,7 +612,10 @@ class DataStore {
 
             if (itemUpdated) {
                 updatedItems.push(updatedItem);
-                this.modifiedItems.add(updatedItem.id);
+                // Only mark as modified if this is user-initiated processing, not initial data loading
+                if (markAsModified) {
+                    this.modifiedItems.add(updatedItem.id);
+                }
                 extractedCount++;
             }
         });
@@ -618,15 +642,18 @@ class DataStore {
      * @returns {Array} - Array of modified items
      */
     getModifiedItems() {
-        return this.processedData.filter(item =>
+        const modifiedItems = this.processedData.filter(item =>
             this.modifiedItems.has(item.id)
         );
+        console.log(`📊 Found ${modifiedItems.length} modified items out of ${this.processedData.length} total items`);
+        return modifiedItems;
     }
 
     /**
      * Clear the modified items tracking (after successful sync)
      */
     clearModifiedItems() {
+        console.log(`🧹 Clearing ${this.modifiedItems.size} modified items`);
         this.modifiedItems.clear();
         this.saveToStorage();
         this.notify();
@@ -638,7 +665,11 @@ class DataStore {
             throw new Error('DSA sync is only available when using DSA data source');
         }
 
-        if (!this.girderToken || !this.dsaConfig?.baseUrl) {
+        // Import dsaAuthStore to check authentication
+        const { default: dsaAuthStore } = await import('./dsaAuthStore');
+        const authStatus = dsaAuthStore.getStatus();
+
+        if (!authStatus.isAuthenticated || !authStatus.isConfigured) {
             throw new Error('DSA authentication or configuration missing');
         }
 
@@ -659,11 +690,45 @@ class DataStore {
             // Import sync utilities
             const { syncAllBdsaMetadata } = await import('./dsaIntegration.js');
 
+            // Get authentication info from dsaAuthStore
+            const config = dsaAuthStore.config;
+            const token = dsaAuthStore.token;
+
+            // Create processor reference for cancellation
+            const processorRef = { current: null };
+
+            // Only sync modified items, not all items
+            const itemsToSync = this.getModifiedItems();
+            console.log(`🔄 Syncing ${itemsToSync.length} modified items out of ${this.processedData.length} total items`);
+
+            if (itemsToSync.length === 0) {
+                console.log('✅ No modified items to sync - sync complete');
+                this.syncStatus = 'synced';
+                this.notifySync('SYNC_COMPLETED', {
+                    completed: true,
+                    totalItems: 0,
+                    processed: 0,
+                    success: 0,
+                    errors: 0,
+                    skipped: 0,
+                    results: []
+                });
+                return {
+                    completed: true,
+                    totalItems: 0,
+                    processed: 0,
+                    success: 0,
+                    errors: 0,
+                    skipped: 0,
+                    results: []
+                };
+            }
+
             // Start sync process
-            const results = await syncAllBdsaMetadata(
-                this.dsaConfig.baseUrl,
-                this.processedData,
-                this.girderToken,
+            const syncPromise = syncAllBdsaMetadata(
+                config.baseUrl,
+                itemsToSync,
+                token,
                 this.columnMappings,
                 (progress) => {
                     this.syncProgress = progress;
@@ -672,14 +737,39 @@ class DataStore {
                     }
                     // Notify only sync listeners
                     this.notifySync('SYNC_PROGRESS_UPDATED', progress);
-                }
+                },
+                processorRef
             );
+
+            // Store processor reference for cancellation (available immediately after syncAllBdsaMetadata call)
+            this.batchProcessor = processorRef.current;
+
+            // Wait for sync to complete
+            const results = await syncPromise;
 
             // Store results
             this.lastSyncResults = results;
             this.syncStatus = results.completed ? 'synced' : 'error';
 
+            // Clear modified items for successfully synced items
+            if (results.completed && results.results) {
+                let clearedCount = 0;
+                results.results.forEach(result => {
+                    if (result.success && result.itemId) {
+                        this.modifiedItems.delete(result.itemId);
+                        clearedCount++;
+                    }
+                });
+                console.log(`Cleared ${clearedCount} items from modified items set after successful sync`);
+
+                // Save the updated state
+                this.saveToStorage();
+            }
+
             console.log('DSA metadata sync completed:', results);
+
+            // Clear processor reference after completion
+            this.batchProcessor = null;
 
             // Notify only sync listeners about completion
             this.notifySync('SYNC_COMPLETED', results);
@@ -698,6 +788,9 @@ class DataStore {
                 skipped: 0
             };
 
+            // Clear processor reference on error
+            this.batchProcessor = null;
+
             this.notifySync('SYNC_ERROR', {
                 error: error.message
             });
@@ -710,14 +803,21 @@ class DataStore {
     }
 
     cancelDsaMetadataSync() {
+        console.log('🚫 Cancel sync requested - checking for active processor...');
         if (this.batchProcessor) {
+            console.log('🚫 Found active batch processor - cancelling DSA metadata sync...');
             this.batchProcessor.cancel();
             this.syncStatus = 'offline';
             this.syncInProgress = false;
+            this.batchProcessor = null;
 
             this.notifySync('SYNC_CANCELLED', {
                 dataStore: this.getSnapshot()
             });
+
+            console.log('✅ DSA metadata sync cancelled successfully');
+        } else {
+            console.log('⚠️ No active batch processor found - sync may have already completed or not started');
         }
     }
 

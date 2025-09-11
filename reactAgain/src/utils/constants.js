@@ -6,11 +6,11 @@
 export const HIDDEN_DSA_FIELDS = [
     // Original meta.bdsaLocal fields (we manage BDSA data separately)
     'meta.bdsaLocal.localCaseId',
-    'meta.bdsaLocal.localStainID', 
+    'meta.bdsaLocal.localStainID',
     'meta.bdsaLocal.localRegionId',
     'meta.bdsaLocal.lastUpdated',
     'meta.bdsaLocal.source',
-    
+
     // Internal DSA fields that are not useful for users
     '_id',
     '_modelType',
@@ -18,7 +18,7 @@ export const HIDDEN_DSA_FIELDS = [
     '_version',
     '_text',
     '_textScore',
-    
+
     // Large binary/metadata fields that clutter the interface
     'meta.originalName',
     'meta.contentType',
@@ -28,13 +28,13 @@ export const HIDDEN_DSA_FIELDS = [
     'meta.creatorName',
     'meta.updated',
     'meta.created',
-    
+
     // Girder-specific fields
     'girder',
     'girderId',
     'girderParentId',
     'girderParentCollection',
-    
+
     // Other common DSA fields that are typically not needed
     'description',
     'notes',

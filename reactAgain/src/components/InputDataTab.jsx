@@ -174,9 +174,9 @@ const InputDataTab = () => {
         };
     }, []);
 
-    // Load column config when data is available (but not during refresh)
+    // Load column config when data is available
     useEffect(() => {
-        if (dataStatus.processedData && dataStatus.processedData.length > 0 && dataStatus.dataSource && !isDataRefresh) {
+        if (dataStatus.processedData && dataStatus.processedData.length > 0 && dataStatus.dataSource) {
             console.log('🔄 Data loaded, attempting to load column config...');
             const dataSourceKey = getDataSourceKey();
             if (dataSourceKey) {
@@ -229,8 +229,8 @@ const InputDataTab = () => {
                             orderedKeys.push(...remainingKeys);
 
                             setColumnOrder(orderedKeys);
-                            setColumnVisibility({});
-                            saveColumnConfig({}, orderedKeys);
+                            setColumnVisibility(DEFAULT_COLUMN_VISIBILITY);
+                            saveColumnConfig(DEFAULT_COLUMN_VISIBILITY, orderedKeys);
                         }
                     } else {
                         console.log('🔄 No saved config found, using preferred order');
@@ -254,8 +254,9 @@ const InputDataTab = () => {
                         orderedKeys.push(...remainingKeys);
 
                         setColumnOrder(orderedKeys);
-                        setColumnVisibility({});
-                        saveColumnConfig({}, orderedKeys);
+                        // Use default column visibility to hide unwanted fields
+                        setColumnVisibility(DEFAULT_COLUMN_VISIBILITY);
+                        saveColumnConfig(DEFAULT_COLUMN_VISIBILITY, orderedKeys);
                     }
                 } catch (error) {
                     console.error('Error loading saved column config:', error);
@@ -279,32 +280,36 @@ const InputDataTab = () => {
                     orderedKeys.push(...remainingKeys);
 
                     setColumnOrder(orderedKeys);
-                    setColumnVisibility({});
+                    setColumnVisibility(DEFAULT_COLUMN_VISIBILITY);
                 }
             }
         }
-    }, [dataStatus.processedData, dataStatus.dataSource, dataStatus.dataSourceInfo, isDataRefresh]);
+    }, [dataStatus.processedData, dataStatus.dataSource, dataStatus.dataSourceInfo]);
 
     // Auto-apply regex rules when data is loaded (if no column mappings exist)
+    // Only run this once when data is first loaded, not on every data change
     useEffect(() => {
-        if (dataStatus.processedData && dataStatus.processedData.length > 0) {
+        if (dataStatus.processedData && dataStatus.processedData.length > 0 && !isDataRefresh) {
             // Check if any BDSA local fields have values
             const hasBdsaValues = dataStatus.processedData.some(item =>
-                item.BDSA?.bdsaLocal?.localCaseId ||
-                item.BDSA?.bdsaLocal?.localStainID ||
-                item.BDSA?.bdsaLocal?.localRegionId
+                (item.BDSA?.bdsaLocal?.localCaseId && item.BDSA.bdsaLocal.localCaseId.trim() !== '') ||
+                (item.BDSA?.bdsaLocal?.localStainID && item.BDSA.bdsaLocal.localStainID.trim() !== '') ||
+                (item.BDSA?.bdsaLocal?.localRegionId && item.BDSA.bdsaLocal.localRegionId.trim() !== '')
             );
 
             // If no BDSA values exist, auto-apply regex rules
             if (!hasBdsaValues) {
-                console.log('🔄 No BDSA values found, auto-applying regex rules...');
-                const result = dataStore.applyRegexRules(regexRules);
+                console.log('🔄 No BDSA values found, auto-applying regex rules to items without existing data...');
+                // Don't mark items as modified during initial data processing
+                const result = dataStore.applyRegexRules(regexRules, false);
                 if (result.success) {
-                    console.log(`✅ Auto-applied regex rules: ${result.extractedCount} items updated`);
+                    console.log(`✅ Auto-applied regex rules: ${result.extractedCount} items updated (not marked as modified)`);
                 }
+            } else {
+                console.log('🔄 BDSA values found, skipping auto-apply of regex rules to preserve existing data');
             }
         }
-    }, [dataStatus.processedData, regexRules]);
+    }, [dataStatus.processedData, dataStatus.dataSource, isDataRefresh]); // Removed regexRules from dependencies
 
     // Auto-load DSA data when authenticated and no data is loaded
     useEffect(() => {
