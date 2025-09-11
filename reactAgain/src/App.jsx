@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import TabView from './components/TabView';
 import SchemaTab from './components/SchemaTab';
 import ProtocolsTab from './components/ProtocolsTab';
+import DsaLogin from './components/DsaLogin';
 import './App.css';
 
 function App() {
@@ -17,8 +18,13 @@ function App() {
     return (
         <div className="app">
             <div className="app-header">
-                <img src="/assets/BDSA_logo_clear.png" alt="BDSA Logo" className="logo" />
-                <h1>BDSA Schema Wrangler</h1>
+                <div className="header-left">
+                    <img src="/assets/BDSA_logo_clear.png" alt="BDSA Logo" className="logo" />
+                    <h1>BDSA Schema Wrangler</h1>
+                </div>
+                <div className="header-right">
+                    <DsaLogin />
+                </div>
             </div>
             <TabView
                 tabs={tabs}

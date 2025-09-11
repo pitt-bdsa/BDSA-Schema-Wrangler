@@ -460,7 +460,10 @@ export const loadDsaData = async (dsaConfig, girderToken, regexRules = {}) => {
         const transformedData = transformDsaData(dsaData, regexRules);
 
         if (transformedData.length > 0) {
-            const columns = Object.keys(transformedData[0] || {}).map(key => {
+            // Filter out BDSA object from column generation to avoid [object Object] display
+            const columns = Object.keys(transformedData[0] || {})
+                .filter(key => key !== 'BDSA') // Exclude BDSA object
+                .map(key => {
                 const column = {
                     field: key,
                     headerName: key,

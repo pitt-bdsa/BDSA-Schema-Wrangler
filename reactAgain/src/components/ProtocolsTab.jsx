@@ -3,6 +3,7 @@ import ProtocolList from './ProtocolList';
 import ProtocolModal from './ProtocolModal';
 import protocolStore from '../utils/protocolStore';
 import schemaValidator from '../utils/schemaValidator';
+import dsaAuthStore from '../utils/dsaAuthStore';
 import './ProtocolsTab.css';
 
 const ProtocolsTab = () => {
@@ -75,8 +76,28 @@ const ProtocolsTab = () => {
     };
 
     const handleSyncWithDSA = async () => {
-        // TODO: Implement DSA sync
-        console.log('DSA sync not yet implemented');
+        const authStatus = dsaAuthStore.getStatus();
+
+        if (!authStatus.isAuthenticated) {
+            alert('Please login to DSA server first');
+            return;
+        }
+
+        if (!authStatus.isConfigured) {
+            alert('Please configure DSA server first');
+            return;
+        }
+
+        try {
+            // Test connection first
+            await dsaAuthStore.testConnection();
+
+            // TODO: Implement actual protocol sync
+            console.log('DSA protocol sync not yet implemented');
+            alert('DSA protocol sync will be implemented soon');
+        } catch (error) {
+            alert(`DSA sync failed: ${error.message}`);
+        }
     };
 
     const currentProtocols = activeSubTab === 'stain' ? protocols.stain : protocols.region;
