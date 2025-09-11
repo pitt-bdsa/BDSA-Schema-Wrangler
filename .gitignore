@@ -12,3 +12,9 @@ deidCode/forReference/
 node_modules
 notebooks/csvFiles/*
 deidCode/x86_version/osx_64_info.md
+reactApp-v2/***
+deidCode/***
+notebooks/***
+app/year_2020_dsametadata.csv
+app/collections.postmortem_tissue_core.histopathology_images-export-2025-03-07T22:38:56.429767092Z.csv
+.gitignore

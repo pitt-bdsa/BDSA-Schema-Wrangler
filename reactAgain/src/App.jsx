@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import TabView from './components/TabView';
 import SchemaTab from './components/SchemaTab';
 import ProtocolsTab from './components/ProtocolsTab';
+import InputDataTab from './components/InputDataTab';
 import DsaLogin from './components/DsaLogin';
 import './App.css';
 
@@ -11,7 +12,7 @@ function App() {
     const tabs = [
         { id: 0, label: 'BDSA Schema', component: <SchemaTab /> },
         { id: 1, label: 'Protocols', component: <ProtocolsTab /> },
-        { id: 2, label: 'Input Data', component: <div>Input Data Tab - Coming Soon</div> },
+        { id: 2, label: 'Input Data', component: <InputDataTab /> },
         { id: 3, label: 'Case Management', component: <div>Case Management Tab - Coming Soon</div> }
     ];
 
