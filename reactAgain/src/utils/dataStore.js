@@ -4,6 +4,7 @@
 class DataStore {
     constructor() {
         this.listeners = new Set();
+        this.syncListeners = new Set(); // Separate listeners for sync events
         this.processedData = [];
         this.dataSource = null;
         this.dataSourceInfo = null;
@@ -11,6 +12,18 @@ class DataStore {
         this.modifiedItems = new Set();
         this.caseIdMappings = new Map();
         this.caseProtocolMappings = new Map();
+
+        // DSA sync state
+        this.syncInProgress = false;
+        this.syncStatus = 'offline'; // 'offline', 'syncing', 'synced', 'error'
+        this.syncProgress = null;
+        this.lastSyncResults = null;
+        this.batchProcessor = null;
+
+        // DSA configuration
+        this.girderToken = null;
+        this.dsaConfig = null;
+        this.columnMappings = {};
 
         // Load from localStorage on initialization
         this.loadFromStorage();
@@ -24,6 +37,26 @@ class DataStore {
 
     notify() {
         this.listeners.forEach(listener => listener());
+    }
+
+    // Sync event system
+    subscribeToSync(listener) {
+        this.syncListeners.add(listener);
+        return () => this.syncListeners.delete(listener);
+    }
+
+    notifySync(eventType, data = {}) {
+        this.syncListeners.forEach(listener => {
+            try {
+                listener({
+                    eventType,
+                    dataStore: this.getSnapshot(),
+                    ...data
+                });
+            } catch (error) {
+                console.error('Error in sync listener:', error);
+            }
+        });
     }
 
     // Local Storage Management
@@ -195,6 +228,10 @@ class DataStore {
             };
             this.dataLoadTimestamp = new Date().toISOString();
             this.modifiedItems.clear();
+
+            // Set DSA configuration for sync functionality
+            this.girderToken = token;
+            this.dsaConfig = config;
 
 
             this.saveToStorage();
@@ -594,9 +631,148 @@ class DataStore {
         this.saveToStorage();
         this.notify();
     }
+
+    // DSA Sync Methods
+    async syncBdsaMetadataToServer(progressCallback = null) {
+        if (this.dataSource !== 'dsa') {
+            throw new Error('DSA sync is only available when using DSA data source');
+        }
+
+        if (!this.girderToken || !this.dsaConfig?.baseUrl) {
+            throw new Error('DSA authentication or configuration missing');
+        }
+
+        if (this.syncInProgress) {
+            throw new Error('Sync already in progress');
+        }
+
+        try {
+            // Set sync in progress
+            this.syncInProgress = true;
+            this.syncStatus = 'syncing';
+            this.syncProgress = { processed: 0, total: this.processedData.length };
+
+            this.notifySync('SYNC_STATUS_CHANGED', {
+                syncStatus: this.syncStatus
+            });
+
+            // Import sync utilities
+            const { syncAllBdsaMetadata } = await import('./dsaIntegration.js');
+
+            // Start sync process
+            const results = await syncAllBdsaMetadata(
+                this.dsaConfig.baseUrl,
+                this.processedData,
+                this.girderToken,
+                this.columnMappings,
+                (progress) => {
+                    this.syncProgress = progress;
+                    if (progressCallback) {
+                        progressCallback(progress);
+                    }
+                    // Notify only sync listeners
+                    this.notifySync('SYNC_PROGRESS_UPDATED', progress);
+                }
+            );
+
+            // Store results
+            this.lastSyncResults = results;
+            this.syncStatus = results.completed ? 'synced' : 'error';
+
+            console.log('DSA metadata sync completed:', results);
+
+            // Notify only sync listeners about completion
+            this.notifySync('SYNC_COMPLETED', results);
+
+            return results;
+
+        } catch (error) {
+            console.error('DSA metadata sync failed:', error);
+            this.syncStatus = 'error';
+            this.lastSyncResults = {
+                completed: false,
+                error: error.message,
+                totalItems: this.processedData.length,
+                success: 0,
+                errors: 1,
+                skipped: 0
+            };
+
+            this.notifySync('SYNC_ERROR', {
+                error: error.message
+            });
+
+            throw error;
+        } finally {
+            this.syncInProgress = false;
+            this.batchProcessor = null;
+        }
+    }
+
+    cancelDsaMetadataSync() {
+        if (this.batchProcessor) {
+            this.batchProcessor.cancel();
+            this.syncStatus = 'offline';
+            this.syncInProgress = false;
+
+            this.notifySync('SYNC_CANCELLED', {
+                dataStore: this.getSnapshot()
+            });
+        }
+    }
+
+    getSyncStatus() {
+        return {
+            inProgress: this.syncInProgress,
+            status: this.syncStatus,
+            progress: this.syncProgress,
+            lastResults: this.lastSyncResults
+        };
+    }
+
+    setColumnMappings(mappings) {
+        this.columnMappings = { ...this.columnMappings, ...mappings };
+        this.saveToStorage();
+        this.notify();
+    }
+
+    getSnapshot() {
+        return {
+            processedData: this.processedData,
+            dataSource: this.dataSource,
+            dataSourceInfo: this.dataSourceInfo,
+            dataLoadTimestamp: this.dataLoadTimestamp,
+            modifiedItems: this.modifiedItems,
+            caseIdMappings: this.caseIdMappings,
+            caseProtocolMappings: this.caseProtocolMappings,
+            syncInProgress: this.syncInProgress,
+            syncStatus: this.syncStatus,
+            syncProgress: this.syncProgress,
+            lastSyncResults: this.lastSyncResults,
+            girderToken: this.girderToken,
+            dsaConfig: this.dsaConfig,
+            columnMappings: this.columnMappings
+        };
+    }
 }
 
 // Create singleton instance
 const dataStore = new DataStore();
+
+// Export functions for DSA sync functionality
+export const syncBdsaMetadataToServer = (progressCallback) => dataStore.syncBdsaMetadataToServer(progressCallback);
+export const cancelDsaMetadataSync = () => dataStore.cancelDsaMetadataSync();
+export const getSyncStatus = () => dataStore.getSyncStatus();
+export const subscribeToSyncEvents = (callback) => dataStore.subscribeToSync(callback);
+export const getDataStoreSnapshot = () => dataStore.getSnapshot();
+
+// Export constants for sync events
+export const DATA_CHANGE_EVENTS = {
+    SYNC_STATUS_CHANGED: 'syncStatusChanged',
+    SYNC_PROGRESS_UPDATED: 'syncProgressUpdated',
+    SYNC_COMPLETED: 'syncCompleted',
+    SYNC_ERROR: 'syncError',
+    SYNC_CANCELLED: 'syncCancelled'
+};
 
 export default dataStore;

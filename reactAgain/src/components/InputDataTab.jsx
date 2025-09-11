@@ -7,6 +7,7 @@ import dataStore from '../utils/dataStore';
 import dsaAuthStore from '../utils/dsaAuthStore';
 import RegexRulesModal from './RegexRulesModal';
 import BdsaMappingModal from './BdsaMappingModal';
+import DsaSyncModal from './DsaSyncModal';
 import { getDefaultRegexRules, applyRegexRules } from '../utils/regexExtractor';
 import { HIDDEN_DSA_FIELDS, PRIORITY_BDSA_FIELDS, DEFAULT_COLUMN_VISIBILITY, DATA_SOURCE_TYPES } from '../utils/constants';
 import './InputDataTab.css';
@@ -55,6 +56,8 @@ const InputDataTab = () => {
             localRegionId: ''
         };
     });
+    const [showDsaSync, setShowDsaSync] = useState(false);
+    const [isDataRefresh, setIsDataRefresh] = useState(false);
 
     // Generate a unique key for the current data source
     const getDataSourceKey = () => {
@@ -151,9 +154,9 @@ const InputDataTab = () => {
         };
     }, []);
 
-    // Load column config when data is available
+    // Load column config when data is available (but not during refresh)
     useEffect(() => {
-        if (dataStatus.processedData && dataStatus.processedData.length > 0 && dataStatus.dataSource) {
+        if (dataStatus.processedData && dataStatus.processedData.length > 0 && dataStatus.dataSource && !isDataRefresh) {
             console.log('🔄 Data loaded, attempting to load column config...');
             const dataSourceKey = getDataSourceKey();
             if (dataSourceKey) {
@@ -185,14 +188,38 @@ const InputDataTab = () => {
 
                         const currentColumns = generateNestedKeys(dataStatus.processedData[0]);
                         const savedOrder = config.order || [];
-                        const hasAllColumns = currentColumns.every(col => savedOrder.includes(col));
+                        const savedVisibility = config.visibility || {};
 
-                        if (hasAllColumns && savedOrder.length === currentColumns.length) {
+                        // More lenient validation - just check if we have a reasonable saved config
+                        const hasReasonableConfig = savedOrder.length > 0 &&
+                            savedOrder.some(col => currentColumns.includes(col)) &&
+                            Object.keys(savedVisibility).length >= 0;
+
+                        if (hasReasonableConfig) {
                             console.log('🔄 Applying saved column config');
-                            setColumnOrder(savedOrder);
-                            setColumnVisibility(config.visibility || {});
+
+                            // Filter saved order to only include columns that still exist
+                            const validSavedOrder = savedOrder.filter(col => currentColumns.includes(col));
+
+                            // Add any new columns that weren't in the saved config
+                            const newColumns = currentColumns.filter(col => !validSavedOrder.includes(col));
+                            const finalOrder = [...validSavedOrder, ...newColumns];
+
+                            // Filter saved visibility to only include columns that still exist
+                            const validSavedVisibility = {};
+                            Object.keys(savedVisibility).forEach(key => {
+                                if (currentColumns.includes(key)) {
+                                    validSavedVisibility[key] = savedVisibility[key];
+                                }
+                            });
+
+                            setColumnOrder(finalOrder);
+                            setColumnVisibility(validSavedVisibility);
+
+                            // Save the updated config
+                            saveColumnConfig(validSavedVisibility, finalOrder);
                         } else {
-                            console.log('🔄 Saved config invalid, using preferred order');
+                            console.log('🔄 No reasonable saved config found, using preferred order');
                             // Use preferred order for default
                             const preferredOrder = PRIORITY_BDSA_FIELDS;
 
@@ -267,7 +294,7 @@ const InputDataTab = () => {
                 }
             }
         }
-    }, [dataStatus.processedData, dataStatus.dataSource, dataStatus.dataSourceInfo]);
+    }, [dataStatus.processedData, dataStatus.dataSource, dataStatus.dataSourceInfo, isDataRefresh]);
 
     // Auto-apply regex rules when data is loaded (if no column mappings exist)
     useEffect(() => {
@@ -352,6 +379,11 @@ const InputDataTab = () => {
             return;
         }
 
+        // Check if this is a refresh (data already exists from same source)
+        const isRefresh = dataStatus.processedData && dataStatus.processedData.length > 0 &&
+            dataStatus.dataSource === 'dsa';
+        setIsDataRefresh(isRefresh);
+
         setIsLoading(true);
         setLoadingMessage('Loading data from DSA server...');
         setError(null);
@@ -367,6 +399,8 @@ const InputDataTab = () => {
         } finally {
             setIsLoading(false);
             setLoadingMessage('');
+            // Reset the refresh flag after a short delay
+            setTimeout(() => setIsDataRefresh(false), 100);
         }
     };
 
@@ -491,6 +525,9 @@ const InputDataTab = () => {
         localStorage.setItem('columnMappings', JSON.stringify(newMappings));
         console.log('💾 Saved column mappings:', newMappings);
 
+        // Update dataStore with column mappings
+        dataStore.setColumnMappings(newMappings);
+
         // Apply the mappings to the current data
         const result = dataStore.applyColumnMappings(newMappings);
         if (result.success) {
@@ -557,7 +594,7 @@ const InputDataTab = () => {
                         }
 
                         // Add column for primitive values
-                        columns.push({
+                        const columnDef = {
                             field: fullKey,
                             headerName: fullKey,
                             sortable: true,
@@ -607,7 +644,39 @@ const InputDataTab = () => {
 
                                 return null;
                             }
-                        });
+                        };
+
+                        // Make BDSA local fields editable
+                        if (fullKey.startsWith('BDSA.bdsaLocal.')) {
+                            columnDef.editable = true;
+                            columnDef.onCellValueChanged = (params) => {
+                                const { data, newValue, oldValue, colDef } = params;
+                                if (newValue !== oldValue) {
+                                    // Update the BDSA field
+                                    if (!data.BDSA) {
+                                        data.BDSA = {};
+                                    }
+                                    const fieldName = colDef.field.replace('BDSA.bdsaLocal.', '');
+                                    data.BDSA[fieldName] = newValue;
+
+                                    // Set data source to manual and update timestamp
+                                    if (!data.BDSA._dataSource) {
+                                        data.BDSA._dataSource = {};
+                                    }
+                                    data.BDSA._dataSource[fieldName] = 'manual';
+                                    data.BDSA._lastModified = new Date().toISOString();
+
+                                    // Mark item as modified
+                                    dataStore.modifiedItems.add(data.id);
+                                    dataStore.saveToStorage();
+                                    dataStore.notify();
+
+                                    console.log(`Manually updated ${colDef.field} to:`, newValue);
+                                }
+                            };
+                        }
+
+                        columns.push(columnDef);
                     }
                 }
             }
@@ -756,6 +825,16 @@ const InputDataTab = () => {
                     </button>
                 )}
 
+                {dataStatus.processedData && dataStatus.processedData.length > 0 && dataStatus.dataSource === 'dsa' && (
+                    <button
+                        className="dsa-sync-btn"
+                        onClick={() => setShowDsaSync(true)}
+                        title="Sync BDSA metadata to DSA server"
+                    >
+                        DSA Metadata
+                    </button>
+                )}
+
                 {/* Update Status Indicator */}
                 {dataStatus.processedData && dataStatus.processedData.length > 0 && dataStore.modifiedItems.size > 0 && (
                     <div className="update-status-indicator">
@@ -775,6 +854,10 @@ const InputDataTab = () => {
                         <span className="legend-item">
                             <span className="legend-color regex-extraction"></span>
                             Regex Extraction
+                        </span>
+                        <span className="legend-item">
+                            <span className="legend-color manual-edit"></span>
+                            Manual Edit
                         </span>
                         <span className="legend-item">
                             <span className="legend-color modified-row"></span>
@@ -913,6 +996,12 @@ const InputDataTab = () => {
                 onSave={handleSaveRegexRules}
                 currentRules={regexRules}
                 sampleData={dataStatus.processedData || []}
+            />
+
+            {/* DSA Sync Modal */}
+            <DsaSyncModal
+                isOpen={showDsaSync}
+                onClose={() => setShowDsaSync(false)}
             />
         </div>
     );
