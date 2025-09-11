@@ -3,6 +3,7 @@ import TabView from './components/TabView';
 import SchemaTab from './components/SchemaTab';
 import ProtocolsTab from './components/ProtocolsTab';
 import InputDataTab from './components/InputDataTab';
+import CaseManagementTab from './components/CaseManagementTab';
 import DsaLogin from './components/DsaLogin';
 import './App.css';
 
@@ -13,7 +14,7 @@ function App() {
         { id: 0, label: 'BDSA Schema', component: <SchemaTab /> },
         { id: 1, label: 'Protocols', component: <ProtocolsTab /> },
         { id: 2, label: 'Input Data', component: <InputDataTab /> },
-        { id: 3, label: 'Case Management', component: <div>Case Management Tab - Coming Soon</div> }
+        { id: 3, label: 'Case Management', component: <CaseManagementTab /> }
     ];
 
     return (

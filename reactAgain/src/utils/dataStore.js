@@ -11,6 +11,8 @@ class DataStore {
         this.dataLoadTimestamp = null;
         this.modifiedItems = new Set();
         this.caseIdMappings = new Map();
+        this.caseIdConflicts = new Map();
+        this.bdsaCaseIdConflicts = new Map();
         this.caseProtocolMappings = new Map();
 
         // DSA sync state
@@ -65,12 +67,14 @@ class DataStore {
             const stored = localStorage.getItem('bdsa_data_store');
             if (stored) {
                 const data = JSON.parse(stored);
-                this.processedData = data.processedData || [];
+                this.processedData = this.initializeBdsaStructure(data.processedData || []);
                 this.dataSource = data.dataSource;
                 this.dataSourceInfo = data.dataSourceInfo;
                 this.dataLoadTimestamp = data.dataLoadTimestamp;
                 this.modifiedItems = new Set(data.modifiedItems || []);
                 this.caseIdMappings = new Map(data.caseIdMappings || []);
+                this.caseIdConflicts = new Map(data.caseIdConflicts || []);
+                this.bdsaCaseIdConflicts = new Map(data.bdsaCaseIdConflicts || []);
                 this.caseProtocolMappings = new Map(data.caseProtocolMappings || []);
             }
         } catch (error) {
@@ -87,6 +91,8 @@ class DataStore {
                 dataLoadTimestamp: this.dataLoadTimestamp,
                 modifiedItems: Array.from(this.modifiedItems),
                 caseIdMappings: Array.from(this.caseIdMappings),
+                caseIdConflicts: Array.from(this.caseIdConflicts),
+                bdsaCaseIdConflicts: Array.from(this.bdsaCaseIdConflicts),
                 caseProtocolMappings: Array.from(this.caseProtocolMappings)
             };
             localStorage.setItem('bdsa_data_store', JSON.stringify(data));
@@ -105,7 +111,7 @@ class DataStore {
                     const csvText = e.target.result;
                     const data = this.parseCsv(csvText, file.name);
 
-                    this.processedData = data;
+                    this.processedData = this.initializeBdsaStructure(data);
                     this.dataSource = 'csv';
                     this.dataSourceInfo = {
                         fileName: file.name,
@@ -385,6 +391,8 @@ class DataStore {
         this.dataLoadTimestamp = null;
         this.modifiedItems.clear();
         this.caseIdMappings.clear();
+        this.caseIdConflicts.clear();
+        this.bdsaCaseIdConflicts.clear();
         this.caseProtocolMappings.clear();
 
         this.saveToStorage();
@@ -399,7 +407,9 @@ class DataStore {
             dataSourceInfo: this.dataSourceInfo,
             dataLoadTimestamp: this.dataLoadTimestamp,
             modifiedItems: Array.from(this.modifiedItems),
-            caseIdMappings: Array.from(this.caseIdMappings),
+            caseIdMappings: Object.fromEntries(this.caseIdMappings),
+            caseIdConflicts: Object.fromEntries(this.caseIdConflicts),
+            bdsaCaseIdConflicts: Object.fromEntries(this.bdsaCaseIdConflicts),
             caseProtocolMappings: Array.from(this.caseProtocolMappings)
         };
     }
@@ -836,6 +846,377 @@ class DataStore {
         this.notify();
     }
 
+    /**
+     * Update case ID mappings and apply them to the actual data items
+     * @param {Object|Map} mappings - Object or Map containing local case ID to BDSA case ID mappings
+     */
+    updateCaseIdMappings(mappings) {
+        if (mappings instanceof Map) {
+            this.caseIdMappings = new Map(mappings);
+        } else if (typeof mappings === 'object') {
+            this.caseIdMappings = new Map(Object.entries(mappings));
+        } else {
+            throw new Error('Invalid mappings format. Expected Object or Map.');
+        }
+
+        // Apply the mappings to the actual data items
+        this.applyCaseIdMappingsToData();
+
+        this.saveToStorage();
+        // Don't call notify() to avoid triggering any logic that might mark items as modified
+    }
+
+    /**
+     * Apply case ID mappings to the actual data items
+     * This updates the BDSA.bdsaLocal.bdsaCaseId field in the data items
+     */
+    applyCaseIdMappingsToData() {
+        if (!this.processedData || this.processedData.length === 0) {
+            return;
+        }
+
+        let updatedCount = 0;
+
+        this.processedData.forEach((item) => {
+            const currentLocalCaseId = item.BDSA?.bdsaLocal?.localCaseId;
+            if (currentLocalCaseId && this.caseIdMappings.has(currentLocalCaseId)) {
+                const bdsaCaseId = this.caseIdMappings.get(currentLocalCaseId);
+
+                // Only update if the value has changed
+                if (item.BDSA?.bdsaLocal?.bdsaCaseId !== bdsaCaseId) {
+                    if (!item.BDSA) {
+                        item.BDSA = {};
+                    }
+                    if (!item.BDSA.bdsaLocal) {
+                        item.BDSA.bdsaLocal = {};
+                    }
+
+                    item.BDSA.bdsaLocal.bdsaCaseId = bdsaCaseId;
+                    item.BDSA._lastModified = new Date().toISOString();
+
+                    // Mark the data source for UI highlighting
+                    if (!item.BDSA._dataSource) {
+                        item.BDSA._dataSource = {};
+                    }
+                    item.BDSA._dataSource.bdsaCaseId = 'case_id_mapping';
+
+                    // Don't mark as modified - this is just metadata application
+                    updatedCount++;
+                }
+            }
+        });
+
+        if (updatedCount > 0) {
+            console.log(`Applied case ID mappings to ${updatedCount} data items`);
+        }
+    }
+
+    /**
+     * Initialize case ID mappings from existing data
+     * This reads existing BDSA.bdsaLocal.bdsaCaseId values and populates the mappings
+     * Handles conflicts where the same localCaseId has different bdsaCaseId values
+     */
+    initializeCaseIdMappingsFromData() {
+        if (!this.processedData || this.processedData.length === 0) {
+            return;
+        }
+
+        const mappings = new Map();
+        const conflicts = new Map();
+        const bdsaConflicts = new Map();
+
+        // First pass: collect all mappings and detect localCaseId conflicts
+        this.processedData.forEach((item) => {
+            const localCaseId = item.BDSA?.bdsaLocal?.localCaseId;
+            const bdsaCaseId = item.BDSA?.bdsaLocal?.bdsaCaseId;
+
+            if (localCaseId && bdsaCaseId) {
+                // Check for conflicts - same localCaseId but different bdsaCaseId
+                if (mappings.has(localCaseId) && mappings.get(localCaseId) !== bdsaCaseId) {
+                    // Record the conflict
+                    if (!conflicts.has(localCaseId)) {
+                        conflicts.set(localCaseId, new Set([mappings.get(localCaseId)]));
+                    }
+                    conflicts.get(localCaseId).add(bdsaCaseId);
+                    console.warn(`⚠️ Local Case ID Conflict: localCaseId "${localCaseId}" has multiple BDSA Case IDs:`, Array.from(conflicts.get(localCaseId)));
+                } else {
+                    mappings.set(localCaseId, bdsaCaseId);
+                }
+            }
+        });
+
+        // Second pass: detect bdsaCaseId conflicts (same BDSA Case ID mapped to multiple local case IDs)
+        const bdsaToLocalMap = new Map();
+        this.processedData.forEach((item) => {
+            const localCaseId = item.BDSA?.bdsaLocal?.localCaseId;
+            const bdsaCaseId = item.BDSA?.bdsaLocal?.bdsaCaseId;
+
+            if (localCaseId && bdsaCaseId) {
+                if (bdsaToLocalMap.has(bdsaCaseId)) {
+                    const existingLocalIds = bdsaToLocalMap.get(bdsaCaseId);
+                    if (!existingLocalIds.has(localCaseId)) {
+                        existingLocalIds.add(localCaseId);
+                        if (existingLocalIds.size === 2) {
+                            // First time we detect this conflict
+                            bdsaConflicts.set(bdsaCaseId, new Set(existingLocalIds));
+                            console.warn(`⚠️ BDSA Case ID Conflict: bdsaCaseId "${bdsaCaseId}" is mapped to multiple local case IDs:`, Array.from(existingLocalIds));
+                        } else {
+                            // Update existing conflict
+                            bdsaConflicts.get(bdsaCaseId).add(localCaseId);
+                            console.warn(`⚠️ BDSA Case ID Conflict: bdsaCaseId "${bdsaCaseId}" is mapped to multiple local case IDs:`, Array.from(bdsaConflicts.get(bdsaCaseId)));
+                        }
+                    }
+                } else {
+                    bdsaToLocalMap.set(bdsaCaseId, new Set([localCaseId]));
+                }
+            }
+        });
+
+        this.caseIdMappings = mappings;
+        this.caseIdConflicts = conflicts;
+        this.bdsaCaseIdConflicts = bdsaConflicts;
+
+        console.log(`Initialized case ID mappings from data: ${mappings.size} mappings found`);
+        if (conflicts.size > 0) {
+            console.warn(`⚠️ Found ${conflicts.size} local case ID conflicts that need resolution`);
+        }
+        if (bdsaConflicts.size > 0) {
+            console.warn(`⚠️ Found ${bdsaConflicts.size} BDSA case ID conflicts that need resolution`);
+        }
+    }
+
+    /**
+     * Get all case ID conflicts
+     * @returns {Object} Object mapping localCaseId to array of conflicting BDSA Case IDs
+     */
+    getCaseIdConflicts() {
+        const conflicts = {};
+        for (const [localCaseId, bdsaCaseIdSet] of this.caseIdConflicts) {
+            conflicts[localCaseId] = Array.from(bdsaCaseIdSet);
+        }
+        return conflicts;
+    }
+
+    /**
+     * Resolve a case ID conflict by choosing one BDSA Case ID and applying it to all items
+     * @param {string} localCaseId - The local case ID with the conflict
+     * @param {string} chosenBdsaCaseId - The BDSA Case ID to use for resolution
+     */
+    resolveCaseIdConflict(localCaseId, chosenBdsaCaseId) {
+        if (!this.caseIdConflicts.has(localCaseId)) {
+            console.warn(`No conflict found for localCaseId: ${localCaseId}`);
+            return;
+        }
+
+        // Update all items with this localCaseId to use the chosen BDSA Case ID
+        let updatedCount = 0;
+        this.processedData.forEach((item) => {
+            if (item.BDSA?.bdsaLocal?.localCaseId === localCaseId) {
+                if (!item.BDSA) {
+                    item.BDSA = {};
+                }
+                if (!item.BDSA.bdsaLocal) {
+                    item.BDSA.bdsaLocal = {};
+                }
+
+                item.BDSA.bdsaLocal.bdsaCaseId = chosenBdsaCaseId;
+                item.BDSA._lastModified = new Date().toISOString();
+                updatedCount++;
+            }
+        });
+
+        // Update the mappings
+        this.caseIdMappings.set(localCaseId, chosenBdsaCaseId);
+
+        // Remove the conflict
+        this.caseIdConflicts.delete(localCaseId);
+
+        this.saveToStorage();
+        console.log(`Resolved conflict for localCaseId "${localCaseId}": updated ${updatedCount} items to use BDSA Case ID "${chosenBdsaCaseId}"`);
+    }
+
+    /**
+     * Clear all conflicting BDSA Case IDs for a specific local case ID
+     * This removes the bdsaCaseId from all items with that localCaseId
+     * @param {string} localCaseId - The local case ID to clear
+     */
+    clearCaseIdConflict(localCaseId) {
+        if (!this.caseIdConflicts.has(localCaseId)) {
+            console.warn(`No conflict found for localCaseId: ${localCaseId}`);
+            return;
+        }
+
+        // Clear BDSA Case ID from all items with this localCaseId
+        let updatedCount = 0;
+        this.processedData.forEach((item) => {
+            if (item.BDSA?.bdsaLocal?.localCaseId === localCaseId) {
+                if (item.BDSA?.bdsaLocal?.bdsaCaseId) {
+                    delete item.BDSA.bdsaLocal.bdsaCaseId;
+                    item.BDSA._lastModified = new Date().toISOString();
+                    updatedCount++;
+                }
+            }
+        });
+
+        // Remove from mappings
+        this.caseIdMappings.delete(localCaseId);
+
+        // Remove the conflict
+        this.caseIdConflicts.delete(localCaseId);
+
+        this.saveToStorage();
+        console.log(`Cleared conflict for localCaseId "${localCaseId}": removed BDSA Case ID from ${updatedCount} items`);
+    }
+
+    /**
+     * Get all BDSA case ID conflicts
+     * @returns {Object} Object mapping bdsaCaseId to array of conflicting local case IDs
+     */
+    getBdsaCaseIdConflicts() {
+        const conflicts = {};
+        for (const [bdsaCaseId, localCaseIdSet] of this.bdsaCaseIdConflicts) {
+            conflicts[bdsaCaseId] = Array.from(localCaseIdSet);
+        }
+        return conflicts;
+    }
+
+    /**
+     * Resolve a BDSA case ID conflict by choosing one local case ID and removing the BDSA Case ID from others
+     * @param {string} bdsaCaseId - The BDSA Case ID with the conflict
+     * @param {string} chosenLocalCaseId - The local case ID to keep the BDSA Case ID
+     */
+    resolveBdsaCaseIdConflict(bdsaCaseId, chosenLocalCaseId) {
+        if (!this.bdsaCaseIdConflicts.has(bdsaCaseId)) {
+            console.warn(`No BDSA Case ID conflict found for: ${bdsaCaseId}`);
+            return;
+        }
+
+        const conflictingLocalIds = this.bdsaCaseIdConflicts.get(bdsaCaseId);
+        if (!conflictingLocalIds.has(chosenLocalCaseId)) {
+            console.warn(`Chosen local case ID "${chosenLocalCaseId}" is not part of the conflict for BDSA Case ID "${bdsaCaseId}"`);
+            return;
+        }
+
+        // Remove BDSA Case ID from all conflicting local case IDs except the chosen one
+        let updatedCount = 0;
+        this.processedData.forEach((item) => {
+            const localCaseId = item.BDSA?.bdsaLocal?.localCaseId;
+            const itemBdsaCaseId = item.BDSA?.bdsaLocal?.bdsaCaseId;
+
+            if (localCaseId && itemBdsaCaseId === bdsaCaseId && localCaseId !== chosenLocalCaseId) {
+                if (item.BDSA?.bdsaLocal?.bdsaCaseId) {
+                    delete item.BDSA.bdsaLocal.bdsaCaseId;
+                    item.BDSA._lastModified = new Date().toISOString();
+                    updatedCount++;
+                }
+            }
+        });
+
+        // Update mappings - remove from all except chosen one
+        for (const localCaseId of conflictingLocalIds) {
+            if (localCaseId !== chosenLocalCaseId) {
+                this.caseIdMappings.delete(localCaseId);
+            }
+        }
+
+        // Remove the conflict
+        this.bdsaCaseIdConflicts.delete(bdsaCaseId);
+
+        this.saveToStorage();
+        console.log(`Resolved BDSA Case ID conflict for "${bdsaCaseId}": kept mapping for "${chosenLocalCaseId}", removed from ${updatedCount} other items`);
+    }
+
+    /**
+     * Clear all BDSA Case ID conflicts by removing the BDSA Case ID from all conflicting items
+     * @param {string} bdsaCaseId - The BDSA Case ID to clear from all conflicting items
+     */
+    clearBdsaCaseIdConflict(bdsaCaseId) {
+        if (!this.bdsaCaseIdConflicts.has(bdsaCaseId)) {
+            console.warn(`No BDSA Case ID conflict found for: ${bdsaCaseId}`);
+            return;
+        }
+
+        const conflictingLocalIds = this.bdsaCaseIdConflicts.get(bdsaCaseId);
+
+        // Remove BDSA Case ID from all conflicting items
+        let updatedCount = 0;
+        this.processedData.forEach((item) => {
+            const localCaseId = item.BDSA?.bdsaLocal?.localCaseId;
+            const itemBdsaCaseId = item.BDSA?.bdsaLocal?.bdsaCaseId;
+
+            if (localCaseId && itemBdsaCaseId === bdsaCaseId && conflictingLocalIds.has(localCaseId)) {
+                if (item.BDSA?.bdsaLocal?.bdsaCaseId) {
+                    delete item.BDSA.bdsaLocal.bdsaCaseId;
+                    item.BDSA._lastModified = new Date().toISOString();
+                    updatedCount++;
+                }
+            }
+        });
+
+        // Remove from mappings
+        for (const localCaseId of conflictingLocalIds) {
+            this.caseIdMappings.delete(localCaseId);
+        }
+
+        // Remove the conflict
+        this.bdsaCaseIdConflicts.delete(bdsaCaseId);
+
+        this.saveToStorage();
+        console.log(`Cleared BDSA Case ID conflict for "${bdsaCaseId}": removed BDSA Case ID from ${updatedCount} items`);
+    }
+
+    /**
+     * Initialize BDSA structure for all data items
+     * This ensures all items have the BDSA.bdsaLocal structure with placeholder fields
+     * so that columns are generated properly
+     * @param {Array} data - The data to initialize
+     * @returns {Array} Data with initialized BDSA structure
+     */
+    initializeBdsaStructure(data) {
+        if (!data || !Array.isArray(data)) {
+            return data;
+        }
+
+        return data.map(item => {
+            // Initialize BDSA structure if it doesn't exist
+            if (!item.BDSA) {
+                item.BDSA = {
+                    bdsaLocal: {
+                        localCaseId: null,
+                        localStainID: null,
+                        localRegionId: null,
+                        bdsaCaseId: null  // Initialize this field so the column appears
+                    },
+                    _dataSource: {},
+                    _lastModified: new Date().toISOString()
+                };
+            } else {
+                // Ensure bdsaLocal structure exists
+                if (!item.BDSA.bdsaLocal) {
+                    item.BDSA.bdsaLocal = {
+                        localCaseId: null,
+                        localStainID: null,
+                        localRegionId: null,
+                        bdsaCaseId: null
+                    };
+                } else {
+                    // Ensure bdsaCaseId field exists
+                    if (!item.BDSA.bdsaLocal.hasOwnProperty('bdsaCaseId')) {
+                        item.BDSA.bdsaLocal.bdsaCaseId = null;
+                    }
+                }
+
+                // Ensure _dataSource exists
+                if (!item.BDSA._dataSource) {
+                    item.BDSA._dataSource = {};
+                }
+            }
+
+            return item;
+        });
+    }
+
+
     getSnapshot() {
         return {
             processedData: this.processedData,
@@ -844,6 +1225,8 @@ class DataStore {
             dataLoadTimestamp: this.dataLoadTimestamp,
             modifiedItems: this.modifiedItems,
             caseIdMappings: this.caseIdMappings,
+            caseIdConflicts: this.caseIdConflicts,
+            bdsaCaseIdConflicts: this.bdsaCaseIdConflicts,
             caseProtocolMappings: this.caseProtocolMappings,
             syncInProgress: this.syncInProgress,
             syncStatus: this.syncStatus,

@@ -51,6 +51,7 @@ export const HIDDEN_DSA_FIELDS = [
 export const PRIORITY_BDSA_FIELDS = [
     'id',
     'name',
+    'BDSA.bdsaLocal.bdsaCaseId',
     'BDSA.bdsaLocal.localCaseId',
     'BDSA.bdsaLocal.localRegionId',
     'BDSA.bdsaLocal.localStainID',

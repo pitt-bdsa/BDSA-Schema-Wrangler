@@ -544,11 +544,6 @@ const InputDataTab = () => {
                         // Recursively process nested objects
                         columns.push(...generateColumnDefs(value, fullKey));
                     } else {
-                        // Skip fields that should be hidden by default
-                        if (HIDDEN_DSA_FIELDS.includes(fullKey)) {
-                            continue;
-                        }
-
                         // Add column for primitive values
                         const columnDef = {
                             field: fullKey,
@@ -557,7 +552,8 @@ const InputDataTab = () => {
                             filter: true,
                             resizable: true,
                             minWidth: 150,
-                            hide: columnVisibility[fullKey] === false,
+                            // Hide if explicitly set to false in columnVisibility OR if it's in HIDDEN_DSA_FIELDS
+                            hide: columnVisibility[fullKey] === false || HIDDEN_DSA_FIELDS.includes(fullKey),
                             cellStyle: (params) => {
                                 const rowData = params.data;
                                 const isModified = dataStore.modifiedItems?.has(rowData?.id);
@@ -578,6 +574,12 @@ const InputDataTab = () => {
                                             backgroundColor: '#fff3cd',
                                             borderLeft: '4px solid #ffc107',
                                             fontWeight: '500'
+                                        };
+                                    } else if (dataSource === 'case_id_mapping') {
+                                        return {
+                                            backgroundColor: '#d4edda',
+                                            borderLeft: '4px solid #28a745',
+                                            fontWeight: '600'
                                         };
                                     } else if (params.value && params.value !== null && params.value !== '') {
                                         return {
