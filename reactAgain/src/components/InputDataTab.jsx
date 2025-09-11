@@ -59,6 +59,26 @@ const InputDataTab = () => {
     const [showDsaSync, setShowDsaSync] = useState(false);
     const [isDataRefresh, setIsDataRefresh] = useState(false);
 
+    // Generate nested keys from an object (excluding meta.bdsaLocal fields)
+    const generateNestedKeys = (obj, prefix = '') => {
+        const keys = [];
+        for (const key in obj) {
+            if (obj.hasOwnProperty(key)) {
+                const fullKey = prefix ? `${prefix}.${key}` : key;
+                const value = obj[key];
+                if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+                    keys.push(...generateNestedKeys(value, fullKey));
+                } else {
+                    // Skip fields that should be hidden by default
+                    if (!HIDDEN_DSA_FIELDS.includes(fullKey)) {
+                        keys.push(fullKey);
+                    }
+                }
+            }
+        }
+        return keys;
+    };
+
     // Generate a unique key for the current data source
     const getDataSourceKey = () => {
         console.log('🔍 Getting data source key:', {
@@ -166,60 +186,20 @@ const InputDataTab = () => {
                         const config = JSON.parse(savedConfig);
                         console.log('🔄 Loading saved column config for:', dataSourceKey, config);
 
-                        // Generate current nested column keys (excluding meta.bdsaLocal fields)
-                        const generateNestedKeys = (obj, prefix = '') => {
-                            const keys = [];
-                            for (const key in obj) {
-                                if (obj.hasOwnProperty(key)) {
-                                    const fullKey = prefix ? `${prefix}.${key}` : key;
-                                    const value = obj[key];
-                                    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-                                        keys.push(...generateNestedKeys(value, fullKey));
-                                    } else {
-                                        // Skip fields that should be hidden by default
-                                        if (!HIDDEN_DSA_FIELDS.includes(fullKey)) {
-                                            keys.push(fullKey);
-                                        }
-                                    }
-                                }
-                            }
-                            return keys;
-                        };
-
+                        console.log('🔍 Sample data structure:', dataStatus.processedData[0]);
                         const currentColumns = generateNestedKeys(dataStatus.processedData[0]);
+                        console.log('🔍 Generated keys:', currentColumns);
                         const savedOrder = config.order || [];
                         const savedVisibility = config.visibility || {};
 
-                        // More lenient validation - just check if we have a reasonable saved config
-                        const hasReasonableConfig = savedOrder.length > 0 &&
-                            savedOrder.some(col => currentColumns.includes(col)) &&
-                            Object.keys(savedVisibility).length >= 0;
+                        const hasAllColumns = currentColumns.every(col => savedOrder.includes(col));
 
-                        if (hasReasonableConfig) {
+                        if (hasAllColumns && savedOrder.length === currentColumns.length) {
                             console.log('🔄 Applying saved column config');
-
-                            // Filter saved order to only include columns that still exist
-                            const validSavedOrder = savedOrder.filter(col => currentColumns.includes(col));
-
-                            // Add any new columns that weren't in the saved config
-                            const newColumns = currentColumns.filter(col => !validSavedOrder.includes(col));
-                            const finalOrder = [...validSavedOrder, ...newColumns];
-
-                            // Filter saved visibility to only include columns that still exist
-                            const validSavedVisibility = {};
-                            Object.keys(savedVisibility).forEach(key => {
-                                if (currentColumns.includes(key)) {
-                                    validSavedVisibility[key] = savedVisibility[key];
-                                }
-                            });
-
-                            setColumnOrder(finalOrder);
-                            setColumnVisibility(validSavedVisibility);
-
-                            // Save the updated config
-                            saveColumnConfig(validSavedVisibility, finalOrder);
+                            setColumnOrder(savedOrder);
+                            setColumnVisibility(savedVisibility);
                         } else {
-                            console.log('🔄 No reasonable saved config found, using preferred order');
+                            console.log('🔄 Saved config invalid, using preferred order');
                             // Use preferred order for default
                             const preferredOrder = PRIORITY_BDSA_FIELDS;
 
@@ -228,11 +208,20 @@ const InputDataTab = () => {
                             const remainingKeys = [...allKeys];
 
                             // Add preferred keys first
+                            console.log('🔍 Applying preferred order:', {
+                                preferredOrder: preferredOrder,
+                                remainingKeys: remainingKeys,
+                                allKeys: allKeys
+                            });
+
                             preferredOrder.forEach(key => {
                                 if (remainingKeys.includes(key)) {
                                     orderedKeys.push(key);
                                     const index = remainingKeys.indexOf(key);
                                     remainingKeys.splice(index, 1);
+                                    console.log(`✅ Added priority field: ${key}`);
+                                } else {
+                                    console.log(`❌ Priority field not found in data: ${key}`);
                                 }
                             });
 
@@ -462,26 +451,6 @@ const InputDataTab = () => {
         // Use the priority fields from constants
         const preferredOrder = PRIORITY_BDSA_FIELDS;
 
-        // Generate all available nested column keys (excluding meta.bdsaLocal fields)
-        const generateNestedKeys = (obj, prefix = '') => {
-            const keys = [];
-            for (const key in obj) {
-                if (obj.hasOwnProperty(key)) {
-                    const fullKey = prefix ? `${prefix}.${key}` : key;
-                    const value = obj[key];
-                    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-                        keys.push(...generateNestedKeys(value, fullKey));
-                    } else {
-                        // Skip fields that should be hidden by default
-                        if (!HIDDEN_DSA_FIELDS.includes(fullKey)) {
-                            keys.push(fullKey);
-                        }
-                    }
-                }
-            }
-            return keys;
-        };
-
         const allKeys = generateNestedKeys(dataStatus.processedData[0]);
 
         // Create ordered list: preferred order first, then remaining keys
@@ -544,24 +513,6 @@ const InputDataTab = () => {
 
         // Generate nested column keys from the first row (excluding meta.bdsaLocal fields)
         const firstRow = dataStatus.processedData[0];
-        const generateNestedKeys = (obj, prefix = '') => {
-            const keys = [];
-            for (const key in obj) {
-                if (obj.hasOwnProperty(key)) {
-                    const fullKey = prefix ? `${prefix}.${key}` : key;
-                    const value = obj[key];
-                    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-                        keys.push(...generateNestedKeys(value, fullKey));
-                    } else {
-                        // Skip fields that should be hidden by default
-                        if (!HIDDEN_DSA_FIELDS.includes(fullKey)) {
-                            keys.push(fullKey);
-                        }
-                    }
-                }
-            }
-            return keys;
-        };
 
         return generateNestedKeys(firstRow).sort();
     };
@@ -692,6 +643,12 @@ const InputDataTab = () => {
         // Create ordered columns array
         const orderedColumns = [];
         const remainingColumns = [...allColumns];
+
+        console.log('🔍 Column generation debug:', {
+            allColumns: allColumns.map(col => col.field),
+            columnOrder: columnOrder,
+            preferredOrder: preferredOrder
+        });
 
         // If we have a saved column order, use it (this takes precedence)
         if (columnOrder.length > 0) {
@@ -831,7 +788,12 @@ const InputDataTab = () => {
                         onClick={() => setShowDsaSync(true)}
                         title="Sync BDSA metadata to DSA server"
                     >
-                        DSA Metadata
+                        <span className="sync-icon">🔄</span>
+                        <span className="sync-text">
+                            <span>DSA</span>
+                            <span>Metadata</span>
+                            <span>Sync</span>
+                        </span>
                     </button>
                 )}
 
