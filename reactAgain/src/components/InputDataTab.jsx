@@ -6,16 +6,13 @@ import 'ag-grid-community/styles/ag-theme-alpine.css';
 import dataStore from '../utils/dataStore';
 import dsaAuthStore from '../utils/dsaAuthStore';
 import RegexRulesModal from './RegexRulesModal';
+import BdsaMappingModal from './BdsaMappingModal';
 import { getDefaultRegexRules, applyRegexRules } from '../utils/regexExtractor';
+import { HIDDEN_DSA_FIELDS, PRIORITY_BDSA_FIELDS, DEFAULT_COLUMN_VISIBILITY, DATA_SOURCE_TYPES } from '../utils/constants';
 import './InputDataTab.css';
 
 // Register AG Grid modules
 ModuleRegistry.registerModules([AllCommunityModule]);
-
-const DATA_SOURCE_TYPES = {
-    CSV: 'csv',
-    DSA: 'dsa'
-};
 
 const InputDataTab = () => {
     const [dataSource, setDataSource] = useState(DATA_SOURCE_TYPES.DSA);
@@ -29,7 +26,35 @@ const InputDataTab = () => {
     const [columnVisibility, setColumnVisibility] = useState({});
     const [columnOrder, setColumnOrder] = useState([]);
     const [showRegexRules, setShowRegexRules] = useState(false);
-    const [regexRules, setRegexRules] = useState(getDefaultRegexRules());
+    const [regexRules, setRegexRules] = useState(() => {
+        // Load saved regex rules from localStorage
+        const savedRules = localStorage.getItem('regexRules');
+        if (savedRules) {
+            try {
+                return JSON.parse(savedRules);
+            } catch (error) {
+                console.error('Error loading saved regex rules:', error);
+            }
+        }
+        return getDefaultRegexRules();
+    });
+    const [showBdsaMapping, setShowBdsaMapping] = useState(false);
+    const [columnMappings, setColumnMappings] = useState(() => {
+        // Load saved column mappings from localStorage
+        const savedMappings = localStorage.getItem('columnMappings');
+        if (savedMappings) {
+            try {
+                return JSON.parse(savedMappings);
+            } catch (error) {
+                console.error('Error loading saved column mappings:', error);
+            }
+        }
+        return {
+            localCaseId: '',
+            localStainID: '',
+            localRegionId: ''
+        };
+    });
 
     // Generate a unique key for the current data source
     const getDataSourceKey = () => {
@@ -138,38 +163,7 @@ const InputDataTab = () => {
                         const config = JSON.parse(savedConfig);
                         console.log('🔄 Loading saved column config for:', dataSourceKey, config);
 
-                        // Validate that saved order contains all current columns
-                        const currentColumns = Object.keys(dataStatus.processedData[0]);
-                        const savedOrder = config.order || [];
-                        const hasAllColumns = currentColumns.every(col => savedOrder.includes(col));
-
-                        if (hasAllColumns && savedOrder.length === currentColumns.length) {
-                            console.log('🔄 Applying saved column config');
-                            setColumnOrder(savedOrder);
-                            setColumnVisibility(config.visibility || {});
-                        } else {
-                            console.log('🔄 Saved config invalid, using default order');
-                            // Generate nested column keys
-                            const generateNestedKeys = (obj, prefix = '') => {
-                                const keys = [];
-                                for (const key in obj) {
-                                    if (obj.hasOwnProperty(key)) {
-                                        const fullKey = prefix ? `${prefix}.${key}` : key;
-                                        const value = obj[key];
-                                        if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-                                            keys.push(...generateNestedKeys(value, fullKey));
-                                        } else {
-                                            keys.push(fullKey);
-                                        }
-                                    }
-                                }
-                                return keys;
-                            };
-                            setColumnOrder(generateNestedKeys(dataStatus.processedData[0]));
-                        }
-                    } else {
-                        console.log('🔄 No saved config found, using default order');
-                        // Generate nested column keys
+                        // Generate current nested column keys (excluding meta.bdsaLocal fields)
                         const generateNestedKeys = (obj, prefix = '') => {
                             const keys = [];
                             for (const key in obj) {
@@ -179,21 +173,122 @@ const InputDataTab = () => {
                                     if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
                                         keys.push(...generateNestedKeys(value, fullKey));
                                     } else {
-                                        keys.push(fullKey);
+                                        // Skip fields that should be hidden by default
+                                        if (!HIDDEN_DSA_FIELDS.includes(fullKey)) {
+                                            keys.push(fullKey);
+                                        }
                                     }
                                 }
                             }
                             return keys;
                         };
-                        setColumnOrder(generateNestedKeys(dataStatus.processedData[0]));
+
+                        const currentColumns = generateNestedKeys(dataStatus.processedData[0]);
+                        const savedOrder = config.order || [];
+                        const hasAllColumns = currentColumns.every(col => savedOrder.includes(col));
+
+                        if (hasAllColumns && savedOrder.length === currentColumns.length) {
+                            console.log('🔄 Applying saved column config');
+                            setColumnOrder(savedOrder);
+                            setColumnVisibility(config.visibility || {});
+                        } else {
+                            console.log('🔄 Saved config invalid, using preferred order');
+                            // Use preferred order for default
+                            const preferredOrder = PRIORITY_BDSA_FIELDS;
+
+                            const allKeys = generateNestedKeys(dataStatus.processedData[0]);
+                            const orderedKeys = [];
+                            const remainingKeys = [...allKeys];
+
+                            // Add preferred keys first
+                            preferredOrder.forEach(key => {
+                                if (remainingKeys.includes(key)) {
+                                    orderedKeys.push(key);
+                                    const index = remainingKeys.indexOf(key);
+                                    remainingKeys.splice(index, 1);
+                                }
+                            });
+
+                            // Add remaining keys
+                            orderedKeys.push(...remainingKeys);
+
+                            setColumnOrder(orderedKeys);
+                            setColumnVisibility({});
+                            saveColumnConfig({}, orderedKeys);
+                        }
+                    } else {
+                        console.log('🔄 No saved config found, using preferred order');
+                        // Use preferred order for default
+                        const preferredOrder = PRIORITY_BDSA_FIELDS;
+
+                        const allKeys = generateNestedKeys(dataStatus.processedData[0]);
+                        const orderedKeys = [];
+                        const remainingKeys = [...allKeys];
+
+                        // Add preferred keys first
+                        preferredOrder.forEach(key => {
+                            if (remainingKeys.includes(key)) {
+                                orderedKeys.push(key);
+                                const index = remainingKeys.indexOf(key);
+                                remainingKeys.splice(index, 1);
+                            }
+                        });
+
+                        // Add remaining keys
+                        orderedKeys.push(...remainingKeys);
+
+                        setColumnOrder(orderedKeys);
+                        setColumnVisibility({});
+                        saveColumnConfig({}, orderedKeys);
                     }
                 } catch (error) {
                     console.error('Error loading saved column config:', error);
-                    setColumnOrder(Object.keys(dataStatus.processedData[0]));
+                    // Use preferred order as fallback
+                    const preferredOrder = PRIORITY_BDSA_FIELDS;
+
+                    const allKeys = generateNestedKeys(dataStatus.processedData[0]);
+                    const orderedKeys = [];
+                    const remainingKeys = [...allKeys];
+
+                    // Add preferred keys first
+                    preferredOrder.forEach(key => {
+                        if (remainingKeys.includes(key)) {
+                            orderedKeys.push(key);
+                            const index = remainingKeys.indexOf(key);
+                            remainingKeys.splice(index, 1);
+                        }
+                    });
+
+                    // Add remaining keys
+                    orderedKeys.push(...remainingKeys);
+
+                    setColumnOrder(orderedKeys);
+                    setColumnVisibility({});
                 }
             }
         }
     }, [dataStatus.processedData, dataStatus.dataSource, dataStatus.dataSourceInfo]);
+
+    // Auto-apply regex rules when data is loaded (if no column mappings exist)
+    useEffect(() => {
+        if (dataStatus.processedData && dataStatus.processedData.length > 0) {
+            // Check if any BDSA local fields have values
+            const hasBdsaValues = dataStatus.processedData.some(item =>
+                item.BDSA?.bdsaLocal?.localCaseId ||
+                item.BDSA?.bdsaLocal?.localStainID ||
+                item.BDSA?.bdsaLocal?.localRegionId
+            );
+
+            // If no BDSA values exist, auto-apply regex rules
+            if (!hasBdsaValues) {
+                console.log('🔄 No BDSA values found, auto-applying regex rules...');
+                const result = dataStore.applyRegexRules(regexRules);
+                if (result.success) {
+                    console.log(`✅ Auto-applied regex rules: ${result.extractedCount} items updated`);
+                }
+            }
+        }
+    }, [dataStatus.processedData, regexRules]);
 
     // Auto-load DSA data when authenticated and no data is loaded
     useEffect(() => {
@@ -330,7 +425,10 @@ const InputDataTab = () => {
     const resetColumnOrder = () => {
         if (!dataStatus.processedData || dataStatus.processedData.length === 0) return;
 
-        // Generate nested column keys
+        // Use the priority fields from constants
+        const preferredOrder = PRIORITY_BDSA_FIELDS;
+
+        // Generate all available nested column keys (excluding meta.bdsaLocal fields)
         const generateNestedKeys = (obj, prefix = '') => {
             const keys = [];
             for (const key in obj) {
@@ -340,16 +438,36 @@ const InputDataTab = () => {
                     if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
                         keys.push(...generateNestedKeys(value, fullKey));
                     } else {
-                        keys.push(fullKey);
+                        // Skip fields that should be hidden by default
+                        if (!HIDDEN_DSA_FIELDS.includes(fullKey)) {
+                            keys.push(fullKey);
+                        }
                     }
                 }
             }
             return keys;
         };
 
-        const defaultOrder = generateNestedKeys(dataStatus.processedData[0]);
-        setColumnOrder(defaultOrder);
-        saveColumnConfig(columnVisibility, defaultOrder);
+        const allKeys = generateNestedKeys(dataStatus.processedData[0]);
+
+        // Create ordered list: preferred order first, then remaining keys
+        const orderedKeys = [];
+        const remainingKeys = [...allKeys];
+
+        // Add preferred keys first
+        preferredOrder.forEach(key => {
+            if (remainingKeys.includes(key)) {
+                orderedKeys.push(key);
+                const index = remainingKeys.indexOf(key);
+                remainingKeys.splice(index, 1);
+            }
+        });
+
+        // Add remaining keys
+        orderedKeys.push(...remainingKeys);
+
+        setColumnOrder(orderedKeys);
+        saveColumnConfig(columnVisibility, orderedKeys);
     };
 
     const handleSaveRegexRules = (newRules) => {
@@ -357,6 +475,58 @@ const InputDataTab = () => {
         // Save to localStorage for persistence
         localStorage.setItem('regexRules', JSON.stringify(newRules));
         console.log('💾 Saved regex rules:', newRules);
+
+        // Apply the regex rules to the current data
+        const result = dataStore.applyRegexRules(newRules);
+        if (result.success) {
+            console.log(`✅ Applied regex rules: ${result.extractedCount} items updated`);
+        } else {
+            console.error('❌ Failed to apply regex rules:', result.error);
+        }
+    };
+
+    const handleSaveColumnMappings = (newMappings) => {
+        setColumnMappings(newMappings);
+        // Save to localStorage for persistence
+        localStorage.setItem('columnMappings', JSON.stringify(newMappings));
+        console.log('💾 Saved column mappings:', newMappings);
+
+        // Apply the mappings to the current data
+        const result = dataStore.applyColumnMappings(newMappings);
+        if (result.success) {
+            console.log(`✅ Applied column mappings: ${result.updatedCount} items updated`);
+        } else {
+            console.error('❌ Failed to apply column mappings:', result.error);
+        }
+    };
+
+    const getAvailableColumns = () => {
+        if (!dataStatus.processedData || dataStatus.processedData.length === 0) {
+            return [];
+        }
+
+        // Generate nested column keys from the first row (excluding meta.bdsaLocal fields)
+        const firstRow = dataStatus.processedData[0];
+        const generateNestedKeys = (obj, prefix = '') => {
+            const keys = [];
+            for (const key in obj) {
+                if (obj.hasOwnProperty(key)) {
+                    const fullKey = prefix ? `${prefix}.${key}` : key;
+                    const value = obj[key];
+                    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+                        keys.push(...generateNestedKeys(value, fullKey));
+                    } else {
+                        // Skip fields that should be hidden by default
+                        if (!HIDDEN_DSA_FIELDS.includes(fullKey)) {
+                            keys.push(fullKey);
+                        }
+                    }
+                }
+            }
+            return keys;
+        };
+
+        return generateNestedKeys(firstRow).sort();
     };
 
     // Generate column definitions from the first row of data
@@ -381,6 +551,11 @@ const InputDataTab = () => {
                         // Recursively process nested objects
                         columns.push(...generateColumnDefs(value, fullKey));
                     } else {
+                        // Skip fields that should be hidden by default
+                        if (HIDDEN_DSA_FIELDS.includes(fullKey)) {
+                            continue;
+                        }
+
                         // Add column for primitive values
                         columns.push({
                             field: fullKey,
@@ -391,10 +566,45 @@ const InputDataTab = () => {
                             minWidth: 150,
                             hide: columnVisibility[fullKey] === false,
                             cellStyle: (params) => {
+                                const rowData = params.data;
+                                const isModified = dataStore.modifiedItems?.has(rowData?.id);
+
+                                // Highlight BDSA fields with different colors based on data source
+                                if (fullKey.startsWith('BDSA.bdsaLocal.')) {
+                                    const fieldName = fullKey.replace('BDSA.bdsaLocal.', '');
+                                    const dataSource = rowData?.BDSA?._dataSource?.[fieldName];
+
+                                    if (dataSource === 'column_mapping') {
+                                        return {
+                                            backgroundColor: '#e8f5e8',
+                                            borderLeft: '4px solid #28a745',
+                                            fontWeight: '500'
+                                        };
+                                    } else if (dataSource === 'regex') {
+                                        return {
+                                            backgroundColor: '#fff3cd',
+                                            borderLeft: '4px solid #ffc107',
+                                            fontWeight: '500'
+                                        };
+                                    } else if (params.value && params.value !== null && params.value !== '') {
+                                        return {
+                                            backgroundColor: '#f8f9fa',
+                                            borderLeft: '4px solid #6c757d',
+                                            fontWeight: '500'
+                                        };
+                                    }
+                                }
+
                                 // Highlight DSA-specific fields
                                 if (fullKey.startsWith('dsa_') || fullKey === 'id' || fullKey === 'name') {
                                     return { backgroundColor: '#f0f7ff', fontWeight: 'bold' };
                                 }
+
+                                // Highlight modified rows
+                                if (isModified) {
+                                    return { backgroundColor: '#fff3e0', borderTop: '2px solid #ff9800' };
+                                }
+
                                 return null;
                             }
                         });
@@ -407,27 +617,39 @@ const InputDataTab = () => {
 
         const allColumns = generateColumnDefs(firstRow);
 
-        // Use custom column order if available, otherwise use default order
-        const orderedKeys = columnOrder.length > 0 ? columnOrder : allColumns.map(col => col.field);
+        // Use the priority fields from constants
+        const preferredOrder = PRIORITY_BDSA_FIELDS;
 
-        const columnDefs = orderedKeys.map(key => {
-            const existingColumn = allColumns.find(col => col.field === key);
-            return existingColumn || {
-                field: key,
-                headerName: key,
-                sortable: true,
-                filter: true,
-                resizable: true,
-                minWidth: 150,
-                hide: columnVisibility[key] === false,
-                cellStyle: (params) => {
-                    if (key.startsWith('dsa_') || key === 'id' || key === 'name') {
-                        return { backgroundColor: '#f0f7ff', fontWeight: 'bold' };
-                    }
-                    return null;
+        // Create ordered columns array
+        const orderedColumns = [];
+        const remainingColumns = [...allColumns];
+
+        // If we have a saved column order, use it (this takes precedence)
+        if (columnOrder.length > 0) {
+            columnOrder.forEach(field => {
+                const column = remainingColumns.find(col => col.field === field);
+                if (column) {
+                    orderedColumns.push(column);
+                    const index = remainingColumns.indexOf(column);
+                    remainingColumns.splice(index, 1);
                 }
-            };
-        });
+            });
+        } else {
+            // Only use preferred order if no saved order exists
+            preferredOrder.forEach(field => {
+                const column = remainingColumns.find(col => col.field === field);
+                if (column) {
+                    orderedColumns.push(column);
+                    const index = remainingColumns.indexOf(column);
+                    remainingColumns.splice(index, 1);
+                }
+            });
+        }
+
+        // Finally, add any remaining columns
+        orderedColumns.push(...remainingColumns);
+
+        const columnDefs = orderedColumns;
 
         console.log('🔍 Generated column definitions:', {
             count: columnDefs.length,
@@ -516,12 +738,49 @@ const InputDataTab = () => {
 
                 {dataStatus.processedData && dataStatus.processedData.length > 0 && (
                     <button
+                        className="bdsa-mapping-btn"
+                        onClick={() => setShowBdsaMapping(true)}
+                        title="Map source columns to BDSA schema fields"
+                    >
+                        BDSA Mapping
+                    </button>
+                )}
+
+                {dataStatus.processedData && dataStatus.processedData.length > 0 && (
+                    <button
                         className="regex-rules-btn"
                         onClick={() => setShowRegexRules(true)}
                         title="Configure Regex Rules for Data Extraction"
                     >
                         Regex Rules
                     </button>
+                )}
+
+                {/* Update Status Indicator */}
+                {dataStatus.processedData && dataStatus.processedData.length > 0 && dataStore.modifiedItems.size > 0 && (
+                    <div className="update-status-indicator">
+                        <span className="update-status-text">
+                            {dataStore.modifiedItems.size} of {dataStatus.processedData.length} items updated
+                        </span>
+                    </div>
+                )}
+
+                {/* Color Legend */}
+                {dataStatus.processedData && dataStatus.processedData.length > 0 && (
+                    <div className="color-legend">
+                        <span className="legend-item">
+                            <span className="legend-color column-mapping"></span>
+                            Column Mapping
+                        </span>
+                        <span className="legend-item">
+                            <span className="legend-color regex-extraction"></span>
+                            Regex Extraction
+                        </span>
+                        <span className="legend-item">
+                            <span className="legend-color modified-row"></span>
+                            Modified Row
+                        </span>
+                    </div>
                 )}
             </div>
 
@@ -637,6 +896,15 @@ const InputDataTab = () => {
                     </div>
                 )}
             </div>
+
+            {/* BDSA Mapping Modal */}
+            <BdsaMappingModal
+                isOpen={showBdsaMapping}
+                onClose={() => setShowBdsaMapping(false)}
+                onSave={handleSaveColumnMappings}
+                currentMappings={columnMappings}
+                availableColumns={getAvailableColumns()}
+            />
 
             {/* Regex Rules Modal */}
             <RegexRulesModal

@@ -2,6 +2,8 @@
  * Utility functions for extracting data using regex rules
  */
 
+import { DEFAULT_REGEX_RULES } from './constants.js';
+
 /**
  * Apply regex rules to extract localCaseId, localStainID, and localRegionId from file names
  * @param {Array} data - Array of data items
@@ -159,23 +161,7 @@ export const testRegexPattern = (pattern, sampleData) => {
  * @returns {Object} - Default regex rules
  */
 export const getDefaultRegexRules = () => {
-    return {
-        localCaseId: {
-            pattern: '^(\\d+-\\d+)',
-            description: 'Extract case ID from filename',
-            example: '05-662-Temporal_AT8.czi → 05-662'
-        },
-        localStainID: {
-            pattern: '_(\\w+)\\.',
-            description: 'Extract stain ID from filename',
-            example: '05-662-Temporal_AT8.czi → AT8'
-        },
-        localRegionId: {
-            pattern: '-(\\w+)_',
-            description: 'Extract region ID from filename',
-            example: '05-662-Temporal_AT8.czi → Temporal'
-        }
-    };
+    return DEFAULT_REGEX_RULES;
 };
 
 /**

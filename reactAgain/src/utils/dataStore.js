@@ -70,7 +70,7 @@ class DataStore {
             reader.onload = (e) => {
                 try {
                     const csvText = e.target.result;
-                    const data = this.parseCsv(csvText);
+                    const data = this.parseCsv(csvText, file.name);
 
                     this.processedData = data;
                     this.dataSource = 'csv';
@@ -103,7 +103,7 @@ class DataStore {
         });
     }
 
-    parseCsv(csvText) {
+    parseCsv(csvText, fileName = 'unknown') {
         const lines = csvText.split('\n').filter(line => line.trim());
         if (lines.length < 2) {
             throw new Error('CSV file must have at least a header and one data row');
@@ -111,6 +111,10 @@ class DataStore {
 
         const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
         const data = [];
+
+        // Create a unique prefix based on filename and timestamp
+        const filePrefix = fileName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+        const timestamp = Date.now();
 
         for (let i = 1; i < lines.length; i++) {
             const values = this.parseCsvLine(lines[i]);
@@ -123,6 +127,18 @@ class DataStore {
             headers.forEach((header, index) => {
                 item[header] = values[index];
             });
+
+            // Add consistent row identifier and BDSA structure
+            item.id = `csv_${filePrefix}_${timestamp}_row_${i}`;
+            item.BDSA = {
+                bdsaLocal: {
+                    localCaseId: null,
+                    localStainID: null,
+                    localRegionId: null
+                },
+                _dataSource: {},
+                _lastModified: new Date().toISOString()
+            };
 
             data.push(item);
         }
@@ -238,20 +254,29 @@ class DataStore {
         return dsaData.map((item, index) => {
             // Keep the original data structure - don't flatten it
             const transformedItem = {
-                // Basic identification
-                id: item._id || item.id || `dsa_item_${index}`,
-                name: item.name || item.filename || item.title || '',
-
                 // Include the original item data (nested structure preserved)
                 ...item,
 
-                // Add DSA-specific fields for reference
-                dsa_id: item._id || item.id || '',
+                // Create a single, consistent row identifier
+                id: item._id || item.id || `dsa_item_${Date.now()}_${index}`,
+
+                // Add convenient DSA metadata fields for easy access
                 dsa_name: item.name || '',
                 dsa_created: item.created || item.createdAt || '',
                 dsa_updated: item.updated || item.updatedAt || '',
                 dsa_size: item.size || item.fileSize || '',
-                dsa_mimeType: item.mimeType || item.contentType || ''
+                dsa_mimeType: item.mimeType || item.contentType || '',
+
+                // Initialize BDSA object for local data management
+                BDSA: {
+                    bdsaLocal: {
+                        localCaseId: null,
+                        localStainID: null,
+                        localRegionId: null
+                    },
+                    _dataSource: {}, // Track where each field came from
+                    _lastModified: new Date().toISOString()
+                }
             };
 
             return transformedItem;
@@ -381,6 +406,193 @@ class DataStore {
             uniqueFieldCounts,
             modifiedItems: this.modifiedItems.size
         };
+    }
+
+    /**
+     * Apply column mappings to populate BDSA fields from source data
+     * @param {Object} columnMappings - Object mapping BDSA fields to source columns
+     * @returns {Object} - Result with success status and updated count
+     */
+    applyColumnMappings(columnMappings) {
+        if (!this.processedData || this.processedData.length === 0) {
+            return { success: false, error: 'No data available' };
+        }
+
+        if (!columnMappings) {
+            return { success: false, error: 'No column mappings provided' };
+        }
+
+        let updatedCount = 0;
+        const updatedItems = [];
+
+        this.processedData.forEach((item, index) => {
+            let itemUpdated = false;
+            const updatedItem = { ...item };
+
+            // Ensure BDSA object exists
+            if (!updatedItem.BDSA) {
+                updatedItem.BDSA = {
+                    bdsaLocal: {},
+                    _dataSource: {},
+                    _lastModified: new Date().toISOString()
+                };
+            }
+
+            // Apply mappings for each field
+            Object.entries(columnMappings).forEach(([bdsaField, sourceColumn]) => {
+                if (sourceColumn && sourceColumn.trim() !== '') {
+                    const sourceValue = item[sourceColumn];
+
+                    // Only update if source value exists and is not empty
+                    if (sourceValue !== null && sourceValue !== undefined && sourceValue !== '') {
+                        // Initialize nested structure if needed
+                        if (!updatedItem.BDSA.bdsaLocal) {
+                            updatedItem.BDSA.bdsaLocal = {};
+                        }
+                        if (!updatedItem.BDSA._dataSource) {
+                            updatedItem.BDSA._dataSource = {};
+                        }
+
+                        // Set the value and track source
+                        updatedItem.BDSA.bdsaLocal[bdsaField] = sourceValue;
+                        updatedItem.BDSA._dataSource[bdsaField] = 'column_mapping';
+                        updatedItem.BDSA._lastModified = new Date().toISOString();
+                        itemUpdated = true;
+                    }
+                }
+            });
+
+            if (itemUpdated) {
+                updatedItems.push(updatedItem);
+                this.modifiedItems.add(updatedItem.id);
+                updatedCount++;
+            }
+        });
+
+        // Update the processed data
+        this.processedData = this.processedData.map(item => {
+            const updated = updatedItems.find(u => u.id === item.id);
+            return updated || item;
+        });
+
+        this.saveToStorage();
+        this.notify();
+
+        console.log(`📊 Applied column mappings: ${updatedCount} items updated`);
+        return {
+            success: true,
+            updatedCount,
+            totalItems: this.processedData.length
+        };
+    }
+
+    /**
+     * Apply regex rules to extract BDSA fields from filenames
+     * @param {Object} regexRules - Object containing regex patterns for each field
+     * @returns {Object} - Result with success status and extracted count
+     */
+    applyRegexRules(regexRules) {
+        if (!this.processedData || this.processedData.length === 0) {
+            return { success: false, error: 'No data available' };
+        }
+
+        if (!regexRules) {
+            return { success: false, error: 'No regex rules provided' };
+        }
+
+        let extractedCount = 0;
+        const updatedItems = [];
+
+        this.processedData.forEach((item, index) => {
+            let itemUpdated = false;
+            const updatedItem = { ...item };
+            const fileName = item.name || item.dsa_name || '';
+
+            // Ensure BDSA object exists
+            if (!updatedItem.BDSA) {
+                updatedItem.BDSA = {
+                    bdsaLocal: {},
+                    _dataSource: {},
+                    _lastModified: new Date().toISOString()
+                };
+            }
+
+            // Apply regex rules for each field
+            Object.entries(regexRules).forEach(([field, rule]) => {
+                if (rule && rule.pattern && rule.pattern.trim() !== '') {
+                    // Only apply regex if field is not already populated from column mapping
+                    const currentValue = updatedItem.BDSA.bdsaLocal?.[field];
+                    const currentSource = updatedItem.BDSA._dataSource?.[field];
+
+                    if (!currentValue || currentSource === 'regex') {
+                        try {
+                            const regex = new RegExp(rule.pattern);
+                            const match = fileName.match(regex);
+
+                            if (match) {
+                                const extractedValue = match[1] || match[0];
+
+                                // Initialize nested structure if needed
+                                if (!updatedItem.BDSA.bdsaLocal) {
+                                    updatedItem.BDSA.bdsaLocal = {};
+                                }
+                                if (!updatedItem.BDSA._dataSource) {
+                                    updatedItem.BDSA._dataSource = {};
+                                }
+
+                                updatedItem.BDSA.bdsaLocal[field] = extractedValue;
+                                updatedItem.BDSA._dataSource[field] = 'regex';
+                                updatedItem.BDSA._lastModified = new Date().toISOString();
+                                itemUpdated = true;
+                            }
+                        } catch (error) {
+                            console.error(`Regex error for field ${field}:`, error);
+                        }
+                    }
+                }
+            });
+
+            if (itemUpdated) {
+                updatedItems.push(updatedItem);
+                this.modifiedItems.add(updatedItem.id);
+                extractedCount++;
+            }
+        });
+
+        // Update the processed data
+        this.processedData = this.processedData.map(item => {
+            const updated = updatedItems.find(u => u.id === item.id);
+            return updated || item;
+        });
+
+        this.saveToStorage();
+        this.notify();
+
+        console.log(`🔍 Applied regex rules: ${extractedCount} items updated`);
+        return {
+            success: true,
+            extractedCount,
+            totalItems: this.processedData.length
+        };
+    }
+
+    /**
+     * Get items that have been modified since last sync
+     * @returns {Array} - Array of modified items
+     */
+    getModifiedItems() {
+        return this.processedData.filter(item =>
+            this.modifiedItems.has(item.id)
+        );
+    }
+
+    /**
+     * Clear the modified items tracking (after successful sync)
+     */
+    clearModifiedItems() {
+        this.modifiedItems.clear();
+        this.saveToStorage();
+        this.notify();
     }
 }
 
