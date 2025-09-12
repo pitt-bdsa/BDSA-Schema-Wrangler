@@ -606,6 +606,328 @@ export const updateItemMetadata = async (baseUrl, itemId, girderToken, metadata)
 };
 
 /**
+ * Adds/updates specific metadata fields for a DSA folder using the add metadata endpoint
+ * This only updates the specified metadata fields without replacing the entire metadata object
+ * @param {string} baseUrl - DSA base URL
+ * @param {string} folderId - DSA folder ID
+ * @param {string} girderToken - Authentication token
+ * @param {Object} metadata - Metadata fields to add/update
+ * @returns {Promise<Object>} Update result
+ */
+export const addFolderMetadata = async (baseUrl, folderId, girderToken, metadata) => {
+    try {
+        if (!baseUrl || !folderId || !girderToken) {
+            throw new Error('Missing required parameters: baseUrl, folderId, or girderToken');
+        }
+
+        if (!metadata || Object.keys(metadata).length === 0) {
+            console.log('No metadata fields to update for folder:', folderId);
+            return {
+                success: true,
+                folderId,
+                skipped: true,
+                reason: 'No metadata fields to update'
+            };
+        }
+
+        const apiUrl = `${baseUrl}/api/v1/folder/${folderId}/metadata`;
+        const headers = {
+            'Content-Type': 'application/json',
+            'Girder-Token': girderToken
+        };
+
+        console.log('Adding metadata to folder:', {
+            folderId,
+            apiUrl,
+            metadata,
+            headers: { ...headers, 'Girder-Token': '[REDACTED]' }
+        });
+
+        // Use PUT to update metadata fields
+        const response = await fetch(apiUrl, {
+            method: 'PUT',
+            headers: headers,
+            body: JSON.stringify(metadata)
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Failed to update folder metadata:', {
+                status: response.status,
+                statusText: response.statusText,
+                folderId,
+                response: errorText
+            });
+            throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+        console.log('Successfully updated metadata for folder:', folderId);
+        return {
+            success: true,
+            folderId,
+            data: result
+        };
+    } catch (error) {
+        console.error('Error updating folder metadata:', error);
+        return {
+            success: false,
+            folderId,
+            error: error.message
+        };
+    }
+};
+
+/**
+ * Syncs stain and region protocols to DSA folder metadata
+ * @param {string} baseUrl - DSA base URL
+ * @param {string} folderId - DSA folder ID
+ * @param {string} girderToken - Authentication token
+ * @param {Object} stainProtocols - Array of stain protocols
+ * @param {Object} regionProtocols - Array of region protocols
+ * @returns {Promise<Object>} Sync result
+ */
+export const syncProtocolsToFolder = async (baseUrl, folderId, girderToken, stainProtocols, regionProtocols) => {
+    try {
+        if (!baseUrl || !folderId || !girderToken) {
+            throw new Error('Missing required parameters: baseUrl, folderId, or girderToken');
+        }
+
+        // Prepare the metadata structure for protocols
+        const protocolsMetadata = {
+            bdsaProtocols: {
+                stainProtocols: stainProtocols || [],
+                regionProtocols: regionProtocols || [],
+                lastUpdated: new Date().toISOString(),
+                source: 'BDSA-Schema-Wrangler',
+                version: '1.0'
+            }
+        };
+
+        console.log('Syncing protocols to folder metadata:', {
+            folderId,
+            stainProtocolCount: stainProtocols?.length || 0,
+            regionProtocolCount: regionProtocols?.length || 0,
+            metadata: protocolsMetadata
+        });
+
+        const result = await addFolderMetadata(baseUrl, folderId, girderToken, protocolsMetadata);
+
+        if (result.success) {
+            console.log('Successfully synced protocols to folder:', folderId);
+        }
+
+        return result;
+    } catch (error) {
+        console.error('Error syncing protocols to folder:', error);
+        return {
+            success: false,
+            folderId,
+            error: error.message
+        };
+    }
+};
+
+/**
+ * Syncs BDSA case ID mappings to DSA folder metadata
+ * @param {string} baseUrl - DSA base URL
+ * @param {string} folderId - DSA folder ID
+ * @param {string} girderToken - Authentication token
+ * @param {Object} caseIdMappings - Map or object of localCaseId -> bdsaCaseId mappings
+ * @param {string} institutionId - BDSA institution ID
+ * @returns {Promise<Object>} Sync result
+ */
+export const syncCaseIdMappingsToFolder = async (baseUrl, folderId, girderToken, caseIdMappings, institutionId) => {
+    try {
+        if (!baseUrl || !folderId || !girderToken) {
+            throw new Error('Missing required parameters: baseUrl, folderId, or girderToken');
+        }
+
+        // Convert caseIdMappings to a serializable format
+        let mappingsArray = [];
+        if (caseIdMappings instanceof Map) {
+            mappingsArray = Array.from(caseIdMappings.entries()).map(([localId, bdsaId]) => ({
+                localCaseId: localId,
+                bdsaCaseId: bdsaId
+            }));
+        } else if (typeof caseIdMappings === 'object' && caseIdMappings !== null) {
+            mappingsArray = Object.entries(caseIdMappings).map(([localId, bdsaId]) => ({
+                localCaseId: localId,
+                bdsaCaseId: bdsaId
+            }));
+        }
+
+        // Prepare the metadata structure for case ID mappings
+        const caseIdMetadata = {
+            bdsaCaseIdMappings: {
+                institutionId: institutionId || '001',
+                mappings: mappingsArray,
+                lastUpdated: new Date().toISOString(),
+                source: 'BDSA-Schema-Wrangler',
+                version: '1.0',
+                totalMappings: mappingsArray.length
+            }
+        };
+
+        console.log('Syncing case ID mappings to folder metadata:', {
+            folderId,
+            institutionId,
+            mappingCount: mappingsArray.length,
+            metadata: caseIdMetadata
+        });
+
+        const result = await addFolderMetadata(baseUrl, folderId, girderToken, caseIdMetadata);
+
+        if (result.success) {
+            console.log('Successfully synced case ID mappings to folder:', folderId);
+        }
+
+        return result;
+    } catch (error) {
+        console.error('Error syncing case ID mappings to folder:', error);
+        return {
+            success: false,
+            folderId,
+            error: error.message
+        };
+    }
+};
+
+/**
+ * Retrieves BDSA case ID mappings from DSA folder metadata
+ * @param {string} baseUrl - DSA base URL
+ * @param {string} folderId - DSA folder ID
+ * @param {string} girderToken - Authentication token
+ * @returns {Promise<Object>} Retrieved case ID mappings or null if not found
+ */
+export const getCaseIdMappingsFromFolder = async (baseUrl, folderId, girderToken) => {
+    try {
+        if (!baseUrl || !folderId || !girderToken) {
+            throw new Error('Missing required parameters: baseUrl, folderId, or girderToken');
+        }
+
+        const apiUrl = `${baseUrl}/api/v1/folder/${folderId}`;
+        const headers = {
+            'Girder-Token': girderToken
+        };
+
+        console.log('Retrieving folder metadata for case ID mappings:', {
+            folderId,
+            apiUrl,
+            headers: { ...headers, 'Girder-Token': '[REDACTED]' }
+        });
+
+        const response = await fetch(apiUrl, {
+            method: 'GET',
+            headers: headers
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Failed to retrieve folder metadata:', {
+                status: response.status,
+                statusText: response.statusText,
+                folderId,
+                response: errorText
+            });
+            throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+
+        // Extract case ID mappings from metadata
+        const caseIdMappings = result.meta?.bdsaCaseIdMappings || null;
+
+        if (caseIdMappings) {
+            console.log('Successfully retrieved case ID mappings from folder:', folderId);
+        } else {
+            console.log('No case ID mappings found in folder metadata:', folderId);
+        }
+
+        return {
+            success: true,
+            folderId,
+            caseIdMappings
+        };
+    } catch (error) {
+        console.error('Error retrieving case ID mappings from folder:', error);
+        return {
+            success: false,
+            folderId,
+            error: error.message,
+            caseIdMappings: null
+        };
+    }
+};
+
+/**
+ * Retrieves protocols from DSA folder metadata
+ * @param {string} baseUrl - DSA base URL
+ * @param {string} folderId - DSA folder ID
+ * @param {string} girderToken - Authentication token
+ * @returns {Promise<Object>} Retrieved protocols or null if not found
+ */
+export const getProtocolsFromFolder = async (baseUrl, folderId, girderToken) => {
+    try {
+        if (!baseUrl || !folderId || !girderToken) {
+            throw new Error('Missing required parameters: baseUrl, folderId, or girderToken');
+        }
+
+        const apiUrl = `${baseUrl}/api/v1/folder/${folderId}`;
+        const headers = {
+            'Girder-Token': girderToken
+        };
+
+        console.log('Retrieving folder metadata for protocols:', {
+            folderId,
+            apiUrl,
+            headers: { ...headers, 'Girder-Token': '[REDACTED]' }
+        });
+
+        const response = await fetch(apiUrl, {
+            method: 'GET',
+            headers: headers
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Failed to retrieve folder metadata:', {
+                status: response.status,
+                statusText: response.statusText,
+                folderId,
+                response: errorText
+            });
+            throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+
+        // Extract protocols from metadata
+        const protocols = result.meta?.bdsaProtocols || null;
+
+        if (protocols) {
+            console.log('Successfully retrieved protocols from folder:', folderId);
+        } else {
+            console.log('No protocols found in folder metadata:', folderId);
+        }
+
+        return {
+            success: true,
+            folderId,
+            protocols
+        };
+    } catch (error) {
+        console.error('Error retrieving protocols from folder:', error);
+        return {
+            success: false,
+            folderId,
+            error: error.message,
+            protocols: null
+        };
+    }
+};
+
+/**
  * Syncs local BDSA metadata to DSA server for a single item
  * @param {string} baseUrl - DSA base URL
  * @param {Object} item - Data item with local metadata

@@ -240,30 +240,199 @@ class ProtocolStore {
         return this.conflicts.filter(c => !c.resolved);
     }
 
-    // Future DSA Integration Methods
-    async syncWithDSA(dsaConfig) {
-        // This will be implemented when DSA integration is ready
-        // For now, just update the last sync timestamp
-        this.lastSync = new Date();
-        this.saveLastSync();
-        this.notify();
+    // DSA Integration Methods
+    async syncWithDSA(dsaConfig, caseIdMappings = null, institutionId = null) {
+        try {
+            if (!dsaConfig || !dsaConfig.baseUrl || !dsaConfig.resourceId || !dsaConfig.token) {
+                throw new Error('DSA configuration incomplete. Missing baseUrl, resourceId, or token.');
+            }
 
-        // TODO: Implement actual DSA sync logic
-        console.log('DSA sync not yet implemented', dsaConfig);
+            console.log('Starting DSA sync for protocols and case ID mappings...', {
+                baseUrl: dsaConfig.baseUrl,
+                resourceId: dsaConfig.resourceId,
+                stainCount: this.stainProtocols.length,
+                regionCount: this.regionProtocols.length,
+                hasCaseIdMappings: !!caseIdMappings,
+                institutionId
+            });
+
+            // Import the DSA integration functions
+            const { syncProtocolsToFolder, syncCaseIdMappingsToFolder } = await import('./dsaIntegration.js');
+
+            const results = {
+                protocols: null,
+                caseIdMappings: null
+            };
+
+            // Push local protocols to DSA folder
+            const protocolsResult = await syncProtocolsToFolder(
+                dsaConfig.baseUrl,
+                dsaConfig.resourceId,
+                dsaConfig.token,
+                this.stainProtocols,
+                this.regionProtocols
+            );
+
+            if (!protocolsResult.success) {
+                throw new Error(`Failed to push protocols to DSA: ${protocolsResult.error}`);
+            }
+            results.protocols = protocolsResult;
+
+            // Push case ID mappings if provided
+            if (caseIdMappings) {
+                const caseIdResult = await syncCaseIdMappingsToFolder(
+                    dsaConfig.baseUrl,
+                    dsaConfig.resourceId,
+                    dsaConfig.token,
+                    caseIdMappings,
+                    institutionId
+                );
+
+                if (!caseIdResult.success) {
+                    console.warn(`Failed to push case ID mappings to DSA: ${caseIdResult.error}`);
+                    // Don't throw here - protocols sync succeeded
+                } else {
+                    results.caseIdMappings = caseIdResult;
+                }
+            }
+
+            // Clear local modification flags since we've successfully synced
+            this.stainProtocols = this.stainProtocols.map(p => ({
+                ...p,
+                _localModified: false,
+                _remoteVersion: new Date().toISOString()
+            }));
+            this.regionProtocols = this.regionProtocols.map(p => ({
+                ...p,
+                _localModified: false,
+                _remoteVersion: new Date().toISOString()
+            }));
+
+            // Save the updated protocols
+            this.saveStainProtocols();
+            this.saveRegionProtocols();
+
+            // Update last sync timestamp
+            this.lastSync = new Date();
+            this.saveLastSync();
+            this.notify();
+
+            console.log('Successfully synced to DSA folder:', dsaConfig.resourceId);
+            return {
+                success: true,
+                message: 'Data synced successfully',
+                pushed: {
+                    stainProtocols: this.stainProtocols.length,
+                    regionProtocols: this.regionProtocols.length,
+                    caseIdMappings: caseIdMappings ? (caseIdMappings instanceof Map ? caseIdMappings.size : Object.keys(caseIdMappings).length) : 0
+                }
+            };
+        } catch (error) {
+            console.error('Error syncing with DSA:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
     }
 
     async pullFromDSA(dsaConfig) {
-        // This will be implemented when DSA integration is ready
-        // For now, just return empty array
-        console.log('DSA pull not yet implemented', dsaConfig);
-        return [];
+        try {
+            if (!dsaConfig || !dsaConfig.baseUrl || !dsaConfig.resourceId || !dsaConfig.token) {
+                throw new Error('DSA configuration incomplete. Missing baseUrl, resourceId, or token.');
+            }
+
+            console.log('Pulling protocols and case ID mappings from DSA folder...', {
+                baseUrl: dsaConfig.baseUrl,
+                resourceId: dsaConfig.resourceId
+            });
+
+            // Import the DSA integration functions
+            const { getProtocolsFromFolder, getCaseIdMappingsFromFolder } = await import('./dsaIntegration.js');
+
+            const results = {
+                protocols: null,
+                caseIdMappings: null
+            };
+
+            // Retrieve protocols from DSA folder
+            const protocolsResult = await getProtocolsFromFolder(
+                dsaConfig.baseUrl,
+                dsaConfig.resourceId,
+                dsaConfig.token
+            );
+
+            if (!protocolsResult.success) {
+                throw new Error(`Failed to pull protocols from DSA: ${protocolsResult.error}`);
+            }
+            results.protocols = protocolsResult;
+
+            // Retrieve case ID mappings from DSA folder
+            const caseIdResult = await getCaseIdMappingsFromFolder(
+                dsaConfig.baseUrl,
+                dsaConfig.resourceId,
+                dsaConfig.token
+            );
+
+            if (!caseIdResult.success) {
+                console.warn(`Failed to pull case ID mappings from DSA: ${caseIdResult.error}`);
+            } else {
+                results.caseIdMappings = caseIdResult;
+            }
+
+            // Update local protocols with remote versions
+            if (results.protocols?.protocols) {
+                const { stainProtocols, regionProtocols } = results.protocols.protocols;
+
+                if (stainProtocols && Array.isArray(stainProtocols)) {
+                    this.stainProtocols = stainProtocols.map(p => ({
+                        ...p,
+                        _localModified: false,
+                        _remoteVersion: p.lastUpdated
+                    }));
+                    this.saveStainProtocols();
+                }
+
+                if (regionProtocols && Array.isArray(regionProtocols)) {
+                    this.regionProtocols = regionProtocols.map(p => ({
+                        ...p,
+                        _localModified: false,
+                        _remoteVersion: p.lastUpdated
+                    }));
+                    this.saveRegionProtocols();
+                }
+            }
+
+            this.lastSync = new Date();
+            this.saveLastSync();
+            this.notify();
+
+            const pulledData = {
+                stainProtocols: results.protocols?.protocols?.stainProtocols?.length || 0,
+                regionProtocols: results.protocols?.protocols?.regionProtocols?.length || 0,
+                caseIdMappings: results.caseIdMappings?.caseIdMappings?.totalMappings || 0
+            };
+
+            console.log('Successfully pulled data from DSA folder:', pulledData);
+
+            return {
+                success: true,
+                message: 'Data pulled successfully',
+                pulled: pulledData,
+                caseIdMappings: results.caseIdMappings?.caseIdMappings || null
+            };
+        } catch (error) {
+            console.error('Error pulling data from DSA:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
     }
 
     async pushToDSA(dsaConfig) {
-        // This will be implemented when DSA integration is ready
-        // For now, just return success
-        console.log('DSA push not yet implemented', dsaConfig);
-        return { success: true, pushed: 0 };
+        // Alias for syncWithDSA to maintain backward compatibility
+        return this.syncWithDSA(dsaConfig);
     }
 
     // Utility Methods

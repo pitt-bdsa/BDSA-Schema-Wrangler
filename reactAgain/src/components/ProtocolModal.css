@@ -18,8 +18,10 @@
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
     width: 100%;
     max-width: 600px;
-    max-height: 90vh;
+    max-height: 95vh;
     overflow-y: auto;
+    display: flex;
+    flex-direction: column;
 }
 
 .modal-header {
@@ -56,16 +58,19 @@
 }
 
 .protocol-form {
-    padding: 24px;
+    padding: 24px 24px 40px 24px;
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
 }
 
 .form-group {
-    margin-bottom: 20px;
+    margin-bottom: 16px;
 }
 
 .form-group label {
     display: block;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
     color: #333;
     font-weight: 500;
     font-size: 0.9rem;
@@ -75,7 +80,7 @@
 .form-group select,
 .form-group textarea {
     width: 100%;
-    padding: 10px 12px;
+    padding: 8px 12px;
     border: 2px solid #e0e0e0;
     border-radius: 6px;
     font-size: 1rem;
@@ -100,21 +105,24 @@
     display: block;
     color: #dc3545;
     font-size: 0.8rem;
-    margin-top: 4px;
+    margin-top: 2px;
 }
 
 .form-group textarea {
     resize: vertical;
-    min-height: 80px;
+    min-height: 70px;
 }
 
 .modal-actions {
     display: flex;
     justify-content: flex-end;
     gap: 12px;
-    margin-top: 32px;
-    padding-top: 20px;
+    margin-top: 24px;
+    padding: 16px 24px;
     border-top: 1px solid #e0e0e0;
+    background: #f8f9fa;
+    border-radius: 0 0 8px 8px;
+    flex-shrink: 0;
 }
 
 .cancel-button {
@@ -122,7 +130,7 @@
     color: white;
     border: none;
     border-radius: 6px;
-    padding: 10px 20px;
+    padding: 8px 16px;
     font-size: 1rem;
     cursor: pointer;
     transition: background-color 0.2s ease;
@@ -137,7 +145,7 @@
     color: white;
     border: none;
     border-radius: 6px;
-    padding: 10px 20px;
+    padding: 8px 16px;
     font-size: 1rem;
     cursor: pointer;
     transition: background-color 0.2s ease;
@@ -150,4 +158,50 @@
 .save-button:disabled {
     background: #ccc;
     cursor: not-allowed;
+}
+
+/* Field hints */
+.field-hint {
+    display: block;
+    color: #6c757d;
+    font-size: 0.75rem;
+    margin-top: 4px;
+    font-style: italic;
+}
+
+/* Checkbox group styling */
+.checkbox-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 6px;
+    margin-bottom: 6px;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: #333;
+    margin: 0;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+    cursor: pointer;
+}
+
+.checkbox-label span {
+    user-select: none;
+}
+
+/* Loading state */
+.loading {
+    text-align: center;
+    padding: 20px;
+    color: #6c757d;
+    font-style: italic;
 }

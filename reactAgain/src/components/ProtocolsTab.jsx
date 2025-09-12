@@ -14,16 +14,29 @@ const ProtocolsTab = () => {
         stain: protocolStore.stainProtocols,
         region: protocolStore.regionProtocols
     });
+    const [syncStatus, setSyncStatus] = useState({
+        lastSync: protocolStore.lastSync,
+        hasLocalChanges: false
+    });
+    const [isSyncing, setIsSyncing] = useState(false);
 
     useEffect(() => {
         // Load schemas for validation
-        schemaValidator.loadSchemas();
+        const loadSchemas = async () => {
+            await schemaValidator.loadSchemas();
+        };
+        loadSchemas();
 
         // Subscribe to protocol store changes
         const unsubscribe = protocolStore.subscribe(() => {
             setProtocols({
                 stain: protocolStore.stainProtocols,
                 region: protocolStore.regionProtocols
+            });
+            setSyncStatus({
+                lastSync: protocolStore.lastSync,
+                hasLocalChanges: protocolStore.getModifiedProtocols().stain.length > 0 ||
+                    protocolStore.getModifiedProtocols().region.length > 0
             });
         });
 
@@ -88,15 +101,82 @@ const ProtocolsTab = () => {
             return;
         }
 
+        setIsSyncing(true);
         try {
             // Test connection first
             await dsaAuthStore.testConnection();
 
-            // TODO: Implement actual protocol sync
-            console.log('DSA protocol sync not yet implemented');
-            alert('DSA protocol sync will be implemented soon');
+            // Get DSA configuration
+            const config = dsaAuthStore.getConfig();
+            const dsaConfig = {
+                baseUrl: config.baseUrl,
+                resourceId: config.resourceId,
+                token: dsaAuthStore.getToken()
+            };
+
+            // Sync protocols to DSA folder
+            const result = await protocolStore.syncWithDSA(dsaConfig);
+
+            if (result.success) {
+                alert(`Protocols synced successfully!\n\nPushed:\n- ${result.pushed.stainProtocols} stain protocols\n- ${result.pushed.regionProtocols} region protocols`);
+            } else {
+                alert(`Sync failed: ${result.error}`);
+            }
         } catch (error) {
             alert(`DSA sync failed: ${error.message}`);
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    const handlePullFromDSA = async () => {
+        const authStatus = dsaAuthStore.getStatus();
+
+        if (!authStatus.isAuthenticated) {
+            alert('Please login to DSA server first');
+            return;
+        }
+
+        if (!authStatus.isConfigured) {
+            alert('Please configure DSA server first');
+            return;
+        }
+
+        setIsSyncing(true);
+        try {
+            // Test connection first
+            await dsaAuthStore.testConnection();
+
+            // Get DSA configuration
+            const config = dsaAuthStore.getConfig();
+            const dsaConfig = {
+                baseUrl: config.baseUrl,
+                resourceId: config.resourceId,
+                token: dsaAuthStore.getToken()
+            };
+
+            // Confirm before overwriting local protocols
+            const confirmMessage = 'This will overwrite your local protocols with the versions from the DSA server. Continue?';
+            if (!window.confirm(confirmMessage)) {
+                return;
+            }
+
+            // Pull protocols from DSA folder
+            const result = await protocolStore.pullFromDSA(dsaConfig);
+
+            if (result.success) {
+                if (result.pulled.stainProtocols > 0 || result.pulled.regionProtocols > 0) {
+                    alert(`Protocols pulled successfully!\n\nPulled:\n- ${result.pulled.stainProtocols} stain protocols\n- ${result.pulled.regionProtocols} region protocols`);
+                } else {
+                    alert('No protocols found in DSA folder metadata.');
+                }
+            } else {
+                alert(`Pull failed: ${result.error}`);
+            }
+        } catch (error) {
+            alert(`DSA pull failed: ${error.message}`);
+        } finally {
+            setIsSyncing(false);
         }
     };
 
@@ -108,14 +188,36 @@ const ProtocolsTab = () => {
                 <div className="header-content">
                     <h2>Protocols</h2>
                     <p>Manage stain and region protocols for BDSA schema compliance</p>
+                    <div className="sync-status">
+                        {syncStatus.lastSync && (
+                            <span className="last-sync">
+                                Last sync: {syncStatus.lastSync.toLocaleString()}
+                            </span>
+                        )}
+                        {syncStatus.hasLocalChanges && (
+                            <span className="local-changes">
+                                ⚠️ Local changes pending
+                            </span>
+                        )}
+                    </div>
                 </div>
                 <div className="header-actions">
                     <button
                         className="sync-button"
-                        onClick={handleSyncWithDSA}
-                        title="Sync with DSA server (coming soon)"
+                        onClick={handlePullFromDSA}
+                        disabled={isSyncing}
+                        title="Pull protocols from DSA server"
                     >
-                        🔄 Sync with DSA
+                        {isSyncing ? '⏳' : '⬇️'} Pull from DSA
+                    </button>
+                    <button
+                        className={`sync-button ${syncStatus.hasLocalChanges ? 'has-changes' : ''}`}
+                        onClick={handleSyncWithDSA}
+                        disabled={isSyncing}
+                        title="Push protocols to DSA server"
+                    >
+                        {isSyncing ? '⏳' : '🔄'} Push to DSA
+                        {syncStatus.hasLocalChanges && !isSyncing && <span className="change-indicator">●</span>}
                     </button>
                 </div>
             </div>

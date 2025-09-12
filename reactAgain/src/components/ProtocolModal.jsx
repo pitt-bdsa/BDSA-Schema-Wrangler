@@ -20,6 +20,16 @@ const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
     });
     const [errors, setErrors] = useState({});
     const [isLoading, setIsLoading] = useState(false);
+    const [schemaLoaded, setSchemaLoaded] = useState(false);
+
+    useEffect(() => {
+        // Load schema on component mount
+        const loadSchema = async () => {
+            const loaded = await schemaValidator.loadSchemas();
+            setSchemaLoaded(loaded);
+        };
+        loadSchema();
+    }, []);
 
     useEffect(() => {
         if (protocol) {
@@ -77,157 +87,268 @@ const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
         }
     };
 
-    const renderStainFields = () => (
-        <>
-            <div className="form-group">
-                <label htmlFor="stainType">Stain Type *</label>
-                <select
-                    id="stainType"
-                    value={formData.stainType}
-                    onChange={(e) => handleFieldChange('stainType', e.target.value)}
-                    className={errors.stainType ? 'error' : ''}
-                >
-                    <option value="">Select stain type</option>
-                    {schemaValidator.getStainTypeOptions().map(option => (
-                        <option key={option.value} value={option.value}>
-                            {option.label}
-                        </option>
-                    ))}
-                </select>
-                {errors.stainType && <span className="error-message">{errors.stainType}</span>}
-            </div>
+    const renderStainFields = () => {
+        if (!schemaLoaded) {
+            return <div className="loading">Loading schema...</div>;
+        }
 
-            {formData.stainType && formData.stainType !== 'ignore' && (
-                <>
-                    <div className="form-group">
-                        <label htmlFor="antibody">Antibody</label>
-                        <select
-                            id="antibody"
-                            value={formData.antibody}
-                            onChange={(e) => handleFieldChange('antibody', e.target.value)}
-                        >
-                            <option value="">Select antibody</option>
-                            {schemaValidator.getAntibodyOptions(formData.stainType).map(antibody => (
-                                <option key={antibody} value={antibody}>{antibody}</option>
-                            ))}
-                        </select>
-                    </div>
+        return (
+            <>
+                <div className="form-group">
+                    <label htmlFor="stainType">Stain Type *</label>
+                    <select
+                        id="stainType"
+                        value={formData.stainType}
+                        onChange={(e) => {
+                            const newFormData = {
+                                ...formData,
+                                stainType: e.target.value,
+                                // Clear dependent fields when stain type changes
+                                antibody: '',
+                                technique: '',
+                                phosphoSpecific: ''
+                            };
+                            setFormData(newFormData);
+                            setErrors(prev => ({ ...prev, stainType: '', antibody: '', technique: '', phosphoSpecific: '' }));
+                            validateForm(newFormData);
+                        }}
+                        className={errors.stainType ? 'error' : ''}
+                    >
+                        <option value="">Select stain type</option>
+                        {schemaValidator.getStainTypeOptions().map(option => (
+                            <option key={option.value} value={option.value}>
+                                {option.label}
+                            </option>
+                        ))}
+                    </select>
+                    {errors.stainType && <span className="error-message">{errors.stainType}</span>}
+                </div>
 
-                    <div className="form-group">
-                        <label htmlFor="technique">Technique</label>
-                        <select
-                            id="technique"
-                            value={formData.technique}
-                            onChange={(e) => handleFieldChange('technique', e.target.value)}
-                        >
-                            <option value="">Select technique</option>
-                            {schemaValidator.getTechniqueOptions(formData.stainType).map(technique => (
-                                <option key={technique} value={technique}>{technique}</option>
-                            ))}
-                        </select>
-                    </div>
+                {formData.stainType && formData.stainType !== 'ignore' && (
+                    <>
+                        {/* Antibody field - only show if schema defines it */}
+                        {schemaValidator.getAntibodyOptions(formData.stainType).length > 0 && (
+                            <div className="form-group">
+                                <label htmlFor="antibody">Antibody</label>
+                                <select
+                                    id="antibody"
+                                    value={formData.antibody}
+                                    onChange={(e) => handleFieldChange('antibody', e.target.value)}
+                                    className={errors.antibody ? 'error' : ''}
+                                >
+                                    <option value="">Select antibody</option>
+                                    {schemaValidator.getAntibodyOptions(formData.stainType).map(antibody => (
+                                        <option key={antibody} value={antibody}>{antibody}</option>
+                                    ))}
+                                </select>
+                                {errors.antibody && <span className="error-message">{errors.antibody}</span>}
+                            </div>
+                        )}
 
-                    <div className="form-group">
-                        <label htmlFor="phosphoSpecific">Phospho-specific</label>
-                        <input
-                            type="text"
-                            id="phosphoSpecific"
-                            value={formData.phosphoSpecific}
-                            onChange={(e) => handleFieldChange('phosphoSpecific', e.target.value)}
-                            placeholder="e.g., pS6, pERK"
-                        />
-                    </div>
+                        {/* Technique field - only show if schema defines it */}
+                        {schemaValidator.getTechniqueOptions(formData.stainType).length > 0 && (
+                            <div className="form-group">
+                                <label htmlFor="technique">Technique</label>
+                                <select
+                                    id="technique"
+                                    value={formData.technique}
+                                    onChange={(e) => handleFieldChange('technique', e.target.value)}
+                                    className={errors.technique ? 'error' : ''}
+                                >
+                                    <option value="">Select technique</option>
+                                    {schemaValidator.getTechniqueOptions(formData.stainType).map(technique => (
+                                        <option key={technique} value={technique}>{technique}</option>
+                                    ))}
+                                </select>
+                                {errors.technique && <span className="error-message">{errors.technique}</span>}
+                            </div>
+                        )}
 
-                    <div className="form-group">
-                        <label htmlFor="dilution">Dilution</label>
-                        <input
-                            type="text"
-                            id="dilution"
-                            value={formData.dilution}
-                            onChange={(e) => handleFieldChange('dilution', e.target.value)}
-                            placeholder="e.g., 1:1000"
-                        />
-                    </div>
+                        {/* Phospho-specific field - only show if schema defines it */}
+                        {schemaValidator.getPhosphoSpecificOptions(formData.stainType).length > 0 && (
+                            <div className="form-group">
+                                <label htmlFor="phosphoSpecific">Phospho-specific</label>
+                                <select
+                                    id="phosphoSpecific"
+                                    value={formData.phosphoSpecific}
+                                    onChange={(e) => handleFieldChange('phosphoSpecific', e.target.value)}
+                                    className={errors.phosphoSpecific ? 'error' : ''}
+                                >
+                                    <option value="">Select phospho-specific</option>
+                                    {schemaValidator.getPhosphoSpecificOptions(formData.stainType).map(option => (
+                                        <option key={option} value={option}>{option}</option>
+                                    ))}
+                                </select>
+                                {errors.phosphoSpecific && <span className="error-message">{errors.phosphoSpecific}</span>}
+                            </div>
+                        )}
 
-                    <div className="form-group">
-                        <label htmlFor="vendor">Vendor</label>
-                        <input
-                            type="text"
-                            id="vendor"
-                            value={formData.vendor}
-                            onChange={(e) => handleFieldChange('vendor', e.target.value)}
-                            placeholder="e.g., Abcam, Cell Signaling"
-                        />
-                    </div>
-                </>
-            )}
-        </>
-    );
+                        {/* Dilution field - always show for non-ignore stains */}
+                        <div className="form-group">
+                            <label htmlFor="dilution">Dilution</label>
+                            <input
+                                type="text"
+                                id="dilution"
+                                value={formData.dilution}
+                                onChange={(e) => handleFieldChange('dilution', e.target.value)}
+                                placeholder="e.g., 1:1000"
+                                className={errors.dilution ? 'error' : ''}
+                            />
+                            {errors.dilution && <span className="error-message">{errors.dilution}</span>}
+                            {schemaValidator.getDilutionPattern(formData.stainType) && (
+                                <small className="field-hint">
+                                    Pattern: {schemaValidator.getDilutionPattern(formData.stainType)}
+                                </small>
+                            )}
+                        </div>
 
-    const renderRegionFields = () => (
-        <>
-            <div className="form-group">
-                <label htmlFor="regionType">Region Type *</label>
-                <select
-                    id="regionType"
-                    value={formData.regionType}
-                    onChange={(e) => handleFieldChange('regionType', e.target.value)}
-                    className={errors.regionType ? 'error' : ''}
-                >
-                    <option value="">Select region type</option>
-                    {schemaValidator.getRegionTypeOptions().map(option => (
-                        <option key={option.value} value={option.value}>
-                            {option.label}
-                        </option>
-                    ))}
-                </select>
-                {errors.regionType && <span className="error-message">{errors.regionType}</span>}
-            </div>
+                        {/* Vendor field - always show for non-ignore stains */}
+                        <div className="form-group">
+                            <label htmlFor="vendor">Vendor</label>
+                            <input
+                                type="text"
+                                id="vendor"
+                                value={formData.vendor}
+                                onChange={(e) => handleFieldChange('vendor', e.target.value)}
+                                placeholder="e.g., Abcam, Cell Signaling"
+                                className={errors.vendor ? 'error' : ''}
+                            />
+                            {errors.vendor && <span className="error-message">{errors.vendor}</span>}
+                            {schemaValidator.getVendorPattern(formData.stainType) && (
+                                <small className="field-hint">
+                                    Pattern: {schemaValidator.getVendorPattern(formData.stainType)}
+                                </small>
+                            )}
+                        </div>
+                    </>
+                )}
+            </>
+        );
+    };
 
-            {formData.regionType && formData.regionType !== 'ignore' && (
-                <>
-                    <div className="form-group">
-                        <label htmlFor="subRegion">Sub-Region</label>
-                        <input
-                            type="text"
-                            id="subRegion"
-                            value={formData.subRegion}
-                            onChange={(e) => handleFieldChange('subRegion', e.target.value)}
-                            placeholder="e.g., CA1, CA2, CA3"
-                        />
-                    </div>
+    const renderRegionFields = () => {
+        if (!schemaLoaded) {
+            return <div className="loading">Loading schema...</div>;
+        }
 
-                    <div className="form-group">
-                        <label htmlFor="hemisphere">Hemisphere</label>
-                        <select
-                            id="hemisphere"
-                            value={formData.hemisphere}
-                            onChange={(e) => handleFieldChange('hemisphere', e.target.value)}
-                        >
-                            <option value="">Select hemisphere</option>
-                            <option value="left">Left</option>
-                            <option value="right">Right</option>
-                            <option value="bilateral">Bilateral</option>
-                        </select>
-                    </div>
+        return (
+            <>
+                <div className="form-group">
+                    <label htmlFor="regionType">Region Type *</label>
+                    <select
+                        id="regionType"
+                        value={formData.regionType}
+                        onChange={(e) => {
+                            const newFormData = {
+                                ...formData,
+                                regionType: e.target.value,
+                                // Clear dependent fields when region type changes
+                                subRegion: ''
+                            };
+                            setFormData(newFormData);
+                            setErrors(prev => ({ ...prev, regionType: '', subRegion: '' }));
+                            validateForm(newFormData);
+                        }}
+                        className={errors.regionType ? 'error' : ''}
+                    >
+                        <option value="">Select region type</option>
+                        {schemaValidator.getRegionTypeOptions().map(option => (
+                            <option key={option.value} value={option.value}>
+                                {option.label}
+                            </option>
+                        ))}
+                    </select>
+                    {errors.regionType && <span className="error-message">{errors.regionType}</span>}
+                </div>
 
-                    <div className="form-group">
-                        <label htmlFor="sliceOrientation">Slice Orientation</label>
-                        <select
-                            id="sliceOrientation"
-                            value={formData.sliceOrientation}
-                            onChange={(e) => handleFieldChange('sliceOrientation', e.target.value)}
-                        >
-                            <option value="">Select orientation</option>
-                            <option value="coronal">Coronal</option>
-                            <option value="sagittal">Sagittal</option>
-                            <option value="horizontal">Horizontal</option>
-                        </select>
-                    </div>
-                </>
-            )}
-        </>
-    );
+                {formData.regionType && formData.regionType !== 'ignore' && (
+                    <>
+                        {/* Sub-Region field - only show if schema defines it */}
+                        {schemaValidator.getSubRegionOptions(formData.regionType).length > 0 && (
+                            <div className="form-group">
+                                <label htmlFor="subRegion">Sub-Region</label>
+                                <select
+                                    id="subRegion"
+                                    value={formData.subRegion}
+                                    onChange={(e) => handleFieldChange('subRegion', e.target.value)}
+                                    className={errors.subRegion ? 'error' : ''}
+                                >
+                                    <option value="">Select sub-region</option>
+                                    {schemaValidator.getSubRegionOptions(formData.regionType).map(subRegion => (
+                                        <option key={subRegion} value={subRegion}>{subRegion}</option>
+                                    ))}
+                                </select>
+                                {errors.subRegion && <span className="error-message">{errors.subRegion}</span>}
+                            </div>
+                        )}
+
+                        {/* Hemisphere field */}
+                        <div className="form-group">
+                            <label htmlFor="hemisphere">Hemisphere</label>
+                            <select
+                                id="hemisphere"
+                                value={formData.hemisphere}
+                                onChange={(e) => handleFieldChange('hemisphere', e.target.value)}
+                                className={errors.hemisphere ? 'error' : ''}
+                            >
+                                <option value="">Select hemisphere</option>
+                                {schemaValidator.getHemisphereOptions().map(hemisphere => (
+                                    <option key={hemisphere} value={hemisphere}>
+                                        {hemisphere.charAt(0).toUpperCase() + hemisphere.slice(1)}
+                                    </option>
+                                ))}
+                            </select>
+                            {errors.hemisphere && <span className="error-message">{errors.hemisphere}</span>}
+                        </div>
+
+                        {/* Slice Orientation field */}
+                        <div className="form-group">
+                            <label htmlFor="sliceOrientation">Slice Orientation</label>
+                            <select
+                                id="sliceOrientation"
+                                value={formData.sliceOrientation}
+                                onChange={(e) => handleFieldChange('sliceOrientation', e.target.value)}
+                                className={errors.sliceOrientation ? 'error' : ''}
+                            >
+                                <option value="">Select orientation</option>
+                                {schemaValidator.getSliceOrientationOptions().map(orientation => (
+                                    <option key={orientation} value={orientation}>
+                                        {orientation.charAt(0).toUpperCase() + orientation.slice(1)}
+                                    </option>
+                                ))}
+                            </select>
+                            {errors.sliceOrientation && <span className="error-message">{errors.sliceOrientation}</span>}
+                        </div>
+
+                        {/* Damage field - Hidden for now as it's slide-specific, not protocol-level */}
+                        {/* 
+                        <div className="form-group">
+                            <label>Damage (Optional)</label>
+                            <div className="checkbox-group">
+                                {schemaValidator.getDamageOptions().map(damageType => (
+                                    <label key={damageType} className="checkbox-label">
+                                        <input
+                                            type="checkbox"
+                                            checked={formData.damage.includes(damageType)}
+                                            onChange={(e) => {
+                                                const updatedDamage = e.target.checked
+                                                    ? [...formData.damage, damageType]
+                                                    : formData.damage.filter(d => d !== damageType);
+                                                handleFieldChange('damage', updatedDamage);
+                                            }}
+                                        />
+                                        <span>{damageType}</span>
+                                    </label>
+                                ))}
+                            </div>
+                            {errors.damage && <span className="error-message">{errors.damage}</span>}
+                        </div>
+                        */}
+                    </>
+                )}
+            </>
+        );
+    };
 
     return (
         <div className="modal-overlay" onClick={onClose}>

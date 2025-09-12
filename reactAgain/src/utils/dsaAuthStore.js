@@ -326,6 +326,14 @@ class DsaAuthStore {
         };
     }
 
+    getConfig() {
+        return { ...this.config };
+    }
+
+    getToken() {
+        return this.token;
+    }
+
     // Test connection to DSA server
     async testConnection() {
         if (!this.config.baseUrl) {

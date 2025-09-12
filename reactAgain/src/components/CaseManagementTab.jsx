@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import './CaseManagementTab.css';
 import dataStore, { setCaseIdInData } from '../utils/dataStore';
+import protocolStore from '../utils/protocolStore';
+import dsaAuthStore from '../utils/dsaAuthStore';
 
 const CaseManagementTab = () => {
     const [activeSubTab, setActiveSubTab] = useState('case-id-mapping');
@@ -300,6 +302,112 @@ const CaseManagementTab = () => {
         forceCaseIdMappingsUpdate();
     };
 
+    // Sync case ID mappings to DSA server
+    const handleSyncCaseIdMappingsToDSA = async () => {
+        const authStatus = dsaAuthStore.getStatus();
+
+        if (!authStatus.isAuthenticated) {
+            alert('Please login to DSA server first');
+            return;
+        }
+
+        if (!authStatus.isConfigured) {
+            alert('Please configure DSA server first');
+            return;
+        }
+
+        try {
+            // Test connection first
+            await dsaAuthStore.testConnection();
+
+            // Get DSA configuration
+            const config = dsaAuthStore.getConfig();
+            const dsaConfig = {
+                baseUrl: config.baseUrl,
+                resourceId: config.resourceId,
+                token: authStatus.token
+            };
+
+            // Get current case ID mappings
+            const caseIdMappings = dataStatus.caseIdMappings || {};
+
+            if (Object.keys(caseIdMappings).length === 0) {
+                alert('No case ID mappings to sync. Please generate some BDSA case IDs first.');
+                return;
+            }
+
+            // Sync case ID mappings to DSA
+            const result = await protocolStore.syncWithDSA(dsaConfig, caseIdMappings, bdsaInstitutionId);
+
+            if (result.success) {
+                alert(`Case ID mappings synced successfully!\n\nSynced ${result.pushed.caseIdMappings} case ID mappings to DSA server.`);
+            } else {
+                alert(`Sync failed: ${result.error}`);
+            }
+        } catch (error) {
+            alert(`DSA sync failed: ${error.message}`);
+        }
+    };
+
+    // Pull case ID mappings from DSA server
+    const handlePullCaseIdMappingsFromDSA = async () => {
+        const authStatus = dsaAuthStore.getStatus();
+
+        if (!authStatus.isAuthenticated) {
+            alert('Please login to DSA server first');
+            return;
+        }
+
+        if (!authStatus.isConfigured) {
+            alert('Please configure DSA server first');
+            return;
+        }
+
+        try {
+            // Test connection first
+            await dsaAuthStore.testConnection();
+
+            // Get DSA configuration
+            const config = dsaAuthStore.getConfig();
+            const dsaConfig = {
+                baseUrl: config.baseUrl,
+                resourceId: config.resourceId,
+                token: authStatus.token
+            };
+
+            // Confirm before overwriting local mappings
+            const confirmMessage = 'This will overwrite your local case ID mappings with the versions from the DSA server. Continue?';
+            if (!window.confirm(confirmMessage)) {
+                return;
+            }
+
+            // Pull case ID mappings from DSA
+            const result = await protocolStore.pullFromDSA(dsaConfig);
+
+            if (result.success) {
+                if (result.caseIdMappings && result.caseIdMappings.mappings) {
+                    // Convert the pulled mappings to the local format
+                    const newMappings = {};
+                    result.caseIdMappings.mappings.forEach(mapping => {
+                        newMappings[mapping.localCaseId] = mapping.bdsaCaseId;
+                    });
+
+                    // Update local case ID mappings
+                    dataStore.updateCaseIdMappings(newMappings);
+                    forceCaseIdMappingsUpdate();
+
+                    alert(`Case ID mappings pulled successfully!\n\nPulled ${result.pulled.caseIdMappings} case ID mappings from DSA server.`);
+                } else {
+                    alert('No case ID mappings found in DSA server.');
+                }
+            } else {
+                alert(`Pull failed: ${result.error}`);
+            }
+        } catch (error) {
+            alert(`DSA pull failed: ${error.message}`);
+        }
+    };
+
     // Handle sorting
     const handleSort = (field) => {
         if (sortField === field) {
@@ -539,6 +647,20 @@ const CaseManagementTab = () => {
                                     disabled={isGeneratingAll || filteredCaseIds.filter(c => !c.isMapped).length === 0}
                                 >
                                     🚀 Generate All
+                                </button>
+                                <button
+                                    className="dsa-sync-btn"
+                                    onClick={handleSyncCaseIdMappingsToDSA}
+                                    title="Push case ID mappings to DSA server"
+                                >
+                                    🔄 Push to DSA
+                                </button>
+                                <button
+                                    className="dsa-sync-btn"
+                                    onClick={handlePullCaseIdMappingsFromDSA}
+                                    title="Pull case ID mappings from DSA server"
+                                >
+                                    ⬇️ Pull from DSA
                                 </button>
                             </div>
                         </div>
