@@ -33,7 +33,7 @@
     padding: 15px 20px;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     border-radius: 10px;
-    color: white;
+    color: white !important;
     min-width: 120px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
@@ -43,11 +43,13 @@
     font-size: 2rem;
     font-weight: bold;
     margin-bottom: 5px;
+    color: white !important;
 }
 
 .stat-label {
     font-size: 0.9rem;
     opacity: 0.9;
+    color: white !important;
 }
 
 /* Sub-tabs */
@@ -375,6 +377,10 @@
 }
 
 .conflict-stat .stat-number.conflict {
+    color: #856404 !important;
+}
+
+.conflict-stat .stat-label {
     color: #856404 !important;
 }
 

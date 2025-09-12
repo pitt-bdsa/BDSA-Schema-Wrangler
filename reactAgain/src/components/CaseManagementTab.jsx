@@ -7,7 +7,7 @@ const CaseManagementTab = () => {
     const [dataStatus, setDataStatus] = useState(dataStore.getStatus());
     const [bdsaInstitutionId, setBdsaInstitutionId] = useState('001');
     const [showMappedCases, setShowMappedCases] = useState(true);
-    const [sortField, setSortField] = useState('localCaseId');
+    const [sortField, setSortField] = useState(null); // Start with no sorting
     const [sortDirection, setSortDirection] = useState('asc');
     const [isGenerating, setIsGenerating] = useState(false);
     const [isGeneratingAll, setIsGeneratingAll] = useState(false);
@@ -61,14 +61,17 @@ const CaseManagementTab = () => {
             }
         });
 
-        return Object.entries(caseIdCounts)
+        const allCases = Object.entries(caseIdCounts)
             .map(([caseId, count]) => ({
                 localCaseId: caseId,
                 rowCount: count,
                 bdsaCaseId: caseIdMappings.get(caseId) || null,
                 isMapped: Boolean(caseIdMappings.get(caseId))
-            }))
-            .sort((a, b) => {
+            }));
+
+        // Only apply sorting if a sort field is explicitly set
+        if (sortField) {
+            allCases.sort((a, b) => {
                 let aValue, bValue;
                 switch (sortField) {
                     case 'rowCount':
@@ -91,6 +94,9 @@ const CaseManagementTab = () => {
                     return aValue < bValue ? 1 : -1;
                 }
             });
+        }
+
+        return allCases;
     };
 
     // Filter cases based on mapped status
