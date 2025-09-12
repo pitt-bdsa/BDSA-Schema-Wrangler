@@ -3,7 +3,7 @@ import { AgGridReact } from 'ag-grid-react';
 import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
-import dataStore from '../utils/dataStore';
+import dataStore, { getItemsToSyncCount } from '../utils/dataStore';
 import dsaAuthStore from '../utils/dsaAuthStore';
 import RegexRulesModal from './RegexRulesModal';
 import BdsaMappingModal from './BdsaMappingModal';
@@ -795,7 +795,9 @@ const InputDataTab = () => {
                         onClick={() => setShowDsaSync(true)}
                         title="Sync BDSA metadata to DSA server"
                     >
-                        <span className="sync-icon">🔄</span>
+                        <span className={`sync-icon ${getItemsToSyncCount() > 0 ? 'sync-icon-orange' : ''}`}>
+                            {getItemsToSyncCount() > 0 ? '🟠' : '🔄'}
+                        </span>
                         <span className="sync-text">
                             <span>DSA</span>
                             <span>Metadata</span>

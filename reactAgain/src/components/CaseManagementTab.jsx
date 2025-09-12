@@ -42,27 +42,24 @@ const CaseManagementTab = () => {
         }
 
         const caseIdCounts = {};
-        const caseIdData = {};
 
+        // Count occurrences of each local case ID
         dataStatus.processedData.forEach((row) => {
             const localCaseId = row.BDSA?.bdsaLocal?.localCaseId;
-            const bdsaCaseId = row.BDSA?.bdsaLocal?.bdsaCaseId;
-
             if (localCaseId) {
                 caseIdCounts[localCaseId] = (caseIdCounts[localCaseId] || 0) + 1;
-                // Store the BDSA Case ID for this local case ID
-                if (bdsaCaseId) {
-                    caseIdData[localCaseId] = bdsaCaseId;
-                }
             }
         });
+
+        // Get case ID mappings from the data store (not from scanning data items)
+        const caseIdMappings = dataStore.caseIdMappings;
 
         return Object.entries(caseIdCounts)
             .map(([caseId, count]) => ({
                 localCaseId: caseId,
                 rowCount: count,
-                bdsaCaseId: caseIdData[caseId] || null,
-                isMapped: Boolean(caseIdData[caseId])
+                bdsaCaseId: caseIdMappings.get(caseId) || null,
+                isMapped: Boolean(caseIdMappings.get(caseId))
             }))
             .sort((a, b) => {
                 let aValue, bValue;

@@ -186,6 +186,10 @@
     background: #218838;
 }
 
+.sync-icon-orange {
+    color: #ff8c00;
+}
+
 .update-status-indicator {
     display: flex;
     align-items: center;

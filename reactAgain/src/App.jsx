@@ -8,12 +8,12 @@ import DsaLogin from './components/DsaLogin';
 import './App.css';
 
 function App() {
-    const [activeTab, setActiveTab] = useState(2);
+    const [activeTab, setActiveTab] = useState(0);
 
     const tabs = [
-        { id: 0, label: 'BDSA Schema', component: <SchemaTab /> },
-        { id: 1, label: 'Protocols', component: <ProtocolsTab /> },
-        { id: 2, label: 'Input Data', component: <InputDataTab /> },
+        { id: 0, label: 'Input Data', component: <InputDataTab /> },
+        { id: 1, label: 'BDSA Schema', component: <SchemaTab /> },
+        { id: 2, label: 'Protocols', component: <ProtocolsTab /> },
         { id: 3, label: 'Case Management', component: <CaseManagementTab /> }
     ];
 

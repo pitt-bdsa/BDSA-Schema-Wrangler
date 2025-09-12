@@ -84,6 +84,7 @@ const DsaSyncControl = () => {
     const getStatusDisplay = () => {
         switch (syncState.status) {
             case 'offline': return { text: 'Not Connected', className: 'status-offline' };
+            case 'ready': return { text: 'Ready to Sync', className: 'status-ready' };
             case 'syncing': return { text: 'Syncing...', className: 'status-syncing' };
             case 'synced': return { text: 'Synced', className: 'status-synced' };
             case 'error': return { text: 'Error', className: 'status-error' };

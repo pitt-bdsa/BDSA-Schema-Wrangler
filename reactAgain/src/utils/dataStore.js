@@ -17,6 +17,7 @@ class DataStore {
 
         // DSA sync state
         this.syncInProgress = false;
+        this.syncCancelled = false; // Flag to cancel sync loop
         this.syncStatus = 'offline'; // 'offline', 'syncing', 'synced', 'error'
         this.syncProgress = null;
         this.lastSyncResults = null;
@@ -120,6 +121,11 @@ class DataStore {
                     };
                     this.dataLoadTimestamp = new Date().toISOString();
                     this.modifiedItems.clear();
+
+                    // Clear case ID mappings when loading new data (they're specific to the previous dataset)
+                    this.caseIdMappings.clear();
+                    this.caseIdConflicts.clear();
+                    this.bdsaCaseIdConflicts.clear();
 
                     this.saveToStorage();
                     this.notify();
@@ -401,6 +407,11 @@ class DataStore {
 
     // Status and Getters
     getStatus() {
+        // Ensure BDSA structure is always initialized when data is accessed
+        if (this.processedData && this.processedData.length > 0) {
+            this.processedData = this.initializeBdsaStructure(this.processedData);
+        }
+
         return {
             processedData: this.processedData,
             dataSource: this.dataSource,
@@ -900,7 +911,8 @@ class DataStore {
                     }
                     item.BDSA._dataSource.bdsaCaseId = 'case_id_mapping';
 
-                    // Don't mark as modified - this is just metadata application
+                    // Mark as modified since this is a user action that should be synced
+                    this.modifiedItems.add(item.id);
                     updatedCount++;
                 }
             }
@@ -1187,8 +1199,8 @@ class DataStore {
                         localRegionId: null,
                         bdsaCaseId: null  // Initialize this field so the column appears
                     },
-                    _dataSource: {},
-                    _lastModified: new Date().toISOString()
+                    _dataSource: {}
+                    // Don't set _lastModified here - only set it when actually modifying data
                 };
             } else {
                 // Ensure bdsaLocal structure exists
@@ -1216,6 +1228,232 @@ class DataStore {
         });
     }
 
+    /**
+     * Set processed data and ensure BDSA structure is initialized
+     * This method should be used whenever data is loaded from any source
+     * @param {Array} data - The data to set
+     * @param {string} source - The data source ('csv', 'dsa', etc.)
+     * @param {Object} sourceInfo - Additional information about the data source
+     */
+    setProcessedData(data, source = null, sourceInfo = null) {
+        console.log('📊 Setting processed data with BDSA structure initialization');
+        this.processedData = this.initializeBdsaStructure(data);
+
+        if (source) {
+            this.dataSource = source;
+        }
+        if (sourceInfo) {
+            this.dataSourceInfo = sourceInfo;
+        }
+
+        this.dataLoadTimestamp = new Date().toISOString();
+        this.modifiedItems.clear();
+
+        // Clear case ID mappings when loading new data (they're specific to the previous dataset)
+        this.caseIdMappings.clear();
+        this.caseIdConflicts.clear();
+        this.bdsaCaseIdConflicts.clear();
+
+        this.saveToStorage();
+        this.notify();
+
+        console.log('✅ Processed data set with BDSA structure:', {
+            itemCount: this.processedData.length,
+            hasBdsaStructure: this.processedData.every(item => item.BDSA?.bdsaLocal?.hasOwnProperty('bdsaCaseId'))
+        });
+    }
+
+
+    // DSA Sync Methods
+    async syncBdsaMetadataToServer(progressCallback) {
+        if (this.syncInProgress) {
+            throw new Error('Sync already in progress');
+        }
+
+        console.log('🚀 Starting sync - setting syncInProgress to true');
+        this.syncInProgress = true;
+        this.syncCancelled = false; // Reset cancellation flag
+        this.syncStatus = 'syncing';
+        this.syncProgress = {
+            current: 0,
+            total: this.processedData.length,
+            percentage: 0,
+            success: 0,
+            errors: 0,
+            skipped: 0
+        };
+        this.notifySyncListeners('syncStatusChanged');
+        console.log('📡 Notified listeners of sync status change');
+
+        try {
+            const results = {
+                success: 0,
+                errors: 0,
+                skipped: 0,
+                details: []
+            };
+
+            for (let i = 0; i < this.processedData.length; i++) {
+                // Check for cancellation before processing each item
+                if (this.syncCancelled) {
+                    console.log('🛑 Sync cancelled by user, stopping at item', i);
+                    break;
+                }
+
+                const item = this.processedData[i];
+
+                try {
+                    // Check if item has BDSA metadata to sync AND has been modified
+                    if (item.BDSA?.bdsaLocal && this.shouldSyncItem(item)) {
+                        // Here you would implement the actual DSA API call
+                        // For now, we'll just simulate the sync
+                        await this.syncItemToServer(item);
+                        results.success++;
+                    } else {
+                        results.skipped++;
+                    }
+                } catch (error) {
+                    console.error(`Failed to sync item ${i}:`, error);
+                    results.errors++;
+                    results.details.push({
+                        itemIndex: i,
+                        error: error.message
+                    });
+                }
+
+                // Update progress
+                this.syncProgress.current = i + 1;
+                this.syncProgress.percentage = Math.round(((i + 1) / this.processedData.length) * 100);
+                this.syncProgress.success = results.success;
+                this.syncProgress.errors = results.errors;
+                this.syncProgress.skipped = results.skipped;
+
+                if (progressCallback) {
+                    progressCallback({
+                        current: i + 1,
+                        total: this.processedData.length,
+                        percentage: this.syncProgress.percentage,
+                        success: results.success,
+                        errors: results.errors,
+                        skipped: results.skipped
+                    });
+                }
+                this.notifySyncListeners('syncProgressUpdated');
+            }
+
+            // Check if sync was cancelled
+            if (this.syncCancelled) {
+                console.log('🚫 Sync was cancelled by user');
+                this.syncStatus = 'offline';
+                this.lastSyncResults = {
+                    ...results,
+                    cancelled: true,
+                    totalItems: this.processedData.length
+                };
+                this.notifySyncListeners('syncCancelled');
+            } else {
+                console.log('✅ Sync completed successfully');
+                this.syncStatus = 'synced';
+                this.lastSyncResults = results;
+                this.notifySyncListeners('syncCompleted');
+            }
+
+            return results;
+        } catch (error) {
+            console.error('❌ Sync failed:', error);
+            this.syncStatus = 'error';
+            this.notifySyncListeners('syncError');
+            throw error;
+        } finally {
+            console.log('🛑 Sync finished - setting syncInProgress to false');
+            this.syncInProgress = false;
+            this.syncCancelled = false; // Reset cancellation flag
+            this.notifySyncListeners('syncStatusChanged');
+        }
+    }
+
+    shouldSyncItem(item) {
+        // Only sync items that are explicitly marked as modified
+        return this.modifiedItems.has(item.id);
+    }
+
+    getItemsToSyncCount() {
+        // Simple: only count items that are explicitly marked as modified
+        return this.modifiedItems.size;
+    }
+
+    async syncItemToServer(item) {
+        // Placeholder for actual DSA API sync
+        // This would make an API call to update the item's metadata on the DSA server
+        console.log('Syncing item to server:', item.id);
+
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    cancelDsaMetadataSync() {
+        console.log('🛑 Cancel sync requested, current syncInProgress:', this.syncInProgress);
+        if (this.syncInProgress) {
+            this.syncCancelled = true; // Set cancellation flag
+            console.log('🚫 Sync cancellation flag set - will stop on next iteration');
+            // Don't set syncInProgress to false yet - let the loop handle it
+            this.notifySyncListeners('syncCancelled');
+        } else {
+            console.log('⚠️ Cancel requested but no sync in progress');
+        }
+    }
+
+    getSyncStatus() {
+        return {
+            inProgress: this.syncInProgress,
+            status: this.syncStatus,
+            progress: this.syncProgress,
+            lastResults: this.lastSyncResults
+        };
+    }
+
+    subscribeToSync(callback) {
+        this.syncListeners.add(callback);
+        return () => this.syncListeners.delete(callback);
+    }
+
+    notifySyncListeners(eventType) {
+        // Update sync status before notifying listeners
+        this.updateSyncStatus();
+
+        this.syncListeners.forEach(callback => {
+            try {
+                callback({
+                    eventType,
+                    dataStore: this.getSnapshot()
+                });
+            } catch (error) {
+                console.error('Error in sync listener:', error);
+            }
+        });
+    }
+
+    updateSyncStatus() {
+        // Don't change status if sync is in progress
+        if (this.syncInProgress) {
+            return;
+        }
+
+        // Check if we can sync (have DSA data and configuration)
+        const canSync = this.dataSource === 'dsa' &&
+            this.processedData &&
+            this.processedData.length > 0;
+
+        if (canSync) {
+            // If we have DSA data and it's not currently syncing, set to 'ready'
+            if (this.syncStatus === 'offline') {
+                this.syncStatus = 'ready';
+            }
+        } else {
+            // No DSA data or configuration, set to offline
+            this.syncStatus = 'offline';
+        }
+    }
 
     getSnapshot() {
         return {
@@ -1248,6 +1486,10 @@ export const cancelDsaMetadataSync = () => dataStore.cancelDsaMetadataSync();
 export const getSyncStatus = () => dataStore.getSyncStatus();
 export const subscribeToSyncEvents = (callback) => dataStore.subscribeToSync(callback);
 export const getDataStoreSnapshot = () => dataStore.getSnapshot();
+export const getItemsToSyncCount = () => dataStore.getItemsToSyncCount();
+
+// Export data management functions
+export const setProcessedData = (data, source, sourceInfo) => dataStore.setProcessedData(data, source, sourceInfo);
 
 // Export constants for sync events
 export const DATA_CHANGE_EVENTS = {
