@@ -6,7 +6,7 @@ const CaseManagementTab = () => {
     const [activeSubTab, setActiveSubTab] = useState('case-id-mapping');
     const [dataStatus, setDataStatus] = useState(dataStore.getStatus());
     const [bdsaInstitutionId, setBdsaInstitutionId] = useState('001');
-    const [showMappedCases, setShowMappedCases] = useState(true);
+    const [temporaryHideMapped, setTemporaryHideMapped] = useState(false);
     const [sortField, setSortField] = useState(null); // Start with no sorting
     const [sortDirection, setSortDirection] = useState('asc');
     const [isGenerating, setIsGenerating] = useState(false);
@@ -33,6 +33,13 @@ const CaseManagementTab = () => {
     const forceCaseIdMappingsUpdate = () => {
         setForceUpdate(prev => prev + 1);
         setDataStatus(dataStore.getStatus());
+    };
+
+    // Reset the temporary filter when new items are generated
+    const resetTemporaryFilter = () => {
+        if (temporaryHideMapped) {
+            setTemporaryHideMapped(false);
+        }
     };
 
     // Get unique case IDs from the data
@@ -102,11 +109,11 @@ const CaseManagementTab = () => {
     // Filter cases based on mapped status
     const filteredCaseIds = useMemo(() => {
         const allCases = getUniqueCaseIds();
-        if (showMappedCases) {
-            return allCases;
+        if (temporaryHideMapped) {
+            return allCases.filter(caseData => !caseData.isMapped);
         }
-        return allCases.filter(caseData => !caseData.isMapped);
-    }, [dataStatus.processedData, dataStatus.caseIdMappings, showMappedCases, sortField, sortDirection]);
+        return allCases;
+    }, [dataStatus.processedData, dataStatus.caseIdMappings, temporaryHideMapped, sortField, sortDirection]);
 
     // Detect duplicate BDSA Case IDs
     const duplicateBdsaCaseIds = useMemo(() => {
@@ -203,6 +210,7 @@ const CaseManagementTab = () => {
             // Set the case ID directly in the data items (single source of truth)
             setCaseIdInData(localCaseId, bdsaCaseId);
             forceCaseIdMappingsUpdate();
+            resetTemporaryFilter(); // Show the newly generated item
 
         } finally {
             setTimeout(() => setIsGenerating(false), 500);
@@ -268,6 +276,7 @@ const CaseManagementTab = () => {
             // Update all mappings at once
             dataStore.updateCaseIdMappings(newMappings);
             forceCaseIdMappingsUpdate();
+            resetTemporaryFilter(); // Show all newly generated items
 
         } finally {
             setIsGeneratingAll(false);
@@ -309,36 +318,31 @@ const CaseManagementTab = () => {
 
     return (
         <div className="case-management-tab">
-            <div className="case-management-header">
-                <h2>Case Management</h2>
-                <p>Manage BDSA case ID mappings and protocol assignments for specific cases.</p>
-
-                <div className="case-stats">
-                    <div className="stat-item">
-                        <span className="stat-number">{stats.unmappedSlides}</span>
-                        <span className="stat-label">Unmapped Slides</span>
-                    </div>
-                    <div className="stat-item">
-                        <span className="stat-number">{stats.mappedCases}</span>
-                        <span className="stat-label">Mapped Cases</span>
-                    </div>
-                    <div className="stat-item">
-                        <span className="stat-number">{stats.bdsaCaseIds}</span>
-                        <span className="stat-label">BDSA Case IDs</span>
-                    </div>
-                    {stats.localConflictCount > 0 && (
-                        <div className="stat-item conflict-stat">
-                            <span className="stat-number conflict">{stats.localConflictCount}</span>
-                            <span className="stat-label">Local Case ID Conflicts</span>
-                        </div>
-                    )}
-                    {stats.bdsaConflictCount > 0 && (
-                        <div className="stat-item conflict-stat">
-                            <span className="stat-number conflict">{stats.bdsaConflictCount}</span>
-                            <span className="stat-label">BDSA Case ID Conflicts</span>
-                        </div>
-                    )}
+            <div className="case-stats">
+                <div className="stat-item">
+                    <span className="stat-number">{stats.unmappedSlides}</span>
+                    <span className="stat-label">Unmapped Slides</span>
                 </div>
+                <div className="stat-item">
+                    <span className="stat-number">{stats.mappedCases}</span>
+                    <span className="stat-label">Mapped Cases</span>
+                </div>
+                <div className="stat-item">
+                    <span className="stat-number">{stats.bdsaCaseIds}</span>
+                    <span className="stat-label">BDSA Case IDs</span>
+                </div>
+                {stats.localConflictCount > 0 && (
+                    <div className="stat-item conflict-stat">
+                        <span className="stat-number conflict">{stats.localConflictCount}</span>
+                        <span className="stat-label">Local Case ID Conflicts</span>
+                    </div>
+                )}
+                {stats.bdsaConflictCount > 0 && (
+                    <div className="stat-item conflict-stat">
+                        <span className="stat-number conflict">{stats.bdsaConflictCount}</span>
+                        <span className="stat-label">BDSA Case ID Conflicts</span>
+                    </div>
+                )}
             </div>
 
             {/* Sub-tabs */}
@@ -524,10 +528,10 @@ const CaseManagementTab = () => {
                             </div>
                             <div className="mapping-controls">
                                 <button
-                                    className={`toggle-mapped-btn ${showMappedCases ? 'active' : ''}`}
-                                    onClick={() => setShowMappedCases(!showMappedCases)}
+                                    className={`toggle-mapped-btn ${temporaryHideMapped ? 'active' : ''}`}
+                                    onClick={() => setTemporaryHideMapped(!temporaryHideMapped)}
                                 >
-                                    👤 {showMappedCases ? 'Hide Mapped' : 'Show Mapped'}
+                                    👤 {temporaryHideMapped ? 'Show All' : 'Hide Mapped'}
                                 </button>
                                 <button
                                     className="generate-all-btn"
@@ -610,7 +614,7 @@ const CaseManagementTab = () => {
                     </div>
                 </div>
             )}
-        </div>
+        </div >
     );
 };
 
