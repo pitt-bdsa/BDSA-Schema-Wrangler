@@ -635,11 +635,13 @@ export const syncItemBdsaMetadata = async (baseUrl, item, girderToken, columnMap
         const localCaseId = item.BDSA?.bdsaLocal?.localCaseId || item[columnMapping.localCaseId] || '';
         const localStainID = item.BDSA?.bdsaLocal?.localStainID || item[columnMapping.localStainID] || '';
         const localRegionId = item.BDSA?.bdsaLocal?.localRegionId || item[columnMapping.localRegionId] || '';
+        const bdsaCaseId = item.BDSA?.bdsaLocal?.bdsaCaseId || '';
 
         console.log(`🔍 SYNC VALUES - Item ${itemId}:`, {
             localCaseId,
             localStainID,
             localRegionId,
+            bdsaCaseId,
             hasBDSAObject: !!item.BDSA,
             hasBdsaLocal: !!item.BDSA?.bdsaLocal,
             bdsaObject: item.BDSA,
@@ -652,16 +654,18 @@ export const syncItemBdsaMetadata = async (baseUrl, item, girderToken, columnMap
             localCaseId,
             localStainID,
             localRegionId,
+            bdsaCaseId,
             lastUpdated: new Date().toISOString(),
             source: 'BDSA-Schema-Wrangler'
         };
 
-        // Only sync if we have at least one local value
-        if (!localCaseId && !localStainID && !localRegionId) {
+        // Only sync if we have at least one local value or bdsaCaseId
+        if (!localCaseId && !localStainID && !localRegionId && !bdsaCaseId) {
             console.log(`🚨 SYNC SKIP - Item ${itemId} has no local metadata values:`, {
                 localCaseId,
                 localStainID,
                 localRegionId,
+                bdsaCaseId,
                 itemBDSA: item.BDSA,
                 columnMapping: columnMapping
             });
@@ -684,7 +688,8 @@ export const syncItemBdsaMetadata = async (baseUrl, item, girderToken, columnMap
             hasBeenModified,
             localCaseId,
             localStainID,
-            localRegionId
+            localRegionId,
+            bdsaCaseId
         });
 
         if (existingMetadata) {
@@ -699,15 +704,17 @@ export const syncItemBdsaMetadata = async (baseUrl, item, girderToken, columnMap
             const hasChanges =
                 existingMetadata.localCaseId !== localCaseId ||
                 normalizeForComparison(existingMetadata.localStainID) !== normalizeForComparison(localStainID) ||
-                normalizeForComparison(existingMetadata.localRegionId) !== normalizeForComparison(localRegionId);
+                normalizeForComparison(existingMetadata.localRegionId) !== normalizeForComparison(localRegionId) ||
+                existingMetadata.bdsaCaseId !== bdsaCaseId;
 
             console.log(`Skip check for item ${itemId}:`, {
                 existingMetadata: {
                     localCaseId: existingMetadata.localCaseId,
                     localStainID: existingMetadata.localStainID,
-                    localRegionId: existingMetadata.localRegionId
+                    localRegionId: existingMetadata.localRegionId,
+                    bdsaCaseId: existingMetadata.bdsaCaseId
                 },
-                newValues: { localCaseId, localStainID, localRegionId },
+                newValues: { localCaseId, localStainID, localRegionId, bdsaCaseId },
                 hasChanges,
                 hasBeenModified,
                 willSkip: !hasChanges && !hasBeenModified
@@ -737,10 +744,20 @@ export const syncItemBdsaMetadata = async (baseUrl, item, girderToken, columnMap
         // Update the item's metadata with BDSA structure
         // This will create/update meta.BDSA.bdsaLocal on the server
         const metadata = { BDSA: { bdsaLocal } };
+
+        console.log(`🔄 Making API call for item ${itemId}:`, {
+            baseUrl,
+            itemId,
+            metadata,
+            hasToken: !!girderToken
+        });
+
         const result = await updateItemMetadata(baseUrl, itemId, girderToken, metadata);
 
         if (result.success) {
-            console.log(`Successfully synced bdsaLocal metadata for item ${itemId}:`, bdsaLocal);
+            console.log(`✅ Successfully synced bdsaLocal metadata for item ${itemId}:`, bdsaLocal);
+        } else {
+            console.error(`❌ Failed to sync item ${itemId}:`, result);
         }
 
         return result;

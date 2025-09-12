@@ -7,14 +7,18 @@ const DsaSyncModal = ({ isOpen, onClose }) => {
     return (
         <div className="modal-overlay">
             <div className="modal-content dsa-sync-modal-content">
-                <DsaSyncControl />
-                <div className="modal-buttons">
-                    <button 
-                        className="close-modal-btn" 
+                <div className="modal-header">
+                    <h2>DSA Metadata Sync</h2>
+                    <button
+                        className="close-modal-btn"
                         onClick={onClose}
+                        title="Close"
                     >
-                        Close
+                        ×
                     </button>
+                </div>
+                <div className="modal-body">
+                    <DsaSyncControl />
                 </div>
             </div>
         </div>

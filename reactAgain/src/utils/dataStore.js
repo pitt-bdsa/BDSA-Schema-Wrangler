@@ -215,6 +215,7 @@ class DataStore {
 
     // DSA Data Loading
     async loadDsaData(dsaAuthStore) {
+        console.log('🚀 DEBUG - loadDsaData called');
         try {
             const authStatus = dsaAuthStore.getStatus();
             if (!authStatus.isAuthenticated) {
@@ -228,7 +229,9 @@ class DataStore {
             const config = dsaAuthStore.config;
             const token = dsaAuthStore.token;
 
+            console.log(' DEBUG - About to fetch items from DSA server');
             const items = await this.fetchDsaItems(config, token);
+            console.log(' DEBUG - Fetched items, about to transform:', items.length);
             const transformedData = this.transformDsaData(items);
 
             this.processedData = transformedData;
@@ -300,7 +303,51 @@ class DataStore {
             sampleItem: dsaData[0] ? Object.keys(dsaData[0]) : []
         });
 
+        // Debug: Check if the first few items have bdsaCaseId in meta.BDSA.bdsaLocal
+        for (let i = 0; i < Math.min(3, dsaData.length); i++) {
+            const item = dsaData[i];
+            const bdsaCaseId = item.meta?.BDSA?.bdsaLocal?.bdsaCaseId;
+            if (bdsaCaseId) {
+                console.log(`🔍 Found bdsaCaseId in server data for item ${i}:`, {
+                    itemId: item._id || item.id,
+                    bdsaCaseId: bdsaCaseId,
+                    fullBdsaLocal: item.meta?.BDSA?.bdsaLocal
+                });
+            }
+        }
+
         return dsaData.map((item, index) => {
+            // Debug: Log the raw item structure to see what we're getting from the server
+            if (index === 0) {
+                console.log('🔍 DEBUG - Raw DSA item structure:', {
+                    itemId: item._id || item.id,
+                    itemName: item.name,
+                    hasMeta: !!item.meta,
+                    metaKeys: item.meta ? Object.keys(item.meta) : [],
+                    hasBdsaMeta: !!(item.meta?.BDSA),
+                    bdsaKeys: item.meta?.BDSA ? Object.keys(item.meta.BDSA) : [],
+                    bdsaLocal: item.meta?.BDSA?.bdsaLocal
+                });
+            }
+
+            // Initialize BDSA object for local data management
+            // First, check if the item already has BDSA metadata from the server
+            const existingBdsaData = item.meta?.BDSA?.bdsaLocal || {};
+
+            // Debug: Log what we're extracting for the first few items
+            if (index < 3) {
+                console.log(`🔍 DEBUG - Extracting BDSA data for item ${index}:`, {
+                    itemId: item._id || item.id,
+                    existingBdsaData,
+                    extractedValues: {
+                        localCaseId: existingBdsaData.localCaseId || null,
+                        localStainID: existingBdsaData.localStainID || null,
+                        localRegionId: existingBdsaData.localRegionId || null,
+                        bdsaCaseId: existingBdsaData.bdsaCaseId || null
+                    }
+                });
+            }
+
             // Keep the original data structure - don't flatten it
             const transformedItem = {
                 // Include the original item data (nested structure preserved)
@@ -316,14 +363,19 @@ class DataStore {
                 dsa_size: item.size || item.fileSize || '',
                 dsa_mimeType: item.mimeType || item.contentType || '',
 
-                // Initialize BDSA object for local data management
                 BDSA: {
                     bdsaLocal: {
-                        localCaseId: null,
-                        localStainID: null,
-                        localRegionId: null
+                        localCaseId: existingBdsaData.localCaseId || null,
+                        localStainID: existingBdsaData.localStainID || null,
+                        localRegionId: existingBdsaData.localRegionId || null,
+                        bdsaCaseId: existingBdsaData.bdsaCaseId || null // Read existing bdsaCaseId from server
                     },
-                    _dataSource: {}, // Track where each field came from
+                    _dataSource: existingBdsaData.source ? {
+                        localCaseId: 'dsa_server',
+                        localStainID: 'dsa_server',
+                        localRegionId: 'dsa_server',
+                        bdsaCaseId: 'dsa_server'
+                    } : {}, // Track where each field came from
                     _lastModified: new Date().toISOString()
                 }
             };
@@ -878,14 +930,68 @@ class DataStore {
     }
 
     /**
+     * Set a case ID directly in the data items (single source of truth approach)
+     * @param {string} localCaseId - The local case ID to update
+     * @param {string|null} bdsaCaseId - The BDSA case ID to set, or null to clear
+     */
+    setCaseIdInData(localCaseId, bdsaCaseId) {
+        if (!this.processedData || this.processedData.length === 0) {
+            return;
+        }
+
+        let updatedCount = 0;
+        this.processedData.forEach((item) => {
+            if (item.BDSA?.bdsaLocal?.localCaseId === localCaseId) {
+                if (!item.BDSA) {
+                    item.BDSA = {};
+                }
+                if (!item.BDSA.bdsaLocal) {
+                    item.BDSA.bdsaLocal = {};
+                }
+
+                item.BDSA.bdsaLocal.bdsaCaseId = bdsaCaseId;
+                item.BDSA._lastModified = new Date().toISOString();
+
+                // Mark the data source for UI highlighting
+                if (!item.BDSA._dataSource) {
+                    item.BDSA._dataSource = {};
+                }
+
+                if (bdsaCaseId) {
+                    item.BDSA._dataSource.bdsaCaseId = 'case_id_mapping';
+                } else {
+                    delete item.BDSA._dataSource.bdsaCaseId;
+                }
+
+                // Mark as modified since this is a user action that should be synced
+                this.modifiedItems.add(item.id);
+                updatedCount++;
+            }
+        });
+
+        if (updatedCount > 0) {
+            const action = bdsaCaseId ? `Set` : `Cleared`;
+            const value = bdsaCaseId ? `${localCaseId} -> ${bdsaCaseId}` : localCaseId;
+            console.log(`${action} case ID ${value} for ${updatedCount} items`);
+            this.saveToStorage();
+            this.notify();
+        }
+    }
+
+    /**
      * Apply case ID mappings to the actual data items
      * This updates the BDSA.bdsaLocal.bdsaCaseId field in the data items
      */
     applyCaseIdMappingsToData() {
         if (!this.processedData || this.processedData.length === 0) {
+            console.log('🔧 applyCaseIdMappingsToData: No processed data');
             return;
         }
 
+        console.log(`🔧 applyCaseIdMappingsToData: Processing ${this.processedData.length} items with ${this.caseIdMappings.size} mappings`);
+        if (this.caseIdMappings.size > 0) {
+            console.log('🔧 Current mappings:', Array.from(this.caseIdMappings.entries()));
+        }
         let updatedCount = 0;
 
         this.processedData.forEach((item) => {
@@ -1189,6 +1295,12 @@ class DataStore {
             return data;
         }
 
+        console.log('🔧 DEBUG - initializeBdsaStructure called, checking first item:', {
+            hasBDSA: !!data[0]?.BDSA,
+            hasBdsaLocal: !!data[0]?.BDSA?.bdsaLocal,
+            bdsaLocalValues: data[0]?.BDSA?.bdsaLocal
+        });
+
         return data.map(item => {
             // Initialize BDSA structure if it doesn't exist
             if (!item.BDSA) {
@@ -1212,10 +1324,12 @@ class DataStore {
                         bdsaCaseId: null
                     };
                 } else {
-                    // Ensure bdsaCaseId field exists
+                    // Ensure bdsaCaseId field exists - but preserve existing value if it exists
                     if (!item.BDSA.bdsaLocal.hasOwnProperty('bdsaCaseId')) {
                         item.BDSA.bdsaLocal.bdsaCaseId = null;
                     }
+                    // Preserve existing values - don't overwrite them with null
+                    // The existing values should already be set by transformDsaData
                 }
 
                 // Ensure _dataSource exists
@@ -1253,6 +1367,9 @@ class DataStore {
         this.caseIdMappings.clear();
         this.caseIdConflicts.clear();
         this.bdsaCaseIdConflicts.clear();
+
+        // Clear sync results when loading new data (they're specific to the previous dataset)
+        this.lastSyncResults = null;
 
         this.saveToStorage();
         this.notify();
@@ -1383,12 +1500,46 @@ class DataStore {
     }
 
     async syncItemToServer(item) {
-        // Placeholder for actual DSA API sync
-        // This would make an API call to update the item's metadata on the DSA server
         console.log('Syncing item to server:', item.id);
 
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Get DSA configuration from auth store
+        const { default: dsaAuthStore } = await import('./dsaAuthStore.js');
+        const authStatus = dsaAuthStore.getStatus();
+
+        if (!authStatus.isAuthenticated || !authStatus.serverUrl || !authStatus.hasToken) {
+            throw new Error('DSA configuration or authentication token not available');
+        }
+
+        console.log('DSA auth status for sync:', {
+            isAuthenticated: authStatus.isAuthenticated,
+            hasConfig: !!authStatus.serverUrl,
+            hasToken: authStatus.hasToken,
+            baseUrl: authStatus.serverUrl
+        });
+
+        // Import the DSA sync function dynamically to avoid circular dependencies
+        const { syncItemBdsaMetadata } = await import('./dsaIntegration.js');
+
+        // Use empty column mapping since we're reading from BDSA.bdsaLocal directly
+        const columnMapping = {
+            localCaseId: 'BDSA.bdsaLocal.localCaseId',
+            localStainID: 'BDSA.bdsaLocal.localStainID',
+            localRegionId: 'BDSA.bdsaLocal.localRegionId'
+        };
+
+        const result = await syncItemBdsaMetadata(
+            authStatus.serverUrl,
+            item,
+            dsaAuthStore.token,
+            columnMapping,
+            () => this.syncCancelled
+        );
+
+        if (!result.success) {
+            throw new Error(result.error || 'Sync failed');
+        }
+
+        console.log('Successfully synced item to server:', item.id);
     }
 
     cancelDsaMetadataSync() {
@@ -1484,12 +1635,15 @@ const dataStore = new DataStore();
 export const syncBdsaMetadataToServer = (progressCallback) => dataStore.syncBdsaMetadataToServer(progressCallback);
 export const cancelDsaMetadataSync = () => dataStore.cancelDsaMetadataSync();
 export const getSyncStatus = () => dataStore.getSyncStatus();
+export const subscribe = (callback) => dataStore.subscribe(callback);
 export const subscribeToSyncEvents = (callback) => dataStore.subscribeToSync(callback);
 export const getDataStoreSnapshot = () => dataStore.getSnapshot();
 export const getItemsToSyncCount = () => dataStore.getItemsToSyncCount();
 
 // Export data management functions
 export const setProcessedData = (data, source, sourceInfo) => dataStore.setProcessedData(data, source, sourceInfo);
+export const setCaseIdInData = (localCaseId, bdsaCaseId) => dataStore.setCaseIdInData(localCaseId, bdsaCaseId);
+export const loadDsaData = (dsaAuthStore) => dataStore.loadDsaData(dsaAuthStore);
 
 // Export constants for sync events
 export const DATA_CHANGE_EVENTS = {

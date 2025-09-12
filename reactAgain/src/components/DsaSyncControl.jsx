@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { syncBdsaMetadataToServer, cancelDsaMetadataSync, getSyncStatus, subscribeToSyncEvents, getDataStoreSnapshot, DATA_CHANGE_EVENTS } from '../utils/dataStore';
+import { syncBdsaMetadataToServer, cancelDsaMetadataSync, getSyncStatus, subscribeToSyncEvents, subscribe, getDataStoreSnapshot, getItemsToSyncCount, loadDsaData, DATA_CHANGE_EVENTS } from '../utils/dataStore';
 import dsaAuthStore from '../utils/dsaAuthStore';
+import { CONFIG } from '../utils/config';
 import './DsaSyncControl.css';
 
 const DsaSyncControl = () => {
@@ -15,7 +16,7 @@ const DsaSyncControl = () => {
 
     useEffect(() => {
         // Subscribe to sync events only (separate from main data store events)
-        const unsubscribe = subscribeToSyncEvents((event) => {
+        const unsubscribeSync = subscribeToSyncEvents((event) => {
             console.log('DsaSyncControl received sync event:', event.eventType);
 
             // Get the latest data store snapshot
@@ -25,6 +26,16 @@ const DsaSyncControl = () => {
             // Update sync state - all events from subscribeToSyncEvents are sync-related
             const newSyncState = getSyncStatus();
             setSyncState(newSyncState);
+        });
+
+        // Subscribe to general data store changes (including data refresh)
+        const unsubscribeData = subscribe(() => {
+            console.log('DsaSyncControl received data change event');
+
+            // Update data store and sync state when data changes
+            const latestDataStore = getDataStoreSnapshot();
+            setDataStore(latestDataStore);
+            setSyncState(getSyncStatus());
         });
 
         // Subscribe to auth store changes
@@ -39,7 +50,8 @@ const DsaSyncControl = () => {
         setSyncState(getSyncStatus());
 
         return () => {
-            unsubscribe();
+            unsubscribeSync();
+            unsubscribeData();
             unsubscribeAuth();
         };
     }, []);
@@ -50,6 +62,18 @@ const DsaSyncControl = () => {
             await syncBdsaMetadataToServer((progress) => {
                 console.log('Sync progress:', progress);
             });
+
+            // Auto-refresh data after successful sync if enabled
+            if (CONFIG.AUTO_REFRESH_AFTER_SYNC) {
+                console.log('🔄 Auto-refreshing data after sync...');
+                try {
+                    await loadDsaData(dsaAuthStore);
+                    console.log('✅ Data refreshed successfully after sync');
+                } catch (refreshError) {
+                    console.error('❌ Failed to refresh data after sync:', refreshError);
+                    // Don't show error to user since sync was successful
+                }
+            }
         } catch (error) {
             console.error('Sync failed:', error);
             alert(`Sync failed: ${error.message}`);
@@ -96,19 +120,13 @@ const DsaSyncControl = () => {
 
     return (
         <div className="dsa-sync-control">
-            <div className="sync-header">
-                <h3>🔄 DSA Metadata Sync</h3>
-                <div className={`sync-status ${statusDisplay.className}`}>
-                    {statusDisplay.text}
-                </div>
-            </div>
 
             <div className="sync-info">
                 <p>Sync BDSA metadata (localCaseId, localStainID, localRegionId) to DSA server as <code>bdsaLocal</code> field.</p>
 
                 {dataStore?.processedData?.length > 0 && (
                     <div className="sync-stats">
-                        <span>📊 {dataStore.processedData.length} items ready to sync</span>
+                        <span>📊 {getItemsToSyncCount()} items ready to sync</span>
                     </div>
                 )}
             </div>
@@ -187,6 +205,15 @@ const DsaSyncControl = () => {
                             Data loaded ({dataStore?.processedData?.length || 0} items)
                         </li>
                     </ul>
+                </div>
+            )}
+
+            {/* Show connection status at bottom only when relevant */}
+            {(syncState.inProgress || syncState.status === 'error' || syncState.status === 'synced') && (
+                <div className="sync-status-footer">
+                    <div className={`sync-status ${statusDisplay.className}`}>
+                        {statusDisplay.text}
+                    </div>
                 </div>
             )}
         </div>

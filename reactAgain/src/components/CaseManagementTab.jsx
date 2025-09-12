@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import './CaseManagementTab.css';
-import dataStore from '../utils/dataStore';
+import dataStore, { setCaseIdInData } from '../utils/dataStore';
 
 const CaseManagementTab = () => {
     const [activeSubTab, setActiveSubTab] = useState('case-id-mapping');
@@ -51,8 +51,15 @@ const CaseManagementTab = () => {
             }
         });
 
-        // Get case ID mappings from the data store (not from scanning data items)
-        const caseIdMappings = dataStore.caseIdMappings;
+        // Read case ID mappings directly from the data items (single source of truth)
+        const caseIdMappings = new Map();
+        dataStatus.processedData?.forEach((item) => {
+            const localCaseId = item.BDSA?.bdsaLocal?.localCaseId;
+            const bdsaCaseId = item.BDSA?.bdsaLocal?.bdsaCaseId;
+            if (localCaseId && bdsaCaseId) {
+                caseIdMappings.set(localCaseId, bdsaCaseId);
+            }
+        });
 
         return Object.entries(caseIdCounts)
             .map(([caseId, count]) => ({
@@ -187,10 +194,8 @@ const CaseManagementTab = () => {
             const nextNumber = maxNumber + 1;
             const bdsaCaseId = `BDSA-${bdsaInstitutionId.padStart(3, '0')}-${nextNumber.toString().padStart(4, '0')}`;
 
-            // Update the case ID mapping
-            const caseIdMappings = dataStatus.caseIdMappings || {};
-            const newMappings = { ...caseIdMappings, [localCaseId]: bdsaCaseId };
-            dataStore.updateCaseIdMappings(newMappings);
+            // Set the case ID directly in the data items (single source of truth)
+            setCaseIdInData(localCaseId, bdsaCaseId);
             forceCaseIdMappingsUpdate();
 
         } finally {
@@ -201,16 +206,15 @@ const CaseManagementTab = () => {
     // Update case ID mapping
     const updateCaseIdMapping = (localCaseId, bdsaCaseId) => {
         const trimmedValue = bdsaCaseId ? bdsaCaseId.trim() : '';
-        const caseIdMappings = dataStatus.caseIdMappings || {};
 
-        const newMappings = { ...caseIdMappings };
         if (trimmedValue) {
-            newMappings[localCaseId] = trimmedValue;
+            // Set the case ID directly in the data items
+            setCaseIdInData(localCaseId, trimmedValue);
         } else {
-            delete newMappings[localCaseId];
+            // Clear the case ID by setting it to null
+            setCaseIdInData(localCaseId, null);
         }
 
-        dataStore.updateCaseIdMappings(newMappings);
         forceCaseIdMappingsUpdate();
     };
 
