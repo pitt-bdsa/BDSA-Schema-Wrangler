@@ -1,11 +1,21 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import './CaseManagementTab.css';
-import dataStore, { setCaseIdInData } from '../utils/dataStore';
+import dataStore, { setCaseIdInData, generateUnmappedCases } from '../utils/dataStore';
 import protocolStore from '../utils/protocolStore';
 import dsaAuthStore from '../utils/dsaAuthStore';
 
 const CaseManagementTab = () => {
     const [activeSubTab, setActiveSubTab] = useState('case-id-mapping');
+
+    // Protocol mapping state
+    const [unmappedCases, setUnmappedCases] = useState([]);
+    const [selectedCase, setSelectedCase] = useState(null);
+    const [showUnmappedOnly, setShowUnmappedOnly] = useState(true);
+    const [hideMappedProtocols, setHideMappedProtocols] = useState(false);
+    const [expandedStainGroups, setExpandedStainGroups] = useState(new Set());
+    const [expandedRegionGroups, setExpandedRegionGroups] = useState(new Set());
+    const [selectedSlides, setSelectedSlides] = useState(new Set());
+    const [protocolUpdateCounter, setProtocolUpdateCounter] = useState(0);
     const [dataStatus, setDataStatus] = useState(dataStore.getStatus());
     const [bdsaInstitutionId, setBdsaInstitutionId] = useState('001');
     const [temporaryHideMapped, setTemporaryHideMapped] = useState(false);
@@ -31,6 +41,14 @@ const CaseManagementTab = () => {
         }
     }, [dataStatus.processedData]);
 
+    // Generate unmapped cases when data changes
+    useEffect(() => {
+        if (dataStatus.processedData && dataStatus.processedData.length > 0) {
+            const newUnmappedCases = generateUnmappedCases();
+            setUnmappedCases(newUnmappedCases);
+        }
+    }, [dataStatus.processedData, dataStatus.caseIdMappings, dataStatus.caseProtocolMappings]);
+
     // Force update when case ID mappings change (since updateCaseIdMappings doesn't notify)
     const forceCaseIdMappingsUpdate = () => {
         setForceUpdate(prev => prev + 1);
@@ -42,6 +60,101 @@ const CaseManagementTab = () => {
         if (temporaryHideMapped) {
             setTemporaryHideMapped(false);
         }
+    };
+
+    // Protocol mapping helper functions
+    const getGroupedSlides = (slides) => {
+        const grouped = {};
+        slides.forEach(slide => {
+            const stainType = slide.stainType;
+            if (!grouped[stainType]) {
+                grouped[stainType] = {
+                    stainType: stainType,
+                    slides: [],
+                    count: 0,
+                    status: 'unmapped'
+                };
+            }
+            grouped[stainType].slides.push(slide);
+            grouped[stainType].count++;
+
+            // If any slide in the group is mapped, mark the group as mapped
+            if (slide.status === 'mapped') {
+                grouped[stainType].status = 'mapped';
+            }
+        });
+
+        // Double-check the status by looking at actual protocol mappings
+        Object.values(grouped).forEach(group => {
+            const allSlidesMapped = group.slides.every(slide => {
+                const slideProtocols = dataStatus.caseProtocolMappings[selectedCase?.bdsaId]?.[slide.id] || { stain: [], region: [] };
+                const hasStainProtocols = (slideProtocols.stain || []).length > 0;
+                return hasStainProtocols;
+            });
+
+            if (allSlidesMapped) {
+                group.status = 'mapped';
+            }
+        });
+
+        return Object.values(grouped);
+    };
+
+    const toggleStainGroupExpansion = (stainType) => {
+        const newExpanded = new Set(expandedStainGroups);
+        if (newExpanded.has(stainType)) {
+            newExpanded.delete(stainType);
+        } else {
+            newExpanded.add(stainType);
+        }
+        setExpandedStainGroups(newExpanded);
+    };
+
+    const toggleSlideSelection = (slideId) => {
+        const newSelected = new Set(selectedSlides);
+        if (newSelected.has(slideId)) {
+            newSelected.delete(slideId);
+        } else {
+            newSelected.add(slideId);
+        }
+        setSelectedSlides(newSelected);
+    };
+
+    const selectAllSlidesInGroup = (group) => {
+        const newSelected = new Set(selectedSlides);
+        group.slides.forEach(slide => newSelected.add(slide.id));
+        setSelectedSlides(newSelected);
+    };
+
+    const deselectAllSlidesInGroup = (group) => {
+        const newSelected = new Set(selectedSlides);
+        group.slides.forEach(slide => newSelected.delete(slide.id));
+        setSelectedSlides(newSelected);
+    };
+
+    const getSelectedSlidesInGroup = (group) => {
+        return group.slides.filter(slide => selectedSlides.has(slide.id));
+    };
+
+    const handleProtocolMapping = (slides, protocolId) => {
+        if (!selectedCase) return;
+
+        // Determine which slides to operate on
+        const isExpanded = expandedStainGroups.has(slides[0]?.stainType);
+        const selectedSlidesInGroup = isExpanded ? getSelectedSlidesInGroup({ slides }) : [];
+        const slidesToOperateOn = isExpanded && selectedSlidesInGroup.length > 0 ? selectedSlidesInGroup : slides;
+
+        // Apply protocol to selected slides
+        slidesToOperateOn.forEach(slide => {
+            dataStore.addProtocolMapping(selectedCase.bdsaId, slide.id, protocolId, 'stain');
+        });
+
+        // Update the protocol counter to trigger re-render
+        setProtocolUpdateCounter(prev => prev + 1);
+
+        // Refresh unmapped cases
+        const newUnmappedCases = generateUnmappedCases();
+        setUnmappedCases(newUnmappedCases);
     };
 
     // Get unique case IDs from the data
@@ -730,9 +843,187 @@ const CaseManagementTab = () => {
             {/* Protocol Mapping Content */}
             {activeSubTab === 'protocol-mapping' && (
                 <div className="protocol-mapping-content">
-                    <div className="no-case-selected">
-                        <h3>Protocol Mapping</h3>
-                        <p>Protocol mapping functionality will be implemented here.</p>
+                    <div className="cases-panel">
+                        <h3>Select BDSA Case</h3>
+                        {!dataStatus.columnMappings?.localStainID ? (
+                            <div className="no-stain-id-configured">
+                                <p>Please configure the Local Stain ID column in the BDSA Settings tab to view unmapped cases.</p>
+                            </div>
+                        ) : unmappedCases.length === 0 ? (
+                            <div className="no-unmapped-cases">
+                                <p>No BDSA cases with unmapped stain protocols found.</p>
+                                <small>Make sure you have:</small>
+                                <ul>
+                                    <li>BDSA case IDs mapped in the Case ID Mapping tab</li>
+                                    <li>Local stain IDs configured in BDSA Settings</li>
+                                    <li>Stain protocols defined in the Protocols tab</li>
+                                </ul>
+                            </div>
+                        ) : (
+                            <div className="case-selection">
+                                <div className="case-selection-controls">
+                                    <label>Choose a BDSA Case:</label>
+                                    <select
+                                        value={selectedCase?.bdsaId || ''}
+                                        onChange={(e) => {
+                                            const selectedBdsaId = e.target.value;
+                                            const caseData = unmappedCases.find(c => c.bdsaId === selectedBdsaId);
+                                            setSelectedCase(caseData || null);
+                                        }}
+                                        className="case-select-dropdown"
+                                    >
+                                        <option value="">-- Select BDSA Case --</option>
+                                        {unmappedCases.map(caseData => (
+                                            <option key={caseData.bdsaId} value={caseData.bdsaId}>
+                                                {caseData.bdsaId} ({caseData.slides.filter(s => s.status === 'unmapped').length} unmapped)
+                                            </option>
+                                        ))}
+                                    </select>
+
+                                    <div className="filter-control">
+                                        <label className="checkbox-label">
+                                            <input
+                                                type="checkbox"
+                                                checked={showUnmappedOnly}
+                                                onChange={(e) => setShowUnmappedOnly(e.target.checked)}
+                                            />
+                                            <span>Show only cases with unmapped slides</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                {selectedCase && (
+                                    <div className="selected-case-summary">
+                                        <h4>Selected: {selectedCase.bdsaId}</h4>
+                                        <p>Local Case ID: {selectedCase.localCaseId}</p>
+                                        <div className="case-slides">
+                                            {getGroupedSlides(selectedCase.slides).map((group, index) => (
+                                                <span
+                                                    key={`${group.stainType}-${index}`}
+                                                    className={`slide-badge ${group.status}`}
+                                                >
+                                                    {group.stainType}
+                                                    {group.count > 1 && <span className="slide-count-badge">×{group.count}</span>}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="mapping-panel">
+                        {selectedCase ? (
+                            <div className="selected-case">
+                                <div className="case-header-with-actions">
+                                    <h3>Mapping Protocols for {selectedCase.bdsaId}</h3>
+                                    <div className="action-buttons">
+                                        <button
+                                            type="button"
+                                            className={`hide-mapped-btn ${hideMappedProtocols ? 'active' : ''}`}
+                                            onClick={() => setHideMappedProtocols(!hideMappedProtocols)}
+                                            title={hideMappedProtocols ? 'Show all protocols' : 'Hide mapped protocols'}
+                                        >
+                                            {hideMappedProtocols ? '👁️ Show All' : '🙈 Hide Mapped'}
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="slides-mapping">
+                                    {getGroupedSlides(selectedCase.slides).map((group, groupIndex) => (
+                                        <div key={`${group.stainType}-${groupIndex}`} className="slide-mapping">
+                                            <div className="slide-info">
+                                                <div className="slide-header">
+                                                    <span className="slide-id">
+                                                        {group.stainType} ({group.count} slides)
+                                                    </span>
+                                                    {group.count > 1 && (
+                                                        <button
+                                                            type="button"
+                                                            className="expand-toggle-btn"
+                                                            onClick={() => toggleStainGroupExpansion(group.stainType)}
+                                                            title={expandedStainGroups.has(group.stainType) ? 'Collapse individual slides' : 'Show individual slides'}
+                                                        >
+                                                            {expandedStainGroups.has(group.stainType) ? '▼' : '▶'}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                <span className="stain-type">{group.stainType}</span>
+                                                <span className={`status ${group.status}`}>
+                                                    {group.status === 'mapped' ? '✓ Mapped' : '⏳ Unmapped'}
+                                                </span>
+                                            </div>
+
+                                            {/* Individual slides when expanded */}
+                                            {expandedStainGroups.has(group.stainType) && group.slides.length > 1 && (
+                                                <div className="individual-slides">
+                                                    <div className="individual-slides-header">
+                                                        <div className="selection-controls">
+                                                            <button
+                                                                type="button"
+                                                                className="select-all-btn"
+                                                                onClick={() => selectAllSlidesInGroup(group)}
+                                                            >
+                                                                Select All
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                className="deselect-all-btn"
+                                                                onClick={() => deselectAllSlidesInGroup(group)}
+                                                            >
+                                                                Deselect All
+                                                            </button>
+                                                        </div>
+                                                        <span className="selected-count">
+                                                            {getSelectedSlidesInGroup(group).length} of {group.slides.length} selected
+                                                        </span>
+                                                    </div>
+                                                    {group.slides.map(slide => (
+                                                        <div key={slide.id} className="individual-slide">
+                                                            <label className="slide-checkbox">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={selectedSlides.has(slide.id)}
+                                                                    onChange={() => toggleSlideSelection(slide.id)}
+                                                                />
+                                                                <span className="slide-detail-id">{slide.filename || slide.localStainId}</span>
+                                                            </label>
+                                                            <span className={`slide-detail-status ${slide.status}`}>
+                                                                {slide.status === 'mapped' ? '✓' : '⏳'}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {/* Protocol selection for unmapped groups */}
+                                            {group.status === 'unmapped' && (
+                                                <div className="protocol-selection">
+                                                    <div className="protocol-buttons">
+                                                        {protocolStore.stainProtocols.map(protocol => (
+                                                            <button
+                                                                key={protocol.id}
+                                                                type="button"
+                                                                className="protocol-btn"
+                                                                onClick={() => handleProtocolMapping(group.slides, protocol.id)}
+                                                                title={`Apply ${protocol.name} to all slides in this group`}
+                                                            >
+                                                                {protocol.name}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="no-case-selected">
+                                <h3>No Case Selected</h3>
+                                <p>Please select a BDSA case from the list above to view and map protocols.</p>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

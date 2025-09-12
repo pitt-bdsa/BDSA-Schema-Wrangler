@@ -1626,6 +1626,86 @@ class DataStore {
             columnMappings: this.columnMappings
         };
     }
+
+    // Generate unmapped cases from current data for protocol mapping
+    generateUnmappedCases() {
+        if (!this.processedData.length || !this.columnMappings.localStainID) {
+            return [];
+        }
+
+        const caseGroups = {};
+
+        this.processedData.forEach(row => {
+            const localCaseId = row[this.columnMappings.localCaseId];
+            const localStainId = row[this.columnMappings.localStainID];
+            const localRegionId = row[this.columnMappings.localRegionId];
+            const filename = row['name'] || row['dsa_name'];
+
+            const finalFilename = filename || `${localCaseId}_${localStainId || localRegionId}.svs`;
+
+            // Skip if no stain ID or region ID, or no BDSA case ID mapping
+            if ((!localStainId && !localRegionId) || !this.caseIdMappings.has(localCaseId)) {
+                return;
+            }
+
+            const bdsaCaseId = this.caseIdMappings.get(localCaseId);
+
+            if (!caseGroups[bdsaCaseId]) {
+                caseGroups[bdsaCaseId] = {
+                    bdsaId: bdsaCaseId,
+                    localCaseId: localCaseId,
+                    slides: []
+                };
+            }
+
+            // Use dsa_id if available, otherwise fall back to constructed slideId format
+            const slideId = row.dsa_id || `${bdsaCaseId}_${finalFilename}`;
+            const slideProtocols = this.caseProtocolMappings.get(bdsaCaseId)?.[slideId] || { stain: [], region: [] };
+
+            // Check if slide is mapped (has protocols)
+            const hasStainProtocols = (slideProtocols.stain || []).length > 0;
+            const hasRegionProtocols = (slideProtocols.region || []).length > 0;
+            const isMapped = hasStainProtocols || hasRegionProtocols;
+
+            caseGroups[bdsaCaseId].slides.push({
+                id: slideId,
+                stainType: localStainId,
+                regionType: localRegionId,
+                status: isMapped ? 'mapped' : 'unmapped',
+                localStainId: localStainId,
+                localRegionId: localRegionId,
+                filename: finalFilename
+            });
+        });
+
+        return Object.values(caseGroups).filter(caseData =>
+            caseData.slides.some(slide => slide.status === 'unmapped')
+        );
+    }
+
+    // Add protocol mapping to a specific slide
+    addProtocolMapping(bdsaCaseId, slideId, protocolId, protocolType) {
+        if (!this.caseProtocolMappings.has(bdsaCaseId)) {
+            this.caseProtocolMappings.set(bdsaCaseId, {});
+        }
+
+        const caseMappings = this.caseProtocolMappings.get(bdsaCaseId);
+        if (!caseMappings[slideId]) {
+            caseMappings[slideId] = { stain: [], region: [] };
+        }
+
+        const slideProtocols = caseMappings[slideId];
+        if (!slideProtocols[protocolType]) {
+            slideProtocols[protocolType] = [];
+        }
+
+        // Add protocol if not already present
+        if (!slideProtocols[protocolType].includes(protocolId)) {
+            slideProtocols[protocolType].push(protocolId);
+            this.saveToStorage();
+            this.notify();
+        }
+    }
 }
 
 // Create singleton instance
@@ -1644,6 +1724,7 @@ export const getItemsToSyncCount = () => dataStore.getItemsToSyncCount();
 export const setProcessedData = (data, source, sourceInfo) => dataStore.setProcessedData(data, source, sourceInfo);
 export const setCaseIdInData = (localCaseId, bdsaCaseId) => dataStore.setCaseIdInData(localCaseId, bdsaCaseId);
 export const loadDsaData = (dsaAuthStore) => dataStore.loadDsaData(dsaAuthStore);
+export const generateUnmappedCases = () => dataStore.generateUnmappedCases();
 
 // Export constants for sync events
 export const DATA_CHANGE_EVENTS = {

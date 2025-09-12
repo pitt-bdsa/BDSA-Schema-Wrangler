@@ -11,6 +11,14 @@ export const HIDDEN_DSA_FIELDS = [
     'meta.bdsaLocal.lastUpdated',
     'meta.bdsaLocal.source',
 
+    // Imported meta.BDSA fields (we manage BDSA data separately, so hide the imported versions)
+    'meta.BDSA.bdsaLocal.localCaseId',
+    'meta.BDSA.bdsaLocal.localStainID',
+    'meta.BDSA.bdsaLocal.localRegionId',
+    'meta.BDSA.bdsaLocal.bdsaCaseId',
+    'meta.BDSA.bdsaLocal.lastUpdated',
+    'meta.BDSA.bdsaLocal.source',
+
     // Internal DSA fields that are not useful for users
     '_id',
     '_modelType',

@@ -12,6 +12,57 @@ import { getDefaultRegexRules, applyRegexRules } from '../utils/regexExtractor';
 import { HIDDEN_DSA_FIELDS, PRIORITY_BDSA_FIELDS, DEFAULT_COLUMN_VISIBILITY, DATA_SOURCE_TYPES } from '../utils/constants';
 import './InputDataTab.css';
 
+// Column display name mapping
+const getColumnDisplayName = (fieldName) => {
+    const displayNames = {
+        'id': 'ID',
+        'name': 'Name',
+        'BDSA.bdsaLocal.bdsaCaseId': 'BDSA Case ID',
+        'BDSA.bdsaLocal.localCaseId': 'Local Case ID',
+        'BDSA.bdsaLocal.localRegionId': 'Local Region ID',
+        'BDSA.bdsaLocal.localStainID': 'Local Stain ID',
+        'dsa_name': 'DSA Name',
+        'dsa_created': 'DSA Created',
+        'dsa_updated': 'DSA Updated',
+        'dsa_size': 'DSA Size',
+        'dsa_mimeType': 'DSA MIME Type',
+        'meta.bdsaLocal.localCaseId': 'Meta Local Case ID',
+        'meta.bdsaLocal.localStainID': 'Meta Local Stain ID',
+        'meta.bdsaLocal.localRegionId': 'Meta Local Region ID',
+        'meta.bdsaLocal.lastUpdated': 'Meta Last Updated',
+        'meta.bdsaLocal.source': 'Meta Source',
+        '_id': 'Internal ID',
+        '_modelType': 'Model Type',
+        '_accessLevel': 'Access Level',
+        '_version': 'Version',
+        '_text': 'Text',
+        '_textScore': 'Text Score',
+        'meta.originalName': 'Original Name',
+        'meta.contentType': 'Content Type',
+        'meta.size': 'File Size',
+        'meta.checksum': 'Checksum',
+        'meta.creatorId': 'Creator ID',
+        'meta.creatorName': 'Creator Name',
+        'meta.updated': 'Meta Updated',
+        'meta.created': 'Meta Created',
+        'girder': 'Girder',
+        'girderId': 'Girder ID',
+        'girderParentId': 'Girder Parent ID',
+        'girderParentCollection': 'Girder Parent Collection',
+        'description': 'Description',
+        'notes': 'Notes',
+        'tags': 'Tags',
+        'public': 'Public',
+        'folderId': 'Folder ID',
+        'parentId': 'Parent ID',
+        'parentCollection': 'Parent Collection',
+        'baseParentId': 'Base Parent ID',
+        'baseParentType': 'Base Parent Type'
+    };
+
+    return displayNames[fieldName] || fieldName;
+};
+
 // Register AG Grid modules
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -408,9 +459,10 @@ const InputDataTab = () => {
 
     const toggleColumnVisibility = (columnKey) => {
         setColumnVisibility(prev => {
+            const isCurrentlyHidden = prev[columnKey] === false || HIDDEN_DSA_FIELDS.includes(columnKey);
             const newVisibility = {
                 ...prev,
-                [columnKey]: prev[columnKey] === false ? undefined : false
+                [columnKey]: isCurrentlyHidden ? true : false
             };
             saveColumnConfig(newVisibility, columnOrder);
             return newVisibility;
@@ -547,13 +599,13 @@ const InputDataTab = () => {
                         // Add column for primitive values
                         const columnDef = {
                             field: fullKey,
-                            headerName: fullKey,
+                            headerName: getColumnDisplayName(fullKey),
                             sortable: true,
                             filter: true,
                             resizable: true,
                             minWidth: 150,
-                            // Hide if explicitly set to false in columnVisibility OR if it's in HIDDEN_DSA_FIELDS
-                            hide: columnVisibility[fullKey] === false || HIDDEN_DSA_FIELDS.includes(fullKey),
+                            // Hide if explicitly set to false in columnVisibility OR if it's in HIDDEN_DSA_FIELDS (unless explicitly overridden)
+                            hide: (columnVisibility[fullKey] === false) || (HIDDEN_DSA_FIELDS.includes(fullKey) && columnVisibility[fullKey] !== true),
                             cellStyle: (params) => {
                                 const rowData = params.data;
                                 const isModified = dataStore.modifiedItems?.has(rowData?.id);
@@ -875,7 +927,7 @@ const InputDataTab = () => {
                                         <label className="column-checkbox">
                                             <input
                                                 type="checkbox"
-                                                checked={columnVisibility[columnKey] !== false}
+                                                checked={columnVisibility[columnKey] !== false && !HIDDEN_DSA_FIELDS.includes(columnKey)}
                                                 onChange={() => toggleColumnVisibility(columnKey)}
                                             />
                                             <span className="column-name">{columnKey}</span>
