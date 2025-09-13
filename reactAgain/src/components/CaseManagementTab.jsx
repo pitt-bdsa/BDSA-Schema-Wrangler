@@ -44,10 +44,16 @@ const CaseManagementTab = () => {
     // Generate unmapped cases when data changes
     useEffect(() => {
         if (dataStatus.processedData && dataStatus.processedData.length > 0) {
+            console.log('🔍 Generating unmapped cases with data:', {
+                processedDataLength: dataStatus.processedData.length,
+                columnMappings: dataStatus.columnMappings,
+                caseIdMappings: Object.keys(dataStatus.caseIdMappings || {}).length
+            });
             const newUnmappedCases = generateUnmappedCases();
+            console.log('🔍 Generated unmapped cases:', newUnmappedCases.length);
             setUnmappedCases(newUnmappedCases);
         }
-    }, [dataStatus.processedData, dataStatus.caseIdMappings, dataStatus.caseProtocolMappings]);
+    }, [dataStatus.processedData, dataStatus.caseIdMappings, dataStatus.caseProtocolMappings, dataStatus.columnMappings]);
 
     // Force update when case ID mappings change (since updateCaseIdMappings doesn't notify)
     const forceCaseIdMappingsUpdate = () => {
@@ -845,9 +851,14 @@ const CaseManagementTab = () => {
                 <div className="protocol-mapping-content">
                     <div className="cases-panel">
                         <h3>Select BDSA Case</h3>
-                        {!dataStatus.columnMappings?.localStainID ? (
+                        {unmappedCases.length === 0 && dataStatus.processedData?.length > 0 ? (
                             <div className="no-stain-id-configured">
-                                <p>Please configure the Local Stain ID column in the BDSA Settings tab to view unmapped cases.</p>
+                                <p>No unmapped cases found. Make sure you have:</p>
+                                <ul>
+                                    <li>BDSA case IDs mapped in the Case ID Mapping tab</li>
+                                    <li>Local stain IDs or region IDs in your data</li>
+                                    <li>Stain protocols defined in the Protocols tab</li>
+                                </ul>
                             </div>
                         ) : unmappedCases.length === 0 ? (
                             <div className="no-unmapped-cases">

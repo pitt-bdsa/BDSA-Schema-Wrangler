@@ -1629,22 +1629,67 @@ class DataStore {
 
     // Generate unmapped cases from current data for protocol mapping
     generateUnmappedCases() {
-        if (!this.processedData.length || !this.columnMappings.localStainID) {
+        if (!this.processedData.length) {
+            console.log('🔍 No processed data available');
             return [];
         }
 
+        console.log('🔍 DEBUG - generateUnmappedCases called with:', {
+            processedDataLength: this.processedData.length,
+            caseIdMappingsSize: this.caseIdMappings.size,
+            columnMappings: this.columnMappings,
+            sampleDataItem: this.processedData[0] ? {
+                id: this.processedData[0].id,
+                name: this.processedData[0].name,
+                BDSA: this.processedData[0].BDSA
+            } : null
+        });
+
+        // Use default column mappings for BDSA data if not set
+        const columnMapping = this.columnMappings.localStainID ? this.columnMappings : {
+            localCaseId: 'BDSA.bdsaLocal.localCaseId',
+            localStainID: 'BDSA.bdsaLocal.localStainID',
+            localRegionId: 'BDSA.bdsaLocal.localRegionId'
+        };
+
+        console.log('🔍 Using column mapping:', columnMapping);
+
         const caseGroups = {};
 
-        this.processedData.forEach(row => {
-            const localCaseId = row[this.columnMappings.localCaseId];
-            const localStainId = row[this.columnMappings.localStainID];
-            const localRegionId = row[this.columnMappings.localRegionId];
+        this.processedData.forEach((row, index) => {
+            // Access the BDSA data correctly from the nested structure
+            const localCaseId = row.BDSA?.bdsaLocal?.localCaseId;
+            const localStainId = row.BDSA?.bdsaLocal?.localStainID;
+            const localRegionId = row.BDSA?.bdsaLocal?.localRegionId;
             const filename = row['name'] || row['dsa_name'];
 
             const finalFilename = filename || `${localCaseId}_${localStainId || localRegionId}.svs`;
 
+            // Debug first few rows
+            if (index < 3) {
+                console.log(`🔍 Row ${index}:`, {
+                    localCaseId,
+                    localStainId,
+                    localRegionId,
+                    filename,
+                    hasCaseIdMapping: this.caseIdMappings.has(localCaseId),
+                    bdsaData: row.BDSA?.bdsaLocal,
+                    fullRowKeys: Object.keys(row).slice(0, 10) // Show first 10 keys for debugging
+                });
+            }
+
             // Skip if no stain ID or region ID, or no BDSA case ID mapping
             if ((!localStainId && !localRegionId) || !this.caseIdMappings.has(localCaseId)) {
+                if (index < 5) { // Show more debug info
+                    console.log(`🔍 Skipping row ${index}:`, {
+                        reason: !localStainId && !localRegionId ? 'No stain/region ID' : 'No case ID mapping',
+                        localStainId,
+                        localRegionId,
+                        localCaseId,
+                        hasCaseIdMapping: this.caseIdMappings.has(localCaseId),
+                        caseIdMappingsKeys: Array.from(this.caseIdMappings.keys()).slice(0, 5) // Show first 5 keys
+                    });
+                }
                 return;
             }
 
@@ -1678,9 +1723,24 @@ class DataStore {
             });
         });
 
-        return Object.values(caseGroups).filter(caseData =>
+        const allCases = Object.values(caseGroups);
+        const unmappedCases = allCases.filter(caseData =>
             caseData.slides.some(slide => slide.status === 'unmapped')
         );
+
+        console.log('🔍 DEBUG - Case generation results:', {
+            totalCaseGroups: allCases.length,
+            unmappedCases: unmappedCases.length,
+            allCases: allCases.map(c => ({
+                bdsaId: c.bdsaId,
+                localCaseId: c.localCaseId,
+                totalSlides: c.slides.length,
+                unmappedSlides: c.slides.filter(s => s.status === 'unmapped').length
+            })),
+            caseGroupsKeys: Object.keys(caseGroups)
+        });
+
+        return unmappedCases;
     }
 
     // Add protocol mapping to a specific slide
