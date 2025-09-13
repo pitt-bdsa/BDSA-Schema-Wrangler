@@ -43,6 +43,10 @@ export const applyRegexRules = (data, regexRules, columnMapping = {}) => {
             { field: 'localRegionId', sourceColumn: columnMapping.localRegionId }
         ];
 
+        // Initialize protocol fields as placeholders
+        updatedItem.BDSA.bdsaStainProtocol = null;
+        updatedItem.BDSA.bdsaRegionProtocol = null;
+
         fieldMappings.forEach(({ field, sourceColumn }) => {
             const regexRule = regexRules[field];
 

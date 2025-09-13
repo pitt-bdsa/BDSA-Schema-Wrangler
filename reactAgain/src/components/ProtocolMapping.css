@@ -1,0 +1,166 @@
+.protocol-mapping {
+    padding: 20px;
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+.case-selection {
+    margin-bottom: 30px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.case-selection h3 {
+    margin-top: 0;
+    color: #333;
+}
+
+.case-selection select {
+    width: 100%;
+    padding: 10px;
+    font-size: 16px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
+.case-selection button {
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+.case-selection button:hover {
+    background: #0056b3;
+}
+
+.mapping-area {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.mapping-area h3 {
+    margin-top: 0;
+    color: #333;
+}
+
+.stain-group {
+    margin-bottom: 30px;
+    padding: 20px;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    background: #fafafa;
+}
+
+.group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.group-header h4 {
+    margin: 0;
+    color: #333;
+}
+
+.status {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.status.mapped {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.status.unmapped {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+.applied-protocols {
+    margin-bottom: 15px;
+    padding: 15px;
+    background: #e8f5e8;
+    border-radius: 4px;
+    border: 1px solid #c3e6cb;
+}
+
+.applied-protocols h5 {
+    margin: 0 0 10px 0;
+    color: #2d5a2d;
+    font-size: 0.9rem;
+}
+
+.applied-protocol {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    background: white;
+    border-radius: 4px;
+    margin-bottom: 5px;
+    font-size: 0.9rem;
+}
+
+.applied-protocol .slide-name {
+    color: #666;
+    font-style: italic;
+}
+
+.applied-protocol button {
+    margin-left: auto;
+    background: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    padding: 2px 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+
+.applied-protocol button:hover {
+    background: #c82333;
+}
+
+.protocol-buttons {
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
+}
+
+.protocol-buttons h5 {
+    margin: 0 0 10px 0;
+    color: #495057;
+    font-size: 0.9rem;
+}
+
+.protocol-btn {
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-right: 10px;
+    margin-bottom: 10px;
+    font-size: 0.9rem;
+    transition: background-color 0.2s;
+}
+
+.protocol-btn:hover {
+    background: #0056b3;
+}

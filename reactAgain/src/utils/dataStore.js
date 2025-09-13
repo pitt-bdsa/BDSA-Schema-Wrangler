@@ -39,7 +39,14 @@ class DataStore {
     }
 
     notify() {
-        this.listeners.forEach(listener => listener());
+        console.log('🔔 DataStore: notify() called, notifying', this.listeners.size, 'listeners');
+        this.listeners.forEach(listener => {
+            try {
+                listener();
+            } catch (error) {
+                console.error('🔔 DataStore: Error in listener:', error);
+            }
+        });
     }
 
     // Sync event system
@@ -1309,7 +1316,9 @@ class DataStore {
                         localCaseId: null,
                         localStainID: null,
                         localRegionId: null,
-                        bdsaCaseId: null  // Initialize this field so the column appears
+                        bdsaCaseId: null,  // Initialize this field so the column appears
+                        bdsaStainProtocol: null,  // Initialize BDSA Region Protocol field (can be array)
+                        bdsaRegionProtocol: null  // Initialize BDSA Protocol field (can be array)
                     },
                     _dataSource: {}
                     // Don't set _lastModified here - only set it when actually modifying data
@@ -1321,12 +1330,22 @@ class DataStore {
                         localCaseId: null,
                         localStainID: null,
                         localRegionId: null,
-                        bdsaCaseId: null
+                        bdsaCaseId: null,
+                        bdsaStainProtocol: null,  // Initialize BDSA Region Protocol field (can be array)
+                        bdsaRegionProtocol: null  // Initialize BDSA Protocol field (can be array)
                     };
                 } else {
                     // Ensure bdsaCaseId field exists - but preserve existing value if it exists
                     if (!item.BDSA.bdsaLocal.hasOwnProperty('bdsaCaseId')) {
                         item.BDSA.bdsaLocal.bdsaCaseId = null;
+                    }
+                    // Ensure bdsaStainProtocol field exists - but preserve existing value if it exists
+                    if (!item.BDSA.bdsaLocal.hasOwnProperty('bdsaStainProtocol')) {
+                        item.BDSA.bdsaLocal.bdsaStainProtocol = null;
+                    }
+                    // Ensure bdsaRegionProtocol field exists - but preserve existing value if it exists
+                    if (!item.BDSA.bdsaLocal.hasOwnProperty('bdsaRegionProtocol')) {
+                        item.BDSA.bdsaLocal.bdsaRegionProtocol = null;
                     }
                     // Preserve existing values - don't overwrite them with null
                     // The existing values should already be set by transformDsaData
@@ -1762,6 +1781,34 @@ class DataStore {
         // Add protocol if not already present
         if (!slideProtocols[protocolType].includes(protocolId)) {
             slideProtocols[protocolType].push(protocolId);
+            this.saveToStorage();
+            console.log('🔔 DataStore: Calling notify() after adding protocol mapping');
+            this.notify();
+        } else {
+            console.log('🔔 DataStore: Protocol already exists, not adding');
+        }
+    }
+
+    // Remove protocol mapping from a specific slide
+    removeProtocolMapping(bdsaCaseId, slideId, protocolId, protocolType) {
+        if (!this.caseProtocolMappings.has(bdsaCaseId)) {
+            return;
+        }
+
+        const caseMappings = this.caseProtocolMappings.get(bdsaCaseId);
+        if (!caseMappings[slideId]) {
+            return;
+        }
+
+        const slideProtocols = caseMappings[slideId];
+        if (!slideProtocols[protocolType]) {
+            return;
+        }
+
+        // Remove protocol if present
+        const index = slideProtocols[protocolType].indexOf(protocolId);
+        if (index > -1) {
+            slideProtocols[protocolType].splice(index, 1);
             this.saveToStorage();
             this.notify();
         }

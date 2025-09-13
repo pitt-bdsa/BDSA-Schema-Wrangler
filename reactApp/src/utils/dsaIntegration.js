@@ -602,6 +602,8 @@ export const syncItemBdsaMetadata = async (baseUrl, item, girderToken, columnMap
             localCaseId,
             localStainID,
             localRegionId,
+            bdsaStainProtocol: null,
+            bdsaRegionProtocol: null,
             lastUpdated: new Date().toISOString(),
             source: 'BDSA-Schema-Wrangler'
         };
@@ -916,6 +918,8 @@ export const enhanceDataWithExistingMetadata = (dsaData) => {
             enhancedItem.BDSA.localCaseId = bdsaLocal.localCaseId || enhancedItem.BDSA.localCaseId || '';
             enhancedItem.BDSA.localStainID = bdsaLocal.localStainID || enhancedItem.BDSA.localStainID || '';
             enhancedItem.BDSA.localRegionId = bdsaLocal.localRegionId || enhancedItem.BDSA.localRegionId || '';
+            enhancedItem.BDSA.bdsaStainProtocol = bdsaLocal.bdsaStainProtocol || enhancedItem.BDSA.bdsaStainProtocol || null;
+            enhancedItem.BDSA.bdsaRegionProtocol = bdsaLocal.bdsaRegionProtocol || enhancedItem.BDSA.bdsaRegionProtocol || null;
 
             // Mark that this data came from server metadata
             enhancedItem._hasServerMetadata = true;

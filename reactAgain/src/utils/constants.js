@@ -43,6 +43,15 @@ export const HIDDEN_DSA_FIELDS = [
     'girderParentId',
     'girderParentCollection',
 
+    // BDSA internal tracking fields
+    'BDSA._dataSource.localCaseId',
+    'BDSA._dataSource.localStainID',
+    'BDSA._dataSource.localRegionId',
+    'BDSA._dataSource.bdsaCaseId',
+    'BDSA._dataSource.bdsaStainProtocol',
+    'BDSA._dataSource.bdsaRegionProtocol',
+    'BDSA._lastModified',
+
     // Other common DSA fields that are typically not needed
     'description',
     'notes',
@@ -60,6 +69,8 @@ export const PRIORITY_BDSA_FIELDS = [
     'id',
     'name',
     'BDSA.bdsaLocal.bdsaCaseId',
+    'BDSA.bdsaLocal.bdsaStainProtocol',
+    'BDSA.bdsaLocal.bdsaRegionProtocol',
     'BDSA.bdsaLocal.localCaseId',
     'BDSA.bdsaLocal.localRegionId',
     'BDSA.bdsaLocal.localStainID',

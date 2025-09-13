@@ -3,6 +3,9 @@ import './CaseManagementTab.css';
 import dataStore, { setCaseIdInData, generateUnmappedCases } from '../utils/dataStore';
 import protocolStore from '../utils/protocolStore';
 import dsaAuthStore from '../utils/dsaAuthStore';
+import ProtocolMapping from './ProtocolMapping';
+import CaseStatsPanel from './CaseStatsPanel';
+import CaseIdMappingSection from './CaseIdMappingSection';
 
 const CaseManagementTab = () => {
     const [activeSubTab, setActiveSubTab] = useState('case-id-mapping');
@@ -19,6 +22,7 @@ const CaseManagementTab = () => {
     const [dataStatus, setDataStatus] = useState(dataStore.getStatus());
     const [bdsaInstitutionId, setBdsaInstitutionId] = useState('001');
     const [temporaryHideMapped, setTemporaryHideMapped] = useState(false);
+    const [showMappedCases, setShowMappedCases] = useState(true);
     const [sortField, setSortField] = useState(null); // Start with no sorting
     const [sortDirection, setSortDirection] = useState('asc');
     const [isGenerating, setIsGenerating] = useState(false);
@@ -29,6 +33,7 @@ const CaseManagementTab = () => {
     // Subscribe to data store updates
     useEffect(() => {
         const unsubscribe = dataStore.subscribe(() => {
+            console.log('🔔 Data store notification received, updating component state');
             setDataStatus(dataStore.getStatus());
         });
         return unsubscribe;
@@ -47,7 +52,9 @@ const CaseManagementTab = () => {
             console.log('🔍 Generating unmapped cases with data:', {
                 processedDataLength: dataStatus.processedData.length,
                 columnMappings: dataStatus.columnMappings,
-                caseIdMappings: Object.keys(dataStatus.caseIdMappings || {}).length
+                caseIdMappings: Object.keys(dataStatus.caseIdMappings || {}).length,
+                caseProtocolMappings: dataStatus.caseProtocolMappings?.length || 0,
+                protocolUpdateCounter: protocolUpdateCounter
             });
             const newUnmappedCases = generateUnmappedCases();
             console.log('🔍 Generated unmapped cases:', newUnmappedCases.length);
@@ -70,6 +77,18 @@ const CaseManagementTab = () => {
 
     // Protocol mapping helper functions
     const getGroupedSlides = (slides) => {
+        // Get fresh protocol mappings from dataStore
+        const freshDataStatus = dataStore.getStatus();
+        const caseProtocolMappings = freshDataStatus.caseProtocolMappings;
+
+        console.log('🔧 getGroupedSlides called with fresh data:', {
+            selectedCase: selectedCase?.bdsaId,
+            caseProtocolMappings: caseProtocolMappings?.length || 0,
+            slidesCount: slides.length,
+            caseProtocolMappingsKeys: Object.keys(caseProtocolMappings || {}),
+            selectedCaseProtocols: caseProtocolMappings?.[selectedCase?.bdsaId] || 'NOT FOUND'
+        });
+
         const grouped = {};
         slides.forEach(slide => {
             const stainType = slide.stainType;
@@ -92,15 +111,45 @@ const CaseManagementTab = () => {
 
         // Double-check the status by looking at actual protocol mappings
         Object.values(grouped).forEach(group => {
+            const anySlidesMapped = group.slides.some(slide => {
+                const slideProtocols = caseProtocolMappings[selectedCase?.bdsaId]?.[slide.id] || { stain: [], region: [] };
+                const hasStainProtocols = (slideProtocols.stain || []).length > 0;
+
+                // Debug individual slide protocol lookup
+                if (group.stainType === '4G8' && slide === group.slides[0]) {
+                    console.log('🔧 Debug slide protocol lookup:', {
+                        slideId: slide.id,
+                        selectedCase: selectedCase?.bdsaId,
+                        slideProtocols,
+                        hasStainProtocols,
+                        caseProtocolMappingsForCase: caseProtocolMappings[selectedCase?.bdsaId]
+                    });
+                }
+
+                return hasStainProtocols;
+            });
+
             const allSlidesMapped = group.slides.every(slide => {
-                const slideProtocols = dataStatus.caseProtocolMappings[selectedCase?.bdsaId]?.[slide.id] || { stain: [], region: [] };
+                const slideProtocols = caseProtocolMappings[selectedCase?.bdsaId]?.[slide.id] || { stain: [], region: [] };
                 const hasStainProtocols = (slideProtocols.stain || []).length > 0;
                 return hasStainProtocols;
             });
 
+            // Set group status based on whether ALL slides are mapped
             if (allSlidesMapped) {
                 group.status = 'mapped';
+            } else if (anySlidesMapped) {
+                group.status = 'partially-mapped'; // New status for mixed groups
+            } else {
+                group.status = 'unmapped';
             }
+
+            console.log(`🔧 Group ${group.stainType} status:`, {
+                status: group.status,
+                anySlidesMapped,
+                allSlidesMapped,
+                slidesCount: group.slides.length
+            });
         });
 
         return Object.values(grouped);
@@ -145,22 +194,37 @@ const CaseManagementTab = () => {
     const handleProtocolMapping = (slides, protocolId) => {
         if (!selectedCase) return;
 
+        console.log('🔧 Applying protocol mapping:', {
+            protocolId,
+            slidesCount: slides.length,
+            selectedCase: selectedCase.bdsaId,
+            slides: slides.map(s => ({ id: s.id, filename: s.filename, stainType: s.stainType }))
+        });
+
         // Determine which slides to operate on
         const isExpanded = expandedStainGroups.has(slides[0]?.stainType);
         const selectedSlidesInGroup = isExpanded ? getSelectedSlidesInGroup({ slides }) : [];
         const slidesToOperateOn = isExpanded && selectedSlidesInGroup.length > 0 ? selectedSlidesInGroup : slides;
 
-        // Apply protocol to selected slides
+        // Apply protocol to selected slides - this will trigger dataStore.notify()
         slidesToOperateOn.forEach(slide => {
+            console.log('🔧 Adding protocol mapping:', {
+                bdsaCaseId: selectedCase.bdsaId,
+                slideId: slide.id,
+                protocolId,
+                protocolType: 'stain'
+            });
             dataStore.addProtocolMapping(selectedCase.bdsaId, slide.id, protocolId, 'stain');
         });
 
-        // Update the protocol counter to trigger re-render
-        setProtocolUpdateCounter(prev => prev + 1);
+        console.log('🔧 Protocol mapping applied, dataStore should notify subscribers');
+    };
 
-        // Refresh unmapped cases
-        const newUnmappedCases = generateUnmappedCases();
-        setUnmappedCases(newUnmappedCases);
+    const handleRemoveProtocolMapping = (slideId, protocolId, protocolType) => {
+        if (!selectedCase) return;
+
+        // Remove protocol from the specific slide - this will trigger dataStore.notify()
+        dataStore.removeProtocolMapping(selectedCase.bdsaId, slideId, protocolId, protocolType);
     };
 
     // Get unique case IDs from the data
@@ -292,6 +356,11 @@ const CaseManagementTab = () => {
             bdsaConflictCount
         };
     }, [dataStatus.processedData]);
+
+    // Generate sequential BDSA Case ID (alias for generateCaseId)
+    const generateCaseId = (localCaseId) => {
+        generateSequentialBdsaCaseId(localCaseId);
+    };
 
     // Generate sequential BDSA Case ID
     const generateSequentialBdsaCaseId = (localCaseId) => {
@@ -545,32 +614,7 @@ const CaseManagementTab = () => {
 
     return (
         <div className="case-management-tab">
-            <div className="case-stats">
-                <div className="stat-item">
-                    <span className="stat-number">{stats.unmappedSlides}</span>
-                    <span className="stat-label">Unmapped Slides</span>
-                </div>
-                <div className="stat-item">
-                    <span className="stat-number">{stats.mappedCases}</span>
-                    <span className="stat-label">Mapped Cases</span>
-                </div>
-                <div className="stat-item">
-                    <span className="stat-number">{stats.bdsaCaseIds}</span>
-                    <span className="stat-label">BDSA Case IDs</span>
-                </div>
-                {stats.localConflictCount > 0 && (
-                    <div className="stat-item conflict-stat">
-                        <span className="stat-number conflict">{stats.localConflictCount}</span>
-                        <span className="stat-label">Local Case ID Conflicts</span>
-                    </div>
-                )}
-                {stats.bdsaConflictCount > 0 && (
-                    <div className="stat-item conflict-stat">
-                        <span className="stat-number conflict">{stats.bdsaConflictCount}</span>
-                        <span className="stat-label">BDSA Case ID Conflicts</span>
-                    </div>
-                )}
-            </div>
+            <CaseStatsPanel stats={stats} />
 
             {/* Sub-tabs */}
             <div className="case-management-sub-tabs">
@@ -590,455 +634,36 @@ const CaseManagementTab = () => {
 
             {/* Case ID Mapping Content */}
             {activeSubTab === 'case-id-mapping' && (
-                <div className="case-id-mapping-content">
-                    {/* Mapping Settings */}
-                    <div className="mapping-settings">
-                        <div className="setting-group">
-                            <label htmlFor="institution-id">BDSA Institution ID:</label>
-                            <input
-                                id="institution-id"
-                                type="text"
-                                value={bdsaInstitutionId}
-                                onChange={(e) => setBdsaInstitutionId(e.target.value)}
-                                className="institution-id-input"
-                                placeholder="001"
-                            />
-                            <small>Used for generating BDSA Case IDs (e.g., BDSA-001-0001)</small>
-                        </div>
-                        <div className="setting-group">
-                            <label>Data Source Column:</label>
-                            <div className="data-source-info">
-                                <span className="data-source-text">
-                                    Showing unique case IDs from column: BDSA.bdsaLocal.localCaseId
-                                </span>
-                                <br />
-                                <span className="total-cases-text">
-                                    Total unique cases: {filteredCaseIds.length}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Duplicate Warning */}
-                    {duplicateBdsaCaseIds.size > 0 && (
-                        <div className="duplicate-warning">
-                            <div className="warning-header">
-                                <span className="warning-icon">⚠️</span>
-                                <span className="warning-text">
-                                    Warning: {duplicateBdsaCaseIds.size} duplicate BDSA Case IDs detected!
-                                </span>
-                            </div>
-                            <div className="warning-actions">
-                                <button className="view-duplicates-btn" onClick={() => setShowMappedCases(true)}>
-                                    View duplicates ({duplicateBdsaCaseIds.size})
-                                </button>
-                                <button className="clear-duplicates-btn" onClick={clearDuplicates}>
-                                    🗑️ Clear Duplicates ({duplicateBdsaCaseIds.size})
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Bulk Generation Progress */}
-                    {isGeneratingAll && (
-                        <div className="bulk-generation-progress">
-                            <div className="progress-info">
-                                <span>Generating BDSA Case IDs...</span>
-                                <span>{generateAllProgress.current} of {generateAllProgress.total}</span>
-                            </div>
-                            <div className="progress-bar">
-                                <div
-                                    className="progress-fill"
-                                    style={{ width: `${(generateAllProgress.current / generateAllProgress.total) * 100}%` }}
-                                />
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Conflict Resolution Section */}
-                    {(stats.localConflictCount > 0 || stats.bdsaConflictCount > 0) && (
-                        <div className="conflict-resolution-section">
-                            <h3>⚠️ Conflict Resolution Required</h3>
-
-                            {/* Local Case ID Conflicts */}
-                            {stats.localConflictCount > 0 && (
-                                <div className="conflict-group">
-                                    <h4>Local Case ID Conflicts ({stats.localConflictCount})</h4>
-                                    <p>Same local case ID mapped to multiple BDSA Case IDs:</p>
-                                    <div className="conflict-list">
-                                        {Object.entries(stats.localCaseIdConflicts).map(([localCaseId, bdsaCaseIds]) => (
-                                            <div key={localCaseId} className="conflict-item">
-                                                <div className="conflict-header">
-                                                    <strong>{localCaseId}</strong>
-                                                    <span className="conflict-count">→ {bdsaCaseIds.length} BDSA IDs</span>
-                                                </div>
-                                                <div className="conflict-options">
-                                                    {bdsaCaseIds.map((bdsaCaseId) => (
-                                                        <button
-                                                            key={bdsaCaseId}
-                                                            className="resolve-conflict-btn"
-                                                            onClick={() => {
-                                                                dataStore.resolveCaseIdConflict(localCaseId, bdsaCaseId);
-                                                                forceCaseIdMappingsUpdate();
-                                                            }}
-                                                        >
-                                                            Keep: {bdsaCaseId}
-                                                        </button>
-                                                    ))}
-                                                    <button
-                                                        className="clear-conflict-btn"
-                                                        onClick={() => {
-                                                            dataStore.clearCaseIdConflict(localCaseId);
-                                                            forceCaseIdMappingsUpdate();
-                                                        }}
-                                                    >
-                                                        Clear All
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* BDSA Case ID Conflicts */}
-                            {stats.bdsaConflictCount > 0 && (
-                                <div className="conflict-group">
-                                    <h4>BDSA Case ID Conflicts ({stats.bdsaConflictCount})</h4>
-                                    <p>Same BDSA Case ID mapped to multiple local case IDs:</p>
-                                    <div className="conflict-list">
-                                        {Object.entries(stats.bdsaCaseIdConflicts).map(([bdsaCaseId, localCaseIds]) => (
-                                            <div key={bdsaCaseId} className="conflict-item">
-                                                <div className="conflict-header">
-                                                    <strong>{bdsaCaseId}</strong>
-                                                    <span className="conflict-count">← {localCaseIds.length} Local IDs</span>
-                                                </div>
-                                                <div className="conflict-options">
-                                                    {localCaseIds.map((localCaseId) => (
-                                                        <button
-                                                            key={localCaseId}
-                                                            className="resolve-conflict-btn"
-                                                            onClick={() => {
-                                                                dataStore.resolveBdsaCaseIdConflict(bdsaCaseId, localCaseId);
-                                                                forceCaseIdMappingsUpdate();
-                                                            }}
-                                                        >
-                                                            Keep: {localCaseId}
-                                                        </button>
-                                                    ))}
-                                                    <button
-                                                        className="clear-conflict-btn"
-                                                        onClick={() => {
-                                                            dataStore.clearBdsaCaseIdConflict(bdsaCaseId);
-                                                            forceCaseIdMappingsUpdate();
-                                                        }}
-                                                    >
-                                                        Clear All
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Case ID Table */}
-                    <div className="case-id-mapping-table">
-                        <div className="mapping-summary">
-                            <div className="summary-info">
-                                <p>
-                                    Showing unique case IDs from column: BDSA.bdsaLocal.localCaseId
-                                </p>
-                                <p>Total unique cases: {filteredCaseIds.length}</p>
-                            </div>
-                            <div className="mapping-controls">
-                                <button
-                                    className={`toggle-mapped-btn ${temporaryHideMapped ? 'active' : ''}`}
-                                    onClick={() => setTemporaryHideMapped(!temporaryHideMapped)}
-                                >
-                                    👤 {temporaryHideMapped ? 'Show All' : 'Hide Mapped'}
-                                </button>
-                                <button
-                                    className="generate-all-btn"
-                                    onClick={generateAllCaseIds}
-                                    disabled={isGeneratingAll || filteredCaseIds.filter(c => !c.isMapped).length === 0}
-                                >
-                                    🚀 Generate All
-                                </button>
-                                <button
-                                    className="dsa-sync-btn"
-                                    onClick={handleSyncCaseIdMappingsToDSA}
-                                    title="Push case ID mappings to DSA server"
-                                >
-                                    🔄 Push to DSA
-                                </button>
-                                <button
-                                    className="dsa-sync-btn"
-                                    onClick={handlePullCaseIdMappingsFromDSA}
-                                    title="Pull case ID mappings from DSA server"
-                                >
-                                    ⬇️ Pull from DSA
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="table-container">
-                            <table className="case-id-table">
-                                <thead>
-                                    <tr>
-                                        <th
-                                            className="sortable-header"
-                                            onClick={() => handleSort('localCaseId')}
-                                        >
-                                            Local Case ID {getSortIcon('localCaseId')}
-                                        </th>
-                                        <th
-                                            className="sortable-header"
-                                            onClick={() => handleSort('rowCount')}
-                                        >
-                                            Row Count {getSortIcon('rowCount')}
-                                        </th>
-                                        <th
-                                            className="sortable-header"
-                                            onClick={() => handleSort('bdsaCaseId')}
-                                        >
-                                            BDSA Case ID {getSortIcon('bdsaCaseId')}
-                                        </th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {filteredCaseIds.map((caseData) => (
-                                        <tr
-                                            key={caseData.localCaseId}
-                                            className={duplicateBdsaCaseIds.has(caseData.bdsaCaseId) ? 'duplicate-bdsa-case' : ''}
-                                        >
-                                            <td className="mapped-case-id">
-                                                {caseData.localCaseId}
-                                            </td>
-                                            <td>{caseData.rowCount}</td>
-                                            <td>
-                                                <input
-                                                    type="text"
-                                                    value={caseData.bdsaCaseId || ''}
-                                                    onChange={(e) => updateCaseIdMapping(caseData.localCaseId, e.target.value)}
-                                                    className="bdsa-case-id-input"
-                                                    placeholder="BDSA-001-0001"
-                                                />
-                                            </td>
-                                            <td>
-                                                <button
-                                                    className="generate-bdsa-id-btn"
-                                                    onClick={() => generateSequentialBdsaCaseId(caseData.localCaseId)}
-                                                    disabled={isGenerating || caseData.isMapped}
-                                                >
-                                                    {isGenerating ? 'Generating...' : 'Generate'}
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
+                <CaseIdMappingSection
+                    bdsaInstitutionId={bdsaInstitutionId}
+                    setBdsaInstitutionId={setBdsaInstitutionId}
+                    filteredCaseIds={filteredCaseIds}
+                    duplicateBdsaCaseIds={duplicateBdsaCaseIds}
+                    setShowMappedCases={setShowMappedCases}
+                    clearDuplicates={clearDuplicates}
+                    isGeneratingAll={isGeneratingAll}
+                    generateAllProgress={generateAllProgress}
+                    stats={stats}
+                    forceCaseIdMappingsUpdate={forceCaseIdMappingsUpdate}
+                    temporaryHideMapped={temporaryHideMapped}
+                    setTemporaryHideMapped={setTemporaryHideMapped}
+                    generateAllCaseIds={generateAllCaseIds}
+                    handleSyncCaseIdMappingsToDSA={handleSyncCaseIdMappingsToDSA}
+                    handlePullCaseIdMappingsFromDSA={handlePullCaseIdMappingsFromDSA}
+                    generateCaseId={generateCaseId}
+                    isGenerating={isGenerating}
+                    sortField={sortField}
+                    sortDirection={sortDirection}
+                    handleSort={handleSort}
+                    getSortIcon={getSortIcon}
+                />
             )}
 
             {/* Protocol Mapping Content */}
             {activeSubTab === 'protocol-mapping' && (
-                <div className="protocol-mapping-content">
-                    <div className="cases-panel">
-                        <h3>Select BDSA Case</h3>
-                        {unmappedCases.length === 0 && dataStatus.processedData?.length > 0 ? (
-                            <div className="no-stain-id-configured">
-                                <p>No unmapped cases found. Make sure you have:</p>
-                                <ul>
-                                    <li>BDSA case IDs mapped in the Case ID Mapping tab</li>
-                                    <li>Local stain IDs or region IDs in your data</li>
-                                    <li>Stain protocols defined in the Protocols tab</li>
-                                </ul>
-                            </div>
-                        ) : unmappedCases.length === 0 ? (
-                            <div className="no-unmapped-cases">
-                                <p>No BDSA cases with unmapped stain protocols found.</p>
-                                <small>Make sure you have:</small>
-                                <ul>
-                                    <li>BDSA case IDs mapped in the Case ID Mapping tab</li>
-                                    <li>Local stain IDs configured in BDSA Settings</li>
-                                    <li>Stain protocols defined in the Protocols tab</li>
-                                </ul>
-                            </div>
-                        ) : (
-                            <div className="case-selection">
-                                <div className="case-selection-controls">
-                                    <label>Choose a BDSA Case:</label>
-                                    <select
-                                        value={selectedCase?.bdsaId || ''}
-                                        onChange={(e) => {
-                                            const selectedBdsaId = e.target.value;
-                                            const caseData = unmappedCases.find(c => c.bdsaId === selectedBdsaId);
-                                            setSelectedCase(caseData || null);
-                                        }}
-                                        className="case-select-dropdown"
-                                    >
-                                        <option value="">-- Select BDSA Case --</option>
-                                        {unmappedCases.map(caseData => (
-                                            <option key={caseData.bdsaId} value={caseData.bdsaId}>
-                                                {caseData.bdsaId} ({caseData.slides.filter(s => s.status === 'unmapped').length} unmapped)
-                                            </option>
-                                        ))}
-                                    </select>
-
-                                    <div className="filter-control">
-                                        <label className="checkbox-label">
-                                            <input
-                                                type="checkbox"
-                                                checked={showUnmappedOnly}
-                                                onChange={(e) => setShowUnmappedOnly(e.target.checked)}
-                                            />
-                                            <span>Show only cases with unmapped slides</span>
-                                        </label>
-                                    </div>
-                                </div>
-
-                                {selectedCase && (
-                                    <div className="selected-case-summary">
-                                        <h4>Selected: {selectedCase.bdsaId}</h4>
-                                        <p>Local Case ID: {selectedCase.localCaseId}</p>
-                                        <div className="case-slides">
-                                            {getGroupedSlides(selectedCase.slides).map((group, index) => (
-                                                <span
-                                                    key={`${group.stainType}-${index}`}
-                                                    className={`slide-badge ${group.status}`}
-                                                >
-                                                    {group.stainType}
-                                                    {group.count > 1 && <span className="slide-count-badge">×{group.count}</span>}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="mapping-panel">
-                        {selectedCase ? (
-                            <div className="selected-case">
-                                <div className="case-header-with-actions">
-                                    <h3>Mapping Protocols for {selectedCase.bdsaId}</h3>
-                                    <div className="action-buttons">
-                                        <button
-                                            type="button"
-                                            className={`hide-mapped-btn ${hideMappedProtocols ? 'active' : ''}`}
-                                            onClick={() => setHideMappedProtocols(!hideMappedProtocols)}
-                                            title={hideMappedProtocols ? 'Show all protocols' : 'Hide mapped protocols'}
-                                        >
-                                            {hideMappedProtocols ? '👁️ Show All' : '🙈 Hide Mapped'}
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="slides-mapping">
-                                    {getGroupedSlides(selectedCase.slides).map((group, groupIndex) => (
-                                        <div key={`${group.stainType}-${groupIndex}`} className="slide-mapping">
-                                            <div className="slide-info">
-                                                <div className="slide-header">
-                                                    <span className="slide-id">
-                                                        {group.stainType} ({group.count} slides)
-                                                    </span>
-                                                    {group.count > 1 && (
-                                                        <button
-                                                            type="button"
-                                                            className="expand-toggle-btn"
-                                                            onClick={() => toggleStainGroupExpansion(group.stainType)}
-                                                            title={expandedStainGroups.has(group.stainType) ? 'Collapse individual slides' : 'Show individual slides'}
-                                                        >
-                                                            {expandedStainGroups.has(group.stainType) ? '▼' : '▶'}
-                                                        </button>
-                                                    )}
-                                                </div>
-                                                <span className="stain-type">{group.stainType}</span>
-                                                <span className={`status ${group.status}`}>
-                                                    {group.status === 'mapped' ? '✓ Mapped' : '⏳ Unmapped'}
-                                                </span>
-                                            </div>
-
-                                            {/* Individual slides when expanded */}
-                                            {expandedStainGroups.has(group.stainType) && group.slides.length > 1 && (
-                                                <div className="individual-slides">
-                                                    <div className="individual-slides-header">
-                                                        <div className="selection-controls">
-                                                            <button
-                                                                type="button"
-                                                                className="select-all-btn"
-                                                                onClick={() => selectAllSlidesInGroup(group)}
-                                                            >
-                                                                Select All
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                className="deselect-all-btn"
-                                                                onClick={() => deselectAllSlidesInGroup(group)}
-                                                            >
-                                                                Deselect All
-                                                            </button>
-                                                        </div>
-                                                        <span className="selected-count">
-                                                            {getSelectedSlidesInGroup(group).length} of {group.slides.length} selected
-                                                        </span>
-                                                    </div>
-                                                    {group.slides.map(slide => (
-                                                        <div key={slide.id} className="individual-slide">
-                                                            <label className="slide-checkbox">
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={selectedSlides.has(slide.id)}
-                                                                    onChange={() => toggleSlideSelection(slide.id)}
-                                                                />
-                                                                <span className="slide-detail-id">{slide.filename || slide.localStainId}</span>
-                                                            </label>
-                                                            <span className={`slide-detail-status ${slide.status}`}>
-                                                                {slide.status === 'mapped' ? '✓' : '⏳'}
-                                                            </span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-
-                                            {/* Protocol selection for unmapped groups */}
-                                            {group.status === 'unmapped' && (
-                                                <div className="protocol-selection">
-                                                    <div className="protocol-buttons">
-                                                        {protocolStore.stainProtocols.map(protocol => (
-                                                            <button
-                                                                key={protocol.id}
-                                                                type="button"
-                                                                className="protocol-btn"
-                                                                onClick={() => handleProtocolMapping(group.slides, protocol.id)}
-                                                                title={`Apply ${protocol.name} to all slides in this group`}
-                                                            >
-                                                                {protocol.name}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="no-case-selected">
-                                <h3>No Case Selected</h3>
-                                <p>Please select a BDSA case from the list above to view and map protocols.</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
+                <ProtocolMapping />
             )}
-        </div >
+        </div>
     );
 };
 

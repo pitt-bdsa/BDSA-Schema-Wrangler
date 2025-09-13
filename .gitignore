@@ -20,4 +20,5 @@ app/collections.postmortem_tissue_core.histopathology_images-export-2025-03-07T2
 .gitignore
 year_2020_dsametadata.csv
 reactApp/src/test/dataStore.test.js
+reactApp/***
 .gitignore

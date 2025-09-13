@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import schemaValidator from '../utils/schemaValidator';
+import ProtocolFormFields from './ProtocolFormFields';
 import './ProtocolModal.css';
 
 const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
