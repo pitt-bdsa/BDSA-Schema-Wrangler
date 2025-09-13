@@ -10,15 +10,7 @@ import CaseIdMappingSection from './CaseIdMappingSection';
 const CaseManagementTab = () => {
     const [activeSubTab, setActiveSubTab] = useState('case-id-mapping');
 
-    // Protocol mapping state
-    const [unmappedCases, setUnmappedCases] = useState([]);
-    const [selectedCase, setSelectedCase] = useState(null);
-    const [showUnmappedOnly, setShowUnmappedOnly] = useState(true);
-    const [hideMappedProtocols, setHideMappedProtocols] = useState(false);
-    const [expandedStainGroups, setExpandedStainGroups] = useState(new Set());
-    const [expandedRegionGroups, setExpandedRegionGroups] = useState(new Set());
-    const [selectedSlides, setSelectedSlides] = useState(new Set());
-    const [protocolUpdateCounter, setProtocolUpdateCounter] = useState(0);
+    // Protocol mapping state (handled by ProtocolMapping component)
     const [dataStatus, setDataStatus] = useState(dataStore.getStatus());
     const [bdsaInstitutionId, setBdsaInstitutionId] = useState('001');
     const [temporaryHideMapped, setTemporaryHideMapped] = useState(false);
@@ -46,21 +38,7 @@ const CaseManagementTab = () => {
         }
     }, [dataStatus.processedData]);
 
-    // Generate unmapped cases when data changes
-    useEffect(() => {
-        if (dataStatus.processedData && dataStatus.processedData.length > 0) {
-            console.log('🔍 Generating unmapped cases with data:', {
-                processedDataLength: dataStatus.processedData.length,
-                columnMappings: dataStatus.columnMappings,
-                caseIdMappings: Object.keys(dataStatus.caseIdMappings || {}).length,
-                caseProtocolMappings: dataStatus.caseProtocolMappings?.length || 0,
-                protocolUpdateCounter: protocolUpdateCounter
-            });
-            const newUnmappedCases = generateUnmappedCases();
-            console.log('🔍 Generated unmapped cases:', newUnmappedCases.length);
-            setUnmappedCases(newUnmappedCases);
-        }
-    }, [dataStatus.processedData, dataStatus.caseIdMappings, dataStatus.caseProtocolMappings, dataStatus.columnMappings]);
+    // Protocol mapping is now handled by the ProtocolMapping component
 
     // Force update when case ID mappings change (since updateCaseIdMappings doesn't notify)
     const forceCaseIdMappingsUpdate = () => {
@@ -75,157 +53,7 @@ const CaseManagementTab = () => {
         }
     };
 
-    // Protocol mapping helper functions
-    const getGroupedSlides = (slides) => {
-        // Get fresh protocol mappings from dataStore
-        const freshDataStatus = dataStore.getStatus();
-        const caseProtocolMappings = freshDataStatus.caseProtocolMappings;
-
-        console.log('🔧 getGroupedSlides called with fresh data:', {
-            selectedCase: selectedCase?.bdsaId,
-            caseProtocolMappings: caseProtocolMappings?.length || 0,
-            slidesCount: slides.length,
-            caseProtocolMappingsKeys: Object.keys(caseProtocolMappings || {}),
-            selectedCaseProtocols: caseProtocolMappings?.[selectedCase?.bdsaId] || 'NOT FOUND'
-        });
-
-        const grouped = {};
-        slides.forEach(slide => {
-            const stainType = slide.stainType;
-            if (!grouped[stainType]) {
-                grouped[stainType] = {
-                    stainType: stainType,
-                    slides: [],
-                    count: 0,
-                    status: 'unmapped'
-                };
-            }
-            grouped[stainType].slides.push(slide);
-            grouped[stainType].count++;
-
-            // If any slide in the group is mapped, mark the group as mapped
-            if (slide.status === 'mapped') {
-                grouped[stainType].status = 'mapped';
-            }
-        });
-
-        // Double-check the status by looking at actual protocol mappings
-        Object.values(grouped).forEach(group => {
-            const anySlidesMapped = group.slides.some(slide => {
-                const slideProtocols = caseProtocolMappings[selectedCase?.bdsaId]?.[slide.id] || { stain: [], region: [] };
-                const hasStainProtocols = (slideProtocols.stain || []).length > 0;
-
-                // Debug individual slide protocol lookup
-                if (group.stainType === '4G8' && slide === group.slides[0]) {
-                    console.log('🔧 Debug slide protocol lookup:', {
-                        slideId: slide.id,
-                        selectedCase: selectedCase?.bdsaId,
-                        slideProtocols,
-                        hasStainProtocols,
-                        caseProtocolMappingsForCase: caseProtocolMappings[selectedCase?.bdsaId]
-                    });
-                }
-
-                return hasStainProtocols;
-            });
-
-            const allSlidesMapped = group.slides.every(slide => {
-                const slideProtocols = caseProtocolMappings[selectedCase?.bdsaId]?.[slide.id] || { stain: [], region: [] };
-                const hasStainProtocols = (slideProtocols.stain || []).length > 0;
-                return hasStainProtocols;
-            });
-
-            // Set group status based on whether ALL slides are mapped
-            if (allSlidesMapped) {
-                group.status = 'mapped';
-            } else if (anySlidesMapped) {
-                group.status = 'partially-mapped'; // New status for mixed groups
-            } else {
-                group.status = 'unmapped';
-            }
-
-            console.log(`🔧 Group ${group.stainType} status:`, {
-                status: group.status,
-                anySlidesMapped,
-                allSlidesMapped,
-                slidesCount: group.slides.length
-            });
-        });
-
-        return Object.values(grouped);
-    };
-
-    const toggleStainGroupExpansion = (stainType) => {
-        const newExpanded = new Set(expandedStainGroups);
-        if (newExpanded.has(stainType)) {
-            newExpanded.delete(stainType);
-        } else {
-            newExpanded.add(stainType);
-        }
-        setExpandedStainGroups(newExpanded);
-    };
-
-    const toggleSlideSelection = (slideId) => {
-        const newSelected = new Set(selectedSlides);
-        if (newSelected.has(slideId)) {
-            newSelected.delete(slideId);
-        } else {
-            newSelected.add(slideId);
-        }
-        setSelectedSlides(newSelected);
-    };
-
-    const selectAllSlidesInGroup = (group) => {
-        const newSelected = new Set(selectedSlides);
-        group.slides.forEach(slide => newSelected.add(slide.id));
-        setSelectedSlides(newSelected);
-    };
-
-    const deselectAllSlidesInGroup = (group) => {
-        const newSelected = new Set(selectedSlides);
-        group.slides.forEach(slide => newSelected.delete(slide.id));
-        setSelectedSlides(newSelected);
-    };
-
-    const getSelectedSlidesInGroup = (group) => {
-        return group.slides.filter(slide => selectedSlides.has(slide.id));
-    };
-
-    const handleProtocolMapping = (slides, protocolId) => {
-        if (!selectedCase) return;
-
-        console.log('🔧 Applying protocol mapping:', {
-            protocolId,
-            slidesCount: slides.length,
-            selectedCase: selectedCase.bdsaId,
-            slides: slides.map(s => ({ id: s.id, filename: s.filename, stainType: s.stainType }))
-        });
-
-        // Determine which slides to operate on
-        const isExpanded = expandedStainGroups.has(slides[0]?.stainType);
-        const selectedSlidesInGroup = isExpanded ? getSelectedSlidesInGroup({ slides }) : [];
-        const slidesToOperateOn = isExpanded && selectedSlidesInGroup.length > 0 ? selectedSlidesInGroup : slides;
-
-        // Apply protocol to selected slides - this will trigger dataStore.notify()
-        slidesToOperateOn.forEach(slide => {
-            console.log('🔧 Adding protocol mapping:', {
-                bdsaCaseId: selectedCase.bdsaId,
-                slideId: slide.id,
-                protocolId,
-                protocolType: 'stain'
-            });
-            dataStore.addProtocolMapping(selectedCase.bdsaId, slide.id, protocolId, 'stain');
-        });
-
-        console.log('🔧 Protocol mapping applied, dataStore should notify subscribers');
-    };
-
-    const handleRemoveProtocolMapping = (slideId, protocolId, protocolType) => {
-        if (!selectedCase) return;
-
-        // Remove protocol from the specific slide - this will trigger dataStore.notify()
-        dataStore.removeProtocolMapping(selectedCase.bdsaId, slideId, protocolId, protocolType);
-    };
+    // Protocol mapping functions are now handled by the ProtocolMapping component
 
     // Get unique case IDs from the data
     const getUniqueCaseIds = () => {
@@ -248,8 +76,11 @@ const CaseManagementTab = () => {
         dataStatus.processedData?.forEach((item) => {
             const localCaseId = item.BDSA?.bdsaLocal?.localCaseId;
             const bdsaCaseId = item.BDSA?.bdsaLocal?.bdsaCaseId;
-            if (localCaseId && bdsaCaseId) {
-                caseIdMappings.set(localCaseId, bdsaCaseId);
+            if (localCaseId) {
+                // Only set mapping if BDSA Case ID exists, otherwise leave as undefined
+                if (bdsaCaseId) {
+                    caseIdMappings.set(localCaseId, bdsaCaseId);
+                }
             }
         });
 
@@ -260,6 +91,17 @@ const CaseManagementTab = () => {
                 bdsaCaseId: caseIdMappings.get(caseId) || null,
                 isMapped: Boolean(caseIdMappings.get(caseId))
             }));
+
+        // Debug logging
+        console.log('🔍 Case ID Mapping Debug:', {
+            totalProcessedData: dataStatus.processedData?.length || 0,
+            caseIdCounts: Object.keys(caseIdCounts).length,
+            caseIdMappings: caseIdMappings.size,
+            allCases: allCases.length,
+            mappedCases: allCases.filter(c => c.isMapped).length,
+            unmappedCases: allCases.filter(c => !c.isMapped).length,
+            sampleUnmapped: allCases.filter(c => !c.isMapped).slice(0, 3)
+        });
 
         // Only apply sorting if a sort field is explicitly set
         if (sortField) {
@@ -298,7 +140,7 @@ const CaseManagementTab = () => {
             return allCases.filter(caseData => !caseData.isMapped);
         }
         return allCases;
-    }, [dataStatus.processedData, dataStatus.caseIdMappings, temporaryHideMapped, sortField, sortDirection]);
+    }, [dataStatus.processedData, dataStatus.caseIdMappings, temporaryHideMapped, sortField, sortDirection, forceUpdate]);
 
     // Detect duplicate BDSA Case IDs
     const duplicateBdsaCaseIds = useMemo(() => {

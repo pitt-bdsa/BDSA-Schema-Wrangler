@@ -18,7 +18,7 @@ const DataGrid = ({
                 });
                 return dataStatus.processedData && dataStatus.processedData.length > 0;
             })() ? (
-                <div className="ag-theme-alpine" style={{ height: '100%', width: '100%', minHeight: '400px' }}>
+                <div className="ag-theme-alpine" style={{ height: '100%', width: '100%', minHeight: '600px' }}>
                     <AgGridReact
                         rowData={dataStatus.processedData}
                         columnDefs={getColumnDefs()}

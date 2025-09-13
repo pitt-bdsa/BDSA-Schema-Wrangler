@@ -106,23 +106,42 @@ const InputDataTab = () => {
     // Only run this once when data is first loaded, not on every data change
     useEffect(() => {
         if (dataStatus.processedData && dataStatus.processedData.length > 0 && !isDataRefresh) {
-            // Check if any BDSA local fields have values
-            const hasBdsaValues = dataStatus.processedData.some(item =>
-                (item.BDSA?.bdsaLocal?.localCaseId && item.BDSA.bdsaLocal.localCaseId.trim() !== '') ||
-                (item.BDSA?.bdsaLocal?.localStainID && item.BDSA.bdsaLocal.localStainID.trim() !== '') ||
-                (item.BDSA?.bdsaLocal?.localRegionId && item.BDSA.bdsaLocal.localRegionId.trim() !== '')
-            );
+            // Check which fields need regex extraction on a per-field basis
+            const fieldsNeedingExtraction = {
+                localCaseId: 0,
+                localStainID: 0,
+                localRegionId: 0
+            };
 
-            // If no BDSA values exist, auto-apply regex rules
-            if (!hasBdsaValues) {
-                console.log('🔄 No BDSA values found, auto-applying regex rules to items without existing data...');
+            dataStatus.processedData.forEach(item => {
+                const bdsaLocal = item.BDSA?.bdsaLocal;
+                if (!bdsaLocal) return;
+
+                // Count items missing each field
+                if (!bdsaLocal.localCaseId || bdsaLocal.localCaseId.trim() === '') {
+                    fieldsNeedingExtraction.localCaseId++;
+                }
+                if (!bdsaLocal.localStainID || bdsaLocal.localStainID.trim() === '') {
+                    fieldsNeedingExtraction.localStainID++;
+                }
+                if (!bdsaLocal.localRegionId || bdsaLocal.localRegionId.trim() === '') {
+                    fieldsNeedingExtraction.localRegionId++;
+                }
+            });
+
+            // If any fields need extraction, apply regex rules
+            const totalNeedingExtraction = Object.values(fieldsNeedingExtraction).reduce((sum, count) => sum + count, 0);
+
+            if (totalNeedingExtraction > 0) {
+                console.log(`🔄 Found items needing regex extraction:`, fieldsNeedingExtraction);
+                console.log(`🔄 Auto-applying regex rules to extract missing field values...`);
                 // Don't mark items as modified during initial data processing
                 const result = dataStore.applyRegexRules(regexRules, false);
                 if (result.success) {
                     console.log(`✅ Auto-applied regex rules: ${result.extractedCount} items updated (not marked as modified)`);
                 }
             } else {
-                console.log('🔄 BDSA values found, skipping auto-apply of regex rules to preserve existing data');
+                console.log('🔄 All items already have BDSA field values, skipping auto-apply of regex rules');
             }
         }
     }, [dataStatus.processedData, dataStatus.dataSource, isDataRefresh]); // Removed regexRules from dependencies

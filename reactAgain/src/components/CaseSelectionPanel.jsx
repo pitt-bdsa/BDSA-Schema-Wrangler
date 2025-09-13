@@ -32,7 +32,7 @@ const CaseSelectionPanel = ({ cases, onCaseSelect }) => {
                     <option value="">Select a BDSA Case...</option>
                     {cases.map(caseData => (
                         <option key={caseData.bdsaId} value={caseData.bdsaId}>
-                            {caseData.bdsaId} - {caseData.localCaseId} ({caseData.unmappedSlides.length} unmapped slides)
+                            {caseData.bdsaId} - {caseData.localCaseId} ({caseData.slides.filter(s => !s.isMapped).length} unmapped slides)
                         </option>
                     ))}
                 </select>
