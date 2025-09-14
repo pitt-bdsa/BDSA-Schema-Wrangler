@@ -198,8 +198,8 @@ const StainProtocolMapping = () => {
                     <div className="stain-groups">
                         {Object.entries(stainGroups).map(([stainType, slides]) => {
                             const isExpanded = expandedGroups.has(stainType);
-                            const mappedCount = slides.filter(s => s.status === 'mapped').length;
-                            const unmappedCount = slides.filter(s => s.status === 'unmapped').length;
+                            const mappedCount = slides.filter(s => s.stainProtocols && s.stainProtocols.length > 0).length;
+                            const unmappedCount = slides.filter(s => !s.stainProtocols || s.stainProtocols.length === 0).length;
 
                             // Find all protocols that are applied to any slide in this group
                             const allGroupProtocols = slides.length > 0 ? [...new Set(
@@ -283,7 +283,7 @@ const StainProtocolMapping = () => {
                                                 </thead>
                                                 <tbody>
                                                     {slides.map(slide => (
-                                                        <tr key={slide.id} className={`slide-row ${slide.status === 'mapped' ? 'mapped' : 'unmapped'}`}>
+                                                        <tr key={slide.id} className={`slide-row ${(slide.stainProtocols && slide.stainProtocols.length > 0) ? 'mapped' : 'unmapped'}`}>
                                                             <td className="file-cell">
                                                                 <div className="file-name">{slide.filename}</div>
                                                                 <div className="slide-id">{slide.id}</div>
@@ -292,8 +292,8 @@ const StainProtocolMapping = () => {
                                                                 {slide.regionType || 'N/A'}
                                                             </td>
                                                             <td className="status-cell">
-                                                                <span className={`status-badge ${slide.status === 'mapped' ? 'mapped' : 'unmapped'}`}>
-                                                                    {slide.status === 'mapped' ? '✓ Mapped' : '○ Unmapped'}
+                                                                <span className={`status-badge ${(slide.stainProtocols && slide.stainProtocols.length > 0) ? 'mapped' : 'unmapped'}`}>
+                                                                    {(slide.stainProtocols && slide.stainProtocols.length > 0) ? '✓ Mapped' : '○ Unmapped'}
                                                                 </span>
                                                             </td>
                                                             <td className="protocols-cell">
@@ -320,7 +320,6 @@ const StainProtocolMapping = () => {
                                                                 <div className="slide-actions">
                                                                     {availableProtocols
                                                                         .filter(protocol => !(slide.stainProtocols || []).includes(protocol.name))
-                                                                        .slice(0, 2) // Show max 2 buttons to keep table clean
                                                                         .map(protocol => (
                                                                             <button
                                                                                 key={protocol.id}
@@ -331,9 +330,6 @@ const StainProtocolMapping = () => {
                                                                                 + {protocol.name}
                                                                             </button>
                                                                         ))}
-                                                                    {availableProtocols.filter(protocol => !(slide.stainProtocols || []).includes(protocol.name)).length > 2 && (
-                                                                        <span className="more-protocols">+{availableProtocols.filter(protocol => !(slide.stainProtocols || []).includes(protocol.name)).length - 2} more</span>
-                                                                    )}
                                                                 </div>
                                                             </td>
                                                         </tr>

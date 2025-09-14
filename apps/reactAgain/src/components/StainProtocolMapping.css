@@ -521,14 +521,17 @@
 }
 
 .actions-cell {
-    min-width: 120px;
+    min-width: 200px;
+    max-width: 300px;
+    overflow-x: auto;
+    white-space: nowrap;
 }
 
 .slide-actions {
     display: flex;
-    flex-wrap: wrap;
     gap: 4px;
     align-items: center;
+    min-width: max-content;
 }
 
 .apply-protocol-btn {

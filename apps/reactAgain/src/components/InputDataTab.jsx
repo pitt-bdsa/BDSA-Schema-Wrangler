@@ -388,7 +388,6 @@ const InputDataTab = () => {
 
                             // Use custom cell renderer for protocol fields
                             if (fullKey.includes('Protocol')) {
-                                console.log('Setting protocol cell renderer for field:', fullKey);
                                 columnDef.cellRenderer = ProtocolArrayCellRenderer;
                                 columnDef.editable = false; // Disable AG Grid editing, use modal instead
                             }

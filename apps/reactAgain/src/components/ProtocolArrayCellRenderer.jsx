@@ -29,8 +29,6 @@ const ProtocolArrayCellRenderer = ({ value, data, colDef, api }) => {
     }, [colDef.field]);
 
     const handleCellClick = () => {
-        console.log('Protocol cell clicked!', { value, protocols, colDef: colDef.field });
-        console.log('Setting isEditing to true');
         setIsEditing(true);
     };
 
