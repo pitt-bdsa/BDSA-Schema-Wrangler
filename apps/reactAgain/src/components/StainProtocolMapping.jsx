@@ -8,6 +8,7 @@ const StainProtocolMapping = () => {
     const [stainProtocols, setStainProtocols] = useState(protocolStore.stainProtocols);
     const [cases, setCases] = useState([]);
     const [currentCaseIndex, setCurrentCaseIndex] = useState(0);
+    const [expandedGroups, setExpandedGroups] = useState(new Set());
 
     // Subscribe to data store changes
     useEffect(() => {
@@ -72,6 +73,17 @@ const StainProtocolMapping = () => {
         setCurrentCaseIndex(newIndex);
     };
 
+    // Toggle group expansion
+    const toggleGroupExpansion = (stainType) => {
+        const newExpanded = new Set(expandedGroups);
+        if (newExpanded.has(stainType)) {
+            newExpanded.delete(stainType);
+        } else {
+            newExpanded.add(stainType);
+        }
+        setExpandedGroups(newExpanded);
+    };
+
     const handleApplyStainProtocol = (slides, protocolId) => {
         // TODO: Implement stain protocol application
         console.log('Applying stain protocol', protocolId, 'to slides:', slides);
@@ -118,26 +130,24 @@ const StainProtocolMapping = () => {
     return (
         <div className="stain-protocol-mapping">
             <div className="header">
-                <h2>Stain Protocol Mapping</h2>
-                <div className="case-navigation">
+                <div className="case-navigation-compact">
                     <button
                         className="nav-btn prev-btn"
                         onClick={handlePreviousCase}
                         disabled={cases.length <= 1}
                     >
-                        ← Previous
+                        ←
                     </button>
-                    <div className="case-info">
-                        <h3>{currentCase.bdsaId}</h3>
-                        <p>Local Case ID: {currentCase.localCaseId}</p>
-                        <p>Case {currentCaseIndex + 1} of {cases.length}</p>
+                    <div className="case-pill">
+                        <div className="case-id">{currentCase.bdsaId}</div>
+                        <div className="case-details">Local: {currentCase.localCaseId} • {currentCaseIndex + 1} of {cases.length}</div>
                     </div>
                     <button
                         className="nav-btn next-btn"
                         onClick={handleNextCase}
                         disabled={cases.length <= 1}
                     >
-                        Next →
+                        →
                     </button>
                 </div>
             </div>
@@ -152,47 +162,67 @@ const StainProtocolMapping = () => {
                     </div>
                 ) : (
                     <div className="stain-groups">
-                        {Object.entries(stainGroups).map(([stainType, slides]) => (
-                            <div key={stainType} className="stain-group">
-                                <div className="group-header">
-                                    <h4>Stain Type: {stainType}</h4>
-                                    <p>{slides.length} slide(s)</p>
-                                </div>
+                        {Object.entries(stainGroups).map(([stainType, slides]) => {
+                            const isExpanded = expandedGroups.has(stainType);
+                            const mappedCount = slides.filter(s => s.status === 'mapped').length;
+                            const unmappedCount = slides.filter(s => s.status === 'unmapped').length;
 
-                                <div className="slide-list">
-                                    {slides.map(slide => (
-                                        <div key={slide.id} className={`slide-item ${slide.status === 'mapped' ? 'mapped' : 'unmapped'}`}>
-                                            <span>Slide ID: {slide.id}</span>
-                                            {slide.regionType && (
-                                                <span>Region: {slide.regionType}</span>
-                                            )}
-                                            <span className="status-indicator">
-                                                {slide.status === 'mapped' ? '✓ Mapped' : '○ Unmapped'}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                <div className="protocol-selection">
-                                    <label>Select Stain Protocol:</label>
-                                    <select
-                                        className="protocol-select"
-                                        onChange={(e) => {
-                                            if (e.target.value) {
-                                                handleApplyStainProtocol(slides, e.target.value);
-                                            }
-                                        }}
+                            return (
+                                <div key={stainType} className="stain-group">
+                                    <div
+                                        className="group-header clickable"
+                                        onClick={() => toggleGroupExpansion(stainType)}
                                     >
-                                        <option value="">Choose a protocol...</option>
-                                        {stainProtocols.map(protocol => (
-                                            <option key={protocol.id} value={protocol.id}>
-                                                {protocol.name} ({protocol.id})
-                                            </option>
-                                        ))}
-                                    </select>
+                                        <div className="group-title">
+                                            <span className="expand-icon">{isExpanded ? '▼' : '▶'}</span>
+                                            <h4>Stain Type: {stainType}</h4>
+                                        </div>
+                                        <div className="group-stats">
+                                            <p>{slides.length} slide(s)</p>
+                                            {mappedCount > 0 && <span className="mapped-count">({mappedCount} mapped)</span>}
+                                            {unmappedCount > 0 && <span className="unmapped-count">({unmappedCount} unmapped)</span>}
+                                        </div>
+                                    </div>
+
+                                    {isExpanded && (
+                                        <>
+                                            <div className="slide-list">
+                                                {slides.map(slide => (
+                                                    <div key={slide.id} className={`slide-item ${slide.status === 'mapped' ? 'mapped' : 'unmapped'}`}>
+                                                        <span>Slide ID: {slide.id}</span>
+                                                        {slide.regionType && (
+                                                            <span>Region: {slide.regionType}</span>
+                                                        )}
+                                                        <span className="status-indicator">
+                                                            {slide.status === 'mapped' ? '✓ Mapped' : '○ Unmapped'}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            <div className="protocol-selection">
+                                                <label>Select Stain Protocol:</label>
+                                                <select
+                                                    className="protocol-select"
+                                                    onChange={(e) => {
+                                                        if (e.target.value) {
+                                                            handleApplyStainProtocol(slides, e.target.value);
+                                                        }
+                                                    }}
+                                                >
+                                                    <option value="">Choose a protocol...</option>
+                                                    {stainProtocols.map(protocol => (
+                                                        <option key={protocol.id} value={protocol.id}>
+                                                            {protocol.name} ({protocol.id})
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>
