@@ -859,3 +859,32 @@
         justify-content: center;
     }
 }
+
+/* Protocol cell renderer styles */
+.protocol-cell-renderer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    align-items: center;
+}
+
+.protocol-chip {
+    display: inline-block;
+    background: #f8f9fa;
+    color: #495057;
+    border: 1px solid #dee2e6;
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-size: 10px;
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.no-protocols {
+    color: #6c757d;
+    font-style: italic;
+    font-size: 11px;
+}

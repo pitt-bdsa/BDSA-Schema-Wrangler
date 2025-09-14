@@ -1,0 +1,143 @@
+import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
+import protocolStore from '../utils/protocolStore';
+import dataStore from '../utils/dataStore';
+import './ProtocolArrayCellRenderer.css';
+
+const ProtocolArrayCellRenderer = ({ value, data, colDef, api }) => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [protocols, setProtocols] = useState([]);
+    const [availableProtocols, setAvailableProtocols] = useState([]);
+
+    // Initialize protocols from the cell value
+    React.useEffect(() => {
+        if (value) {
+            const protocolArray = Array.isArray(value)
+                ? value
+                : (typeof value === 'string' ? value.split(',').map(p => p.trim()).filter(p => p) : []);
+            setProtocols(protocolArray);
+        } else {
+            setProtocols([]);
+        }
+    }, [value]);
+
+    // Load available protocols
+    React.useEffect(() => {
+        const protocolType = colDef.field.includes('Stain') ? 'stain' : 'region';
+        const available = protocolType === 'stain' ? protocolStore.stainProtocols : protocolStore.regionProtocols;
+        setAvailableProtocols(available || []);
+    }, [colDef.field]);
+
+    const handleCellClick = () => {
+        console.log('Protocol cell clicked!', { value, protocols, colDef: colDef.field });
+        console.log('Setting isEditing to true');
+        setIsEditing(true);
+    };
+
+    const handleAddProtocol = (protocolName) => {
+        if (!protocols.includes(protocolName)) {
+            const newProtocols = [...protocols, protocolName];
+            setProtocols(newProtocols);
+            updateCellValue(newProtocols);
+        }
+    };
+
+    const handleRemoveProtocol = (protocolName) => {
+        const newProtocols = protocols.filter(p => p !== protocolName);
+        setProtocols(newProtocols);
+        updateCellValue(newProtocols);
+    };
+
+    const updateCellValue = (newProtocols) => {
+        // Update the data
+        const fieldName = colDef.field.replace('BDSA.bdsaLocal.', '');
+        if (!data.BDSA) {
+            data.BDSA = {};
+        }
+        if (!data.BDSA.bdsaLocal) {
+            data.BDSA.bdsaLocal = {};
+        }
+        data.BDSA.bdsaLocal[fieldName] = newProtocols;
+
+        // Mark as modified
+        dataStore.modifiedItems.add(data.id);
+        dataStore.saveToStorage();
+        dataStore.notify();
+
+        // Refresh the grid
+        api.refreshCells({ rowNodes: [api.getRowNode(data.id)] });
+    };
+
+    const handleClose = () => {
+        setIsEditing(false);
+    };
+
+    if (!value || protocols.length === 0) {
+        return (
+            <div className="protocol-cell-renderer clickable" onClick={handleCellClick}>
+                <span className="no-protocols">Click to add protocols</span>
+            </div>
+        );
+    }
+
+    const modalContent = isEditing && (
+        <div className="protocol-edit-modal-overlay" onClick={handleClose}>
+            <div className="protocol-edit-modal" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-header">
+                    <h3>Edit Protocols - {colDef.field}</h3>
+                    <button className="close-btn" onClick={handleClose}>×</button>
+                </div>
+                <div className="modal-content">
+                    <div className="current-protocols">
+                        <h4>Current Protocols:</h4>
+                        <div className="protocol-tags">
+                            {protocols.map((protocol, index) => (
+                                <span key={index} className="protocol-tag">
+                                    {protocol}
+                                    <button
+                                        className="remove-btn"
+                                        onClick={() => handleRemoveProtocol(protocol)}
+                                    >
+                                        ×
+                                    </button>
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="available-protocols">
+                        <h4>Add Protocol:</h4>
+                        <div className="protocol-buttons">
+                            {availableProtocols
+                                .filter(protocol => !protocols.includes(protocol.name))
+                                .map(protocol => (
+                                    <button
+                                        key={protocol.id}
+                                        className="add-protocol-btn"
+                                        onClick={() => handleAddProtocol(protocol.name)}
+                                    >
+                                        + {protocol.name}
+                                    </button>
+                                ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+
+    return (
+        <>
+            <div className="protocol-cell-renderer clickable" onClick={handleCellClick}>
+                {protocols.map((protocol, index) => (
+                    <span key={index} className="protocol-chip">
+                        {protocol}
+                    </span>
+                ))}
+            </div>
+
+            {isEditing && createPortal(modalContent, document.body)}
+        </>
+    );
+};
+
+export default ProtocolArrayCellRenderer;

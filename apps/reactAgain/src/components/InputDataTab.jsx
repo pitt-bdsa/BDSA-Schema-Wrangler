@@ -9,6 +9,7 @@ import DsaSyncModal from './DsaSyncModal';
 import DataControlsToolbar from './DataControlsToolbar';
 import DataGrid from './DataGrid';
 import ColumnVisibilityModal from './ColumnVisibilityModal';
+import ProtocolArrayCellRenderer from './ProtocolArrayCellRenderer';
 import { getDefaultRegexRules, applyRegexRules } from '../utils/regexExtractor';
 import { HIDDEN_DSA_FIELDS, PRIORITY_BDSA_FIELDS, DEFAULT_COLUMN_VISIBILITY, DATA_SOURCE_TYPES } from '../utils/constants';
 import { generateColumnDefinitions, getColumnDisplayName, generateNestedKeys } from '../utils/columnDefinitionGenerator';
@@ -384,6 +385,14 @@ const InputDataTab = () => {
                         // Make BDSA local fields editable
                         if (fullKey.startsWith('BDSA.bdsaLocal.')) {
                             columnDef.editable = true;
+
+                            // Use custom cell renderer for protocol fields
+                            if (fullKey.includes('Protocol')) {
+                                console.log('Setting protocol cell renderer for field:', fullKey);
+                                columnDef.cellRenderer = ProtocolArrayCellRenderer;
+                                columnDef.editable = false; // Disable AG Grid editing, use modal instead
+                            }
+
                             columnDef.onCellValueChanged = (params) => {
                                 const { data, newValue, oldValue, colDef } = params;
                                 if (newValue !== oldValue) {
@@ -391,8 +400,18 @@ const InputDataTab = () => {
                                     if (!data.BDSA) {
                                         data.BDSA = {};
                                     }
+                                    if (!data.BDSA.bdsaLocal) {
+                                        data.BDSA.bdsaLocal = {};
+                                    }
                                     const fieldName = colDef.field.replace('BDSA.bdsaLocal.', '');
-                                    data.BDSA[fieldName] = newValue;
+
+                                    // Handle protocol arrays properly
+                                    if (colDef.field.includes('Protocol')) {
+                                        // Ensure we store as array
+                                        data.BDSA.bdsaLocal[fieldName] = Array.isArray(newValue) ? newValue : [];
+                                    } else {
+                                        data.BDSA.bdsaLocal[fieldName] = newValue;
+                                    }
 
                                     // Set data source to manual and update timestamp
                                     if (!data.BDSA._dataSource) {
