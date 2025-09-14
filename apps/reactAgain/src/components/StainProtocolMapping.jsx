@@ -29,13 +29,9 @@ const StainProtocolMapping = () => {
     // Generate cases with unmapped stain slides when data changes
     useEffect(() => {
         if (dataStatus.processedData && dataStatus.processedData.length > 0) {
-            const allUnmappedCases = dataStore.generateUnmappedCases();
-            // Filter to only cases that have slides with stain types
-            const casesWithStainSlides = allUnmappedCases.filter(caseData => {
-                const stainSlides = getAllStainSlides(caseData);
-                return stainSlides.length > 0;
-            });
-            setCases(casesWithStainSlides);
+            const allCasesWithStainSlides = dataStore.generateUnmappedCases();
+            // The function now returns all cases with stain slides, so we can use them directly
+            setCases(allCasesWithStainSlides);
             // Reset to first case when cases change
             setCurrentCaseIndex(0);
         }
@@ -189,13 +185,21 @@ const StainProtocolMapping = () => {
                                             <div className="slide-list">
                                                 {slides.map(slide => (
                                                     <div key={slide.id} className={`slide-item ${slide.status === 'mapped' ? 'mapped' : 'unmapped'}`}>
-                                                        <span>Slide ID: {slide.id}</span>
-                                                        {slide.regionType && (
-                                                            <span>Region: {slide.regionType}</span>
+                                                        <div className="slide-main-info">
+                                                            <span>File: {slide.filename}</span>
+                                                            <span className="slide-id">ID: {slide.id}</span>
+                                                            {slide.regionType && (
+                                                                <span>Region: {slide.regionType}</span>
+                                                            )}
+                                                            <span className="status-indicator">
+                                                                {slide.status === 'mapped' ? '✓ Mapped' : '○ Unmapped'}
+                                                            </span>
+                                                        </div>
+                                                        {slide.stainProtocols && slide.stainProtocols.length > 0 && (
+                                                            <div className="existing-protocols">
+                                                                <strong>Existing Protocols:</strong> {Array.isArray(slide.stainProtocols) ? slide.stainProtocols.join(', ') : slide.stainProtocols}
+                                                            </div>
                                                         )}
-                                                        <span className="status-indicator">
-                                                            {slide.status === 'mapped' ? '✓ Mapped' : '○ Unmapped'}
-                                                        </span>
                                                     </div>
                                                 ))}
                                             </div>

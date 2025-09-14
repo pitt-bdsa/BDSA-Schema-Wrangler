@@ -193,12 +193,12 @@
 }
 
 .slide-item {
-    display: inline-block;
+    display: block;
     background: white;
     border: 1px solid #dee2e6;
     border-radius: 4px;
     padding: 8px 12px;
-    margin: 5px 5px 5px 0;
+    margin: 5px 0;
     font-size: 12px;
     color: #666;
     position: relative;
@@ -214,12 +214,33 @@
     border-color: #ffc107;
 }
 
-.slide-item span {
+.slide-main-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+.slide-main-info span {
     margin-right: 10px;
 }
 
-.slide-item span:last-child {
+.slide-main-info span:last-child {
     margin-right: 0;
+}
+
+.slide-id {
+    font-size: 10px;
+    color: #999;
+    font-family: monospace;
+}
+
+.existing-protocols {
+    font-size: 11px;
+    color: #28a745;
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid #e9ecef;
 }
 
 .status-indicator {

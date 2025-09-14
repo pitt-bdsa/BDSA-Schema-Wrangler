@@ -1761,6 +1761,9 @@ class DataStore {
 
             const finalFilename = filename || `${localCaseId}_${localStainId || localRegionId}.svs`;
 
+            // Use the actual _id or dsa_id from the data for proper table reference
+            const slideId = row._id || row.dsa_id || finalFilename;
+
             // Debug first few rows
             if (index < 3) {
                 console.log(`🔍 Row ${index}:`, {
@@ -1768,6 +1771,10 @@ class DataStore {
                     localStainId,
                     localRegionId,
                     filename,
+                    finalFilename,
+                    slideId,
+                    _id: row._id,
+                    dsa_id: row.dsa_id,
                     hasCaseIdMapping: this.caseIdMappings.has(localCaseId),
                     bdsaData: row.BDSA?.bdsaLocal,
                     fullRowKeys: Object.keys(row).slice(0, 10) // Show first 10 keys for debugging
@@ -1799,9 +1806,6 @@ class DataStore {
                 };
             }
 
-            // Use dsa_id if available, otherwise fall back to constructed slideId format
-            const slideId = row.dsa_id || `${bdsaCaseId}_${finalFilename}`;
-
             // Skip if we've already processed this slide ID
             if (slideIdsSeen.has(slideId)) {
                 console.log(`🔍 Skipping duplicate slide: ${slideId}`);
@@ -1809,42 +1813,100 @@ class DataStore {
             }
             slideIdsSeen.add(slideId);
 
-            const slideProtocols = this.caseProtocolMappings.get(bdsaCaseId)?.[slideId] || { stain: [], region: [] };
+            // Get protocol information from the actual data
+            const bdsaStainProtocol = row.BDSA?.bdsaLocal?.bdsaStainProtocol;
+            const bdsaRegionProtocol = row.BDSA?.bdsaLocal?.bdsaRegionProtocol;
+
+            // Parse the protocol data - always store as arrays internally
+            let stainProtocols = [];
+            if (bdsaStainProtocol) {
+                if (Array.isArray(bdsaStainProtocol)) {
+                    // Already an array, just filter out invalid entries
+                    stainProtocols = bdsaStainProtocol.filter(p => p && typeof p === 'string');
+                } else if (typeof bdsaStainProtocol === 'string') {
+                    // Convert string to array
+                    stainProtocols = bdsaStainProtocol.split(',').map(p => p.trim()).filter(p => p);
+                }
+            }
+            
+            let regionProtocols = [];
+            if (bdsaRegionProtocol) {
+                if (Array.isArray(bdsaRegionProtocol)) {
+                    // Already an array, just filter out invalid entries
+                    regionProtocols = bdsaRegionProtocol.filter(p => p && typeof p === 'string');
+                } else if (typeof bdsaRegionProtocol === 'string') {
+                    // Convert string to array
+                    regionProtocols = bdsaRegionProtocol.split(',').map(p => p.trim()).filter(p => p);
+                }
+            }
+
+            // Also check the caseProtocolMappings for any additional mappings
+            const additionalSlideProtocols = this.caseProtocolMappings.get(bdsaCaseId)?.[slideId] || { stain: [], region: [] };
+
+            // Combine protocols from data and mappings
+            const allStainProtocols = [...stainProtocols, ...(additionalSlideProtocols.stain || [])];
+            const allRegionProtocols = [...regionProtocols, ...(additionalSlideProtocols.region || [])];
 
             // Check if slide is mapped (has protocols)
-            const hasStainProtocols = (slideProtocols.stain || []).length > 0;
-            const hasRegionProtocols = (slideProtocols.region || []).length > 0;
+            const hasStainProtocols = allStainProtocols.length > 0;
+            const hasRegionProtocols = allRegionProtocols.length > 0;
             const isMapped = hasStainProtocols || hasRegionProtocols;
 
+            // Debug logging for protocol detection
+            if (index < 10) { // Show more rows for debugging
+                console.log(`🔍 Row ${index} protocol detection:`, {
+                    slideId,
+                    filename: finalFilename,
+                    bdsaStainProtocol,
+                    bdsaStainProtocolType: typeof bdsaStainProtocol,
+                    bdsaRegionProtocol,
+                    bdsaRegionProtocolType: typeof bdsaRegionProtocol,
+                    stainProtocols,
+                    regionProtocols,
+                    localStainId,
+                    localRegionId,
+                    isMapped,
+                    hasStainProtocols,
+                    hasRegionProtocols,
+                    allStainProtocols,
+                    allRegionProtocols
+                });
+            }
+
             caseGroups[bdsaCaseId].slides.push({
-                id: slideId,
+                id: slideId, // This is now the actual _id or dsa_id for table reference
+                filename: finalFilename, // This is the display name
                 stainType: localStainId,
                 regionType: localRegionId,
                 status: isMapped ? 'mapped' : 'unmapped',
                 localStainId: localStainId,
                 localRegionId: localRegionId,
-                filename: finalFilename
+                stainProtocols: allStainProtocols,
+                regionProtocols: allRegionProtocols
             });
         });
 
         const allCases = Object.values(caseGroups);
-        const unmappedCases = allCases.filter(caseData =>
-            caseData.slides.some(slide => slide.status === 'unmapped')
+        // Return ALL cases that have slides with stain types, not just unmapped ones
+        const casesWithStainSlides = allCases.filter(caseData =>
+            caseData.slides.some(slide => slide.stainType)
         );
 
         console.log('🔍 DEBUG - Case generation results:', {
             totalCaseGroups: allCases.length,
-            unmappedCases: unmappedCases.length,
+            casesWithStainSlides: casesWithStainSlides.length,
             allCases: allCases.map(c => ({
                 bdsaId: c.bdsaId,
                 localCaseId: c.localCaseId,
                 totalSlides: c.slides.length,
+                stainSlides: c.slides.filter(s => s.stainType).length,
+                mappedSlides: c.slides.filter(s => s.status === 'mapped').length,
                 unmappedSlides: c.slides.filter(s => s.status === 'unmapped').length
             })),
             caseGroupsKeys: Object.keys(caseGroups)
         });
 
-        return unmappedCases;
+        return casesWithStainSlides;
     }
 
     // Add protocol mapping to a specific slide
