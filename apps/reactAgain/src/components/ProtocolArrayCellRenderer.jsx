@@ -62,27 +62,20 @@ const ProtocolArrayCellRenderer = ({ value, data, colDef, api }) => {
         dataStore.saveToStorage();
         dataStore.notify();
 
-        // Refresh the grid
-        api.refreshCells({ rowNodes: [api.getRowNode(data.id)] });
+        // Don't refresh the grid while modal is open - it will refresh when modal closes
     };
 
     const handleClose = () => {
         setIsEditing(false);
+        // Refresh the grid when modal closes to show updated data
+        api.refreshCells({ rowNodes: [api.getRowNode(data.id)] });
     };
-
-    if (!value || protocols.length === 0) {
-        return (
-            <div className="protocol-cell-renderer clickable" onClick={handleCellClick}>
-                <span className="no-protocols">Click to add protocols</span>
-            </div>
-        );
-    }
 
     const modalContent = isEditing && (
         <div className="protocol-edit-modal-overlay" onClick={handleClose}>
             <div className="protocol-edit-modal" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-header">
-                    <h3>Edit Protocols - {colDef.field}</h3>
+                    <h3>Edit Protocols</h3>
                     <button className="close-btn" onClick={handleClose}>×</button>
                 </div>
                 <div className="modal-content">
@@ -126,11 +119,15 @@ const ProtocolArrayCellRenderer = ({ value, data, colDef, api }) => {
     return (
         <>
             <div className="protocol-cell-renderer clickable" onClick={handleCellClick}>
-                {protocols.map((protocol, index) => (
-                    <span key={index} className="protocol-chip">
-                        {protocol}
-                    </span>
-                ))}
+                {protocols.length > 0 ? (
+                    protocols.map((protocol, index) => (
+                        <span key={index} className="protocol-chip">
+                            {protocol}
+                        </span>
+                    ))
+                ) : (
+                    <span className="no-protocols">Click to add protocols</span>
+                )}
             </div>
 
             {isEditing && createPortal(modalContent, document.body)}

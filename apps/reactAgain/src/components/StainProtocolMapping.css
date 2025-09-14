@@ -290,6 +290,16 @@
     background: #007bff;
 }
 
+.group-chip.fully-applied {
+    background: #28a745;
+    color: white;
+}
+
+.group-chip.partially-applied {
+    background: #ffc107;
+    color: #212529;
+}
+
 .remove-protocol-btn {
     background: none;
     border: none;
@@ -336,6 +346,16 @@
 
 .add-protocol-btn:hover {
     background: #5a6268;
+    transform: translateY(-1px);
+}
+
+.add-protocol-btn.partially-applied {
+    background: #ffc107;
+    color: #212529;
+}
+
+.add-protocol-btn.partially-applied:hover {
+    background: #e0a800;
     transform: translateY(-1px);
 }
 

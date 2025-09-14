@@ -864,27 +864,41 @@
 .protocol-cell-renderer {
     display: flex;
     flex-wrap: wrap;
-    gap: 2px;
+    gap: 4px;
     align-items: center;
+    min-height: 32px;
+    padding: 6px 4px;
+    line-height: 1;
+    justify-content: flex-start;
+    height: 100%;
+    box-sizing: border-box;
 }
 
 .protocol-chip {
-    display: inline-block;
-    background: #f8f9fa;
-    color: #495057;
-    border: 1px solid #dee2e6;
-    padding: 1px 4px;
-    border-radius: 2px;
+    display: inline-flex;
+    background: #e3f2fd;
+    color: #1565c0;
+    border: 1px solid #bbdefb;
+    padding: 3px 8px;
+    border-radius: 14px;
     font-size: 10px;
-    max-width: 100px;
+    max-width: 140px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-weight: 500;
+    line-height: 1.3;
+    height: 20px;
+    align-items: center;
+    box-sizing: border-box;
 }
 
 .no-protocols {
     color: #6c757d;
     font-style: italic;
     font-size: 11px;
+    line-height: 1.3;
+    display: flex;
+    align-items: center;
+    height: 20px;
 }

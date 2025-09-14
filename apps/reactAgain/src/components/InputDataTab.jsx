@@ -10,6 +10,7 @@ import DataControlsToolbar from './DataControlsToolbar';
 import DataGrid from './DataGrid';
 import ColumnVisibilityModal from './ColumnVisibilityModal';
 import ProtocolArrayCellRenderer from './ProtocolArrayCellRenderer';
+import NameCellRenderer from './NameCellRenderer';
 import { getDefaultRegexRules, applyRegexRules } from '../utils/regexExtractor';
 import { HIDDEN_DSA_FIELDS, PRIORITY_BDSA_FIELDS, DEFAULT_COLUMN_VISIBILITY, DATA_SOURCE_TYPES } from '../utils/constants';
 import { generateColumnDefinitions, getColumnDisplayName, generateNestedKeys } from '../utils/columnDefinitionGenerator';
@@ -391,7 +392,15 @@ const InputDataTab = () => {
                                 columnDef.cellRenderer = ProtocolArrayCellRenderer;
                                 columnDef.editable = false; // Disable AG Grid editing, use modal instead
                             }
+                        }
 
+                        // Use custom cell renderer for name field to show tooltip on hover
+                        if (fullKey === 'name') {
+                            columnDef.cellRenderer = NameCellRenderer;
+                        }
+
+                        // Add cell value change handler for BDSA fields
+                        if (fullKey.startsWith('BDSA.bdsaLocal.')) {
                             columnDef.onCellValueChanged = (params) => {
                                 const { data, newValue, oldValue, colDef } = params;
                                 if (newValue !== oldValue) {

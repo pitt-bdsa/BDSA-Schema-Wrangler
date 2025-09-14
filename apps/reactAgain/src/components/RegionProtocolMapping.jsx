@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import dataStore from '../utils/dataStore';
 import protocolStore from '../utils/protocolStore';
-import './StainProtocolMapping.css';
+import './StainProtocolMapping.css'; // Reuse the same styles
 
-const StainProtocolMapping = () => {
+const RegionProtocolMapping = () => {
     const [dataStatus, setDataStatus] = useState(dataStore.getStatus());
-    const [stainProtocols, setStainProtocols] = useState(protocolStore.stainProtocols);
+    const [regionProtocols, setRegionProtocols] = useState(protocolStore.regionProtocols);
     const [availableProtocols, setAvailableProtocols] = useState([]);
     const [cases, setCases] = useState([]);
     const [currentCaseIndex, setCurrentCaseIndex] = useState(0);
@@ -22,44 +22,44 @@ const StainProtocolMapping = () => {
     // Subscribe to protocol store changes
     useEffect(() => {
         const unsubscribeProtocols = protocolStore.subscribe(() => {
-            setStainProtocols(protocolStore.stainProtocols);
-            setAvailableProtocols(protocolStore.stainProtocols || []);
+            setRegionProtocols(protocolStore.regionProtocols);
+            setAvailableProtocols(protocolStore.regionProtocols || []);
         });
 
         // Initial load
-        setStainProtocols(protocolStore.stainProtocols);
-        setAvailableProtocols(protocolStore.stainProtocols || []);
+        setRegionProtocols(protocolStore.regionProtocols);
+        setAvailableProtocols(protocolStore.regionProtocols || []);
 
         return unsubscribeProtocols;
     }, []);
 
-    // Generate cases with stain slides when data changes
+    // Generate cases with region slides when data changes
     useEffect(() => {
         if (dataStatus.processedData && dataStatus.processedData.length > 0) {
-            const stainCases = dataStore.generateStainProtocolCases();
-            setCases(stainCases);
+            const regionCases = dataStore.generateRegionProtocolCases();
+            setCases(regionCases);
             // Reset to first case when cases change
             setCurrentCaseIndex(0);
         }
     }, [dataStatus.processedData]);
 
-    // Get all slides with stain types for the case (regardless of mapping status)
-    const getAllStainSlides = (caseData) => {
+    // Get all slides with region types for the case (regardless of mapping status)
+    const getAllRegionSlides = (caseData) => {
         if (!caseData || !caseData.slides) return [];
         return caseData.slides.filter(slide =>
-            slide.stainType // Show all slides that have a stain type
+            slide.regionType // Show all slides that have a region type
         );
     };
 
-    // Group slides by stain type
-    const groupSlidesByStainType = (slides) => {
+    // Group slides by region type
+    const groupSlidesByRegionType = (slides) => {
         const groups = {};
         slides.forEach(slide => {
-            const stainType = slide.stainType;
-            if (!groups[stainType]) {
-                groups[stainType] = [];
+            const regionType = slide.regionType;
+            if (!groups[regionType]) {
+                groups[regionType] = [];
             }
-            groups[stainType].push(slide);
+            groups[regionType].push(slide);
         });
         return groups;
     };
@@ -76,18 +76,18 @@ const StainProtocolMapping = () => {
     };
 
     // Toggle group expansion
-    const toggleGroupExpansion = (stainType) => {
+    const toggleGroupExpansion = (regionType) => {
         const newExpanded = new Set(expandedGroups);
-        if (newExpanded.has(stainType)) {
-            newExpanded.delete(stainType);
+        if (newExpanded.has(regionType)) {
+            newExpanded.delete(regionType);
         } else {
-            newExpanded.add(stainType);
+            newExpanded.add(regionType);
         }
         setExpandedGroups(newExpanded);
     };
 
-    const handleApplyStainProtocol = (slides, protocolId) => {
-        console.log('Applying stain protocol', protocolId, 'to slides:', slides);
+    const handleApplyRegionProtocol = (slides, protocolId) => {
+        console.log('Applying region protocol', protocolId, 'to slides:', slides);
 
         // Get the current case
         const currentCase = cases[currentCaseIndex];
@@ -95,15 +95,14 @@ const StainProtocolMapping = () => {
 
         // Apply protocol to each slide
         slides.forEach(slide => {
-            dataStore.addProtocolMapping(currentCase.bdsaId, slide.id, protocolId, 'stain');
+            dataStore.addProtocolMapping(currentCase.bdsaId, slide.id, protocolId, 'region');
         });
 
         console.log(`✅ Applied protocol ${protocolId} to ${slides.length} slides`);
     };
 
-    const handleRemoveStainProtocol = (slides, protocolToRemove) => {
-        console.log('🔍 Removing stain protocol', protocolToRemove, 'from slides:', slides);
-        console.log('🔍 Current case:', cases[currentCaseIndex]);
+    const handleRemoveRegionProtocol = (slides, protocolToRemove) => {
+        console.log('🔍 Removing region protocol', protocolToRemove, 'from slides:', slides);
 
         // Get the current case
         const currentCase = cases[currentCaseIndex];
@@ -115,8 +114,7 @@ const StainProtocolMapping = () => {
         // Remove protocol from each slide
         slides.forEach(slide => {
             console.log(`🔍 Removing ${protocolToRemove} from slide ${slide.id} (${slide.filename})`);
-            console.log(`🔍 Slide current protocols:`, slide.stainProtocols);
-            dataStore.removeProtocolMapping(currentCase.bdsaId, slide.id, protocolToRemove, 'stain');
+            dataStore.removeProtocolMapping(currentCase.bdsaId, slide.id, protocolToRemove, 'region');
         });
 
         console.log(`✅ Removed protocol ${protocolToRemove} from ${slides.length} slides`);
@@ -126,14 +124,14 @@ const StainProtocolMapping = () => {
         return (
             <div className="stain-protocol-mapping">
                 <div className="header">
-                    <h2>Stain Protocol Mapping</h2>
-                    <p>No cases with stain slides found.</p>
+                    <h2>Region Protocol Mapping</h2>
+                    <p>No cases with region slides found.</p>
                 </div>
                 <div className="no-cases">
                     <p>Make sure you have:</p>
                     <ul>
                         <li>Loaded data with BDSA Case IDs assigned</li>
-                        <li>Local Stain IDs in your data</li>
+                        <li>Local Region IDs in your data</li>
                     </ul>
                 </div>
             </div>
@@ -141,24 +139,8 @@ const StainProtocolMapping = () => {
     }
 
     const currentCase = cases[currentCaseIndex];
-    const allStainSlides = getAllStainSlides(currentCase);
-    const stainGroups = groupSlidesByStainType(allStainSlides);
-
-    // Debug logging
-    console.log('🔍 DEBUG - Current case:', {
-        bdsaId: currentCase.bdsaId,
-        localCaseId: currentCase.localCaseId,
-        totalSlides: currentCase.slides.length,
-        stainSlides: allStainSlides.length,
-        allSlides: currentCase.slides.map(s => ({
-            id: s.id,
-            stainType: s.stainType,
-            status: s.status,
-            hasStainProtocol: s.hasStainProtocol
-        }))
-    });
-
-    console.log('🔍 DEBUG - Stain groups:', stainGroups);
+    const allRegionSlides = getAllRegionSlides(currentCase);
+    const regionGroups = groupSlidesByRegionType(allRegionSlides);
 
     return (
         <div className="stain-protocol-mapping">
@@ -186,24 +168,24 @@ const StainProtocolMapping = () => {
             </div>
 
             <div className="mapping-interface">
-                <h3>Map Stain Protocols to Slides</h3>
-                <p>Select a stain protocol for each group of slides with the same stain type.</p>
+                <h3>Map Region Protocols to Slides</h3>
+                <p>Select a region protocol for each group of slides with the same region type.</p>
 
-                {Object.keys(stainGroups).length === 0 ? (
+                {Object.keys(regionGroups).length === 0 ? (
                     <div className="no-unmapped-slides">
-                        <p>No slides with stain types found in this case.</p>
+                        <p>No slides with region types found in this case.</p>
                     </div>
                 ) : (
                     <div className="stain-groups">
-                        {Object.entries(stainGroups).map(([stainType, slides]) => {
-                            const isExpanded = expandedGroups.has(stainType);
-                            const mappedCount = slides.filter(s => s.stainProtocols && s.stainProtocols.length > 0).length;
-                            const unmappedCount = slides.filter(s => !s.stainProtocols || s.stainProtocols.length === 0).length;
+                        {Object.entries(regionGroups).map(([regionType, slides]) => {
+                            const isExpanded = expandedGroups.has(regionType);
+                            const mappedCount = slides.filter(s => s.regionProtocols && s.regionProtocols.length > 0).length;
+                            const unmappedCount = slides.filter(s => !s.regionProtocols || s.regionProtocols.length === 0).length;
 
                             // Find all protocols that are applied to any slide in this group with counts
                             const protocolCounts = {};
                             slides.forEach(slide => {
-                                (slide.stainProtocols || []).forEach(protocol => {
+                                (slide.regionProtocols || []).forEach(protocol => {
                                     protocolCounts[protocol] = (protocolCounts[protocol] || 0) + 1;
                                 });
                             });
@@ -213,18 +195,15 @@ const StainProtocolMapping = () => {
                                 protocolCounts[protocol] === slides.length
                             );
 
-                            console.log(`🔍 Group ${stainType} protocol counts:`, protocolCounts);
-                            console.log(`🔍 Fully applied protocols:`, fullyAppliedProtocols);
-
                             return (
-                                <div key={stainType} className="stain-group">
+                                <div key={regionType} className="stain-group">
                                     <div
                                         className="group-header clickable"
-                                        onClick={() => toggleGroupExpansion(stainType)}
+                                        onClick={() => toggleGroupExpansion(regionType)}
                                     >
                                         <div className="group-title">
                                             <span className="expand-icon">{isExpanded ? '▼' : '▶'}</span>
-                                            <h4>Stain Type: {stainType}</h4>
+                                            <h4>Region Type: {regionType}</h4>
                                         </div>
                                         <div className="group-stats">
                                             <p>{slides.length} slide(s)</p>
@@ -246,7 +225,7 @@ const StainProtocolMapping = () => {
                                                             {protocol} ({count}/{slides.length})
                                                             <button
                                                                 className="remove-protocol-btn"
-                                                                onClick={() => handleRemoveStainProtocol(slides, protocol)}
+                                                                onClick={() => handleRemoveRegionProtocol(slides, protocol)}
                                                                 title={`Remove ${protocol} from all slides`}
                                                             >
                                                                 ×
@@ -260,7 +239,7 @@ const StainProtocolMapping = () => {
 
                                     {/* Protocol selection - always visible */}
                                     <div className="protocol-selection">
-                                        <label>Add Stain Protocol:</label>
+                                        <label>Add Region Protocol:</label>
                                         <div className="available-protocols">
                                             {availableProtocols
                                                 .filter(protocol => !fullyAppliedProtocols.includes(protocol.name))
@@ -271,7 +250,7 @@ const StainProtocolMapping = () => {
                                                         <button
                                                             key={protocol.id}
                                                             className={`add-protocol-btn ${isPartiallyApplied ? 'partially-applied' : ''}`}
-                                                            onClick={() => handleApplyStainProtocol(slides, protocol.name)}
+                                                            onClick={() => handleApplyRegionProtocol(slides, protocol.name)}
                                                             title={isPartiallyApplied 
                                                                 ? `Apply ${protocol.name} to remaining ${slides.length - currentCount} slides`
                                                                 : `Add ${protocol.name} to all slides`
@@ -298,25 +277,25 @@ const StainProtocolMapping = () => {
                                                 </thead>
                                                 <tbody>
                                                     {slides.map(slide => (
-                                                        <tr key={slide.id} className={`slide-row ${(slide.stainProtocols && slide.stainProtocols.length > 0) ? 'mapped' : 'unmapped'}`}>
+                                                        <tr key={slide.id} className={`slide-row ${(slide.regionProtocols && slide.regionProtocols.length > 0) ? 'mapped' : 'unmapped'}`}>
                                                             <td className="file-cell">
                                                                 <div className="file-name">{slide.filename}</div>
                                                                 <div className="slide-id">{slide.id}</div>
                                                             </td>
                                                             <td className="status-cell">
-                                                                <span className={`status-badge ${(slide.stainProtocols && slide.stainProtocols.length > 0) ? 'mapped' : 'unmapped'}`}>
-                                                                    {(slide.stainProtocols && slide.stainProtocols.length > 0) ? '✓ Mapped' : '○ Unmapped'}
+                                                                <span className={`status-badge ${(slide.regionProtocols && slide.regionProtocols.length > 0) ? 'mapped' : 'unmapped'}`}>
+                                                                    {(slide.regionProtocols && slide.regionProtocols.length > 0) ? '✓ Mapped' : '○ Unmapped'}
                                                                 </span>
                                                             </td>
                                                             <td className="protocols-cell">
-                                                                {slide.stainProtocols && slide.stainProtocols.length > 0 ? (
+                                                                {slide.regionProtocols && slide.regionProtocols.length > 0 ? (
                                                                     <div className="protocol-tags">
-                                                                        {slide.stainProtocols.map((protocol, idx) => (
+                                                                        {slide.regionProtocols.map((protocol, idx) => (
                                                                             <span key={idx} className="protocol-tag">
                                                                                 {protocol}
                                                                                 <button
                                                                                     className="remove-protocol-btn"
-                                                                                    onClick={() => handleRemoveStainProtocol([slide], protocol)}
+                                                                                    onClick={() => handleRemoveRegionProtocol([slide], protocol)}
                                                                                     title={`Remove ${protocol}`}
                                                                                 >
                                                                                     ×
@@ -331,12 +310,12 @@ const StainProtocolMapping = () => {
                                                             <td className="actions-cell">
                                                                 <div className="slide-actions">
                                                                     {availableProtocols
-                                                                        .filter(protocol => !(slide.stainProtocols || []).includes(protocol.name))
+                                                                        .filter(protocol => !(slide.regionProtocols || []).includes(protocol.name))
                                                                         .map(protocol => (
                                                                             <button
                                                                                 key={protocol.id}
                                                                                 className="apply-protocol-btn"
-                                                                                onClick={() => handleApplyStainProtocol([slide], protocol.name)}
+                                                                                onClick={() => handleApplyRegionProtocol([slide], protocol.name)}
                                                                                 title={`Apply ${protocol.name}`}
                                                                             >
                                                                                 + {protocol.name}
@@ -360,4 +339,4 @@ const StainProtocolMapping = () => {
     );
 };
 
-export default StainProtocolMapping;
+export default RegionProtocolMapping;
