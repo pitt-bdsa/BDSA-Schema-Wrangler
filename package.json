@@ -1,11 +1,25 @@
 {
-  "dependencies": {
-    "@expo/metro-runtime": "~5.0.4",
-    "ag-grid-community": "^34.0.2",
-    "ag-grid-react": "^34.0.2",
-    "expo": "^53.0.19",
-    "papaparse": "^5.5.3",
-    "react-native-web": "^0.20.0",
-    "recharts": "^3.1.0"
+  "name": "bdsa-schema-wrangler",
+  "version": "1.0.0",
+  "description": "BDSA Schema Wrangler - Metadata harmonization and DSA synchronization tools",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:react-again": "cd apps/reactAgain && npm start",
+    "dev:sync-app": "cd apps/react-sync-app && npm start",
+    "build:all": "npm run build --workspaces",
+    "install:all": "npm install",
+    "clean": "rm -rf node_modules packages/*/node_modules apps/*/node_modules"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^4.9.5"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
   }
 }
