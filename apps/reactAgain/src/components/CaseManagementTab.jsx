@@ -3,9 +3,9 @@ import './CaseManagementTab.css';
 import dataStore, { setCaseIdInData, generateUnmappedCases } from '../utils/dataStore';
 import protocolStore from '../utils/protocolStore';
 import dsaAuthStore from '../utils/dsaAuthStore';
-import ProtocolMapping from './ProtocolMapping';
 import CaseStatsPanel from './CaseStatsPanel';
 import CaseIdMappingSection from './CaseIdMappingSection';
+import StainProtocolMapping from './StainProtocolMapping';
 
 const CaseManagementTab = () => {
     const [activeSubTab, setActiveSubTab] = useState('case-id-mapping');
@@ -437,10 +437,10 @@ const CaseManagementTab = () => {
                     Case ID Mapping
                 </button>
                 <button
-                    className={`sub-tab-btn ${activeSubTab === 'protocol-mapping' ? 'active' : ''}`}
-                    onClick={() => setActiveSubTab('protocol-mapping')}
+                    className={`sub-tab-btn ${activeSubTab === 'stain-protocol-mapping' ? 'active' : ''}`}
+                    onClick={() => setActiveSubTab('stain-protocol-mapping')}
                 >
-                    Protocol Mapping
+                    Stain Protocol Mapping
                 </button>
             </div>
 
@@ -469,10 +469,11 @@ const CaseManagementTab = () => {
                 />
             )}
 
-            {/* Protocol Mapping Content */}
-            {activeSubTab === 'protocol-mapping' && (
-                <ProtocolMapping />
+            {/* Stain Protocol Mapping Content */}
+            {activeSubTab === 'stain-protocol-mapping' && (
+                <StainProtocolMapping />
             )}
+
         </div>
     );
 };

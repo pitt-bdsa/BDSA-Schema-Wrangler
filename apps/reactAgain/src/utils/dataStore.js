@@ -1750,6 +1750,7 @@ class DataStore {
         console.log('🔍 Using column mapping:', columnMapping);
 
         const caseGroups = {};
+        const slideIdsSeen = new Set(); // Track slide IDs to prevent duplicates
 
         this.processedData.forEach((row, index) => {
             // Access the BDSA data correctly from the nested structure
@@ -1800,6 +1801,14 @@ class DataStore {
 
             // Use dsa_id if available, otherwise fall back to constructed slideId format
             const slideId = row.dsa_id || `${bdsaCaseId}_${finalFilename}`;
+
+            // Skip if we've already processed this slide ID
+            if (slideIdsSeen.has(slideId)) {
+                console.log(`🔍 Skipping duplicate slide: ${slideId}`);
+                return;
+            }
+            slideIdsSeen.add(slideId);
+
             const slideProtocols = this.caseProtocolMappings.get(bdsaCaseId)?.[slideId] || { stain: [], region: [] };
 
             // Check if slide is mapped (has protocols)
