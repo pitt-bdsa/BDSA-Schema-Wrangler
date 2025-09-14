@@ -23,6 +23,8 @@ export interface DSAItem {
   };
   _localLastModified?: string;
   _hasServerMetadata?: boolean;
+  _modelType?: string; // For DSA items: 'folder', 'item', 'collection', etc.
+  modelType?: string; // Alternative property name
 }
 
 export interface DSAAuthStatus {

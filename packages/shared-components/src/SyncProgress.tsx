@@ -79,13 +79,13 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
               <strong>Current:</strong> {progress.currentItem}
             </div>
           )}
-          
+
           {progress.status === 'error' && progress.error && (
             <div className="error-message">
               <strong>Error:</strong> {progress.error}
             </div>
           )}
-          
+
           {progress.status === 'completed' && (
             <div className="completion-message">
               ✅ Sync completed successfully!
@@ -94,7 +94,7 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         .sync-progress {
           border: 1px solid #ddd;
           border-radius: 8px;

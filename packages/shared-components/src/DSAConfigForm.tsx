@@ -39,7 +39,7 @@ export const DSAConfigForm: React.FC<DSAConfigFormProps> = ({
 
     setIsAuthenticating(true);
     try {
-      await onAuthenticate(username, setPassword);
+      await onAuthenticate(username, password);
       setPassword(''); // Clear password after successful auth
     } catch (error) {
       console.error('Authentication failed:', error);
@@ -64,7 +64,7 @@ export const DSAConfigForm: React.FC<DSAConfigFormProps> = ({
   return (
     <div className="dsa-config-form">
       <h3>DSA Server Configuration</h3>
-      
+
       <div className="config-section">
         <label>
           Server URL:
@@ -76,7 +76,7 @@ export const DSAConfigForm: React.FC<DSAConfigFormProps> = ({
             disabled={disabled}
           />
         </label>
-        
+
         <label>
           Resource ID:
           <input
@@ -87,7 +87,7 @@ export const DSAConfigForm: React.FC<DSAConfigFormProps> = ({
             disabled={disabled}
           />
         </label>
-        
+
         <label>
           Resource Type:
           <select
@@ -109,7 +109,7 @@ export const DSAConfigForm: React.FC<DSAConfigFormProps> = ({
         >
           {isTestingConnection ? 'Testing...' : 'Test Connection'}
         </button>
-        
+
         {connectionStatus && (
           <div className={`connection-status ${connectionStatus.includes('successful') ? 'success' : 'error'}`}>
             {connectionStatus}
@@ -148,7 +148,7 @@ export const DSAConfigForm: React.FC<DSAConfigFormProps> = ({
                   required
                 />
               </label>
-              
+
               <label>
                 Password:
                 <input
@@ -159,7 +159,7 @@ export const DSAConfigForm: React.FC<DSAConfigFormProps> = ({
                   required
                 />
               </label>
-              
+
               <button
                 type="submit"
                 disabled={disabled || isAuthenticating || !username || !password}
