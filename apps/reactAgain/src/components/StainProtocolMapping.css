@@ -193,32 +193,41 @@
 }
 
 .slide-item {
-    display: block;
-    background: white;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-    padding: 8px 12px;
-    margin: 5px 0;
-    font-size: 12px;
-    color: #666;
+    display: flex;
+    flex-direction: column;
+    background: #ffffff;
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 6px 0;
+    font-size: 13px;
+    color: #495057;
     position: relative;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+}
+
+.slide-item:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
 }
 
 .slide-item.mapped {
-    background: #f8f9fa;
-    border-color: #28a745;
+    border-left: 4px solid #28a745;
+    background: linear-gradient(135deg, #f8fff9 0%, #ffffff 100%);
 }
 
 .slide-item.unmapped {
-    background: #fff3cd;
-    border-color: #ffc107;
+    border-left: 4px solid #dc3545;
+    background: linear-gradient(135deg, #fff8f8 0%, #ffffff 100%);
 }
 
 .slide-main-info {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 4px;
+    gap: 16px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
 }
 
 .slide-main-info span {
@@ -236,11 +245,17 @@
 }
 
 .existing-protocols {
-    font-size: 11px;
-    color: #28a745;
-    margin-top: 4px;
-    padding-top: 4px;
+    font-size: 12px;
+    color: #495057;
+    margin-top: 8px;
+    padding-top: 8px;
     border-top: 1px solid #e9ecef;
+}
+
+.existing-protocols strong {
+    color: #28a745;
+    font-weight: 600;
+    margin-right: 8px;
 }
 
 .group-protocols {
@@ -325,16 +340,21 @@
 }
 
 .status-indicator {
-    font-weight: 500;
-    font-size: 11px;
+    font-weight: 600;
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.05);
 }
 
 .slide-item.mapped .status-indicator {
     color: #28a745;
+    background: rgba(40, 167, 69, 0.1);
 }
 
 .slide-item.unmapped .status-indicator {
-    color: #856404;
+    color: #dc3545;
+    background: rgba(220, 53, 69, 0.1);
 }
 
 .protocol-selection {

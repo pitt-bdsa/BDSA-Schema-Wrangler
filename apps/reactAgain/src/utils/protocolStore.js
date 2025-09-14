@@ -183,8 +183,13 @@ class ProtocolStore {
 
     // Protocol Management
     addStainProtocol(protocol) {
+        // Require a name for the protocol - this should be the primary identifier
+        if (!protocol.name || protocol.name.trim() === '') {
+            throw new Error('Protocol name is required');
+        }
+        
         // Use the protocol name as the ID, ensuring uniqueness
-        const protocolId = protocol.name || protocol.id || Date.now().toString();
+        const protocolId = protocol.name.trim();
 
         // Check if a protocol with this ID already exists
         const existingIndex = this.stainProtocols.findIndex(p => p.id === protocolId);
@@ -215,8 +220,13 @@ class ProtocolStore {
     }
 
     addRegionProtocol(protocol) {
+        // Require a name for the protocol - this should be the primary identifier
+        if (!protocol.name || protocol.name.trim() === '') {
+            throw new Error('Protocol name is required');
+        }
+        
         // Use the protocol name as the ID, ensuring uniqueness
-        const protocolId = protocol.name || protocol.id || Date.now().toString();
+        const protocolId = protocol.name.trim();
 
         // Check if a protocol with this ID already exists
         const existingIndex = this.regionProtocols.findIndex(p => p.id === protocolId);

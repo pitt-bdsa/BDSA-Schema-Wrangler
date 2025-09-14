@@ -21,9 +21,6 @@ const StainProtocolMapping = () => {
 
     // Subscribe to protocol store changes
     useEffect(() => {
-        // Clear localStorage to remove any fake protocols I added
-        localStorage.removeItem('bdsa_stain_protocols');
-
         const unsubscribeProtocols = protocolStore.subscribe(() => {
             setStainProtocols(protocolStore.stainProtocols);
             setAvailableProtocols(protocolStore.stainProtocols || []);
@@ -263,7 +260,7 @@ const StainProtocolMapping = () => {
                                                     <button
                                                         key={protocol.id}
                                                         className="add-protocol-btn"
-                                                        onClick={() => handleApplyStainProtocol(slides, protocol.id)}
+                                                        onClick={() => handleApplyStainProtocol(slides, protocol.name)}
                                                         title={`Add ${protocol.name} to all slides`}
                                                     >
                                                         + {protocol.name}
