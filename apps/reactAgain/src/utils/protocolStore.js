@@ -187,7 +187,7 @@ class ProtocolStore {
         if (!protocol.name || protocol.name.trim() === '') {
             throw new Error('Protocol name is required');
         }
-        
+
         // Use the protocol name as the ID, ensuring uniqueness
         const protocolId = protocol.name.trim();
 
@@ -224,7 +224,7 @@ class ProtocolStore {
         if (!protocol.name || protocol.name.trim() === '') {
             throw new Error('Protocol name is required');
         }
-        
+
         // Use the protocol name as the ID, ensuring uniqueness
         const protocolId = protocol.name.trim();
 

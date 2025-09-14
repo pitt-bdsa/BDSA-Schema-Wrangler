@@ -270,40 +270,76 @@ const StainProtocolMapping = () => {
                                     </div>
 
                                     {isExpanded && (
-                                        <div className="slide-list">
-                                            {slides.map(slide => (
-                                                <div key={slide.id} className={`slide-item ${slide.status === 'mapped' ? 'mapped' : 'unmapped'}`}>
-                                                    <div className="slide-main-info">
-                                                        <span>File: {slide.filename}</span>
-                                                        <span className="slide-id">ID: {slide.id}</span>
-                                                        {slide.regionType && (
-                                                            <span>Region: {slide.regionType}</span>
-                                                        )}
-                                                        <span className="status-indicator">
-                                                            {slide.status === 'mapped' ? '✓ Mapped' : '○ Unmapped'}
-                                                        </span>
-                                                    </div>
-                                                    {slide.stainProtocols && slide.stainProtocols.length > 0 && (
-                                                        <div className="existing-protocols">
-                                                            <strong>Existing Protocols:</strong>
-                                                            <div className="protocol-chips">
-                                                                {slide.stainProtocols.map((protocol, idx) => (
-                                                                    <span key={idx} className="protocol-chip">
-                                                                        {protocol}
-                                                                        <button
-                                                                            className="remove-protocol-btn"
-                                                                            onClick={() => handleRemoveStainProtocol([slide], protocol)}
-                                                                            title={`Remove ${protocol}`}
-                                                                        >
-                                                                            ×
-                                                                        </button>
-                                                                    </span>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ))}
+                                        <div className="slides-table-container">
+                                            <table className="slides-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>File</th>
+                                                        <th>Region</th>
+                                                        <th>Status</th>
+                                                        <th>Protocols</th>
+                                                        <th>Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {slides.map(slide => (
+                                                        <tr key={slide.id} className={`slide-row ${slide.status === 'mapped' ? 'mapped' : 'unmapped'}`}>
+                                                            <td className="file-cell">
+                                                                <div className="file-name">{slide.filename}</div>
+                                                                <div className="slide-id">{slide.id}</div>
+                                                            </td>
+                                                            <td className="region-cell">
+                                                                {slide.regionType || 'N/A'}
+                                                            </td>
+                                                            <td className="status-cell">
+                                                                <span className={`status-badge ${slide.status === 'mapped' ? 'mapped' : 'unmapped'}`}>
+                                                                    {slide.status === 'mapped' ? '✓ Mapped' : '○ Unmapped'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="protocols-cell">
+                                                                {slide.stainProtocols && slide.stainProtocols.length > 0 ? (
+                                                                    <div className="protocol-tags">
+                                                                        {slide.stainProtocols.map((protocol, idx) => (
+                                                                            <span key={idx} className="protocol-tag">
+                                                                                {protocol}
+                                                                                <button
+                                                                                    className="remove-protocol-btn"
+                                                                                    onClick={() => handleRemoveStainProtocol([slide], protocol)}
+                                                                                    title={`Remove ${protocol}`}
+                                                                                >
+                                                                                    ×
+                                                                                </button>
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="no-protocols">No protocols</span>
+                                                                )}
+                                                            </td>
+                                                            <td className="actions-cell">
+                                                                <div className="slide-actions">
+                                                                    {availableProtocols
+                                                                        .filter(protocol => !(slide.stainProtocols || []).includes(protocol.name))
+                                                                        .slice(0, 2) // Show max 2 buttons to keep table clean
+                                                                        .map(protocol => (
+                                                                            <button
+                                                                                key={protocol.id}
+                                                                                className="apply-protocol-btn"
+                                                                                onClick={() => handleApplyStainProtocol([slide], protocol.name)}
+                                                                                title={`Apply ${protocol.name}`}
+                                                                            >
+                                                                                + {protocol.name}
+                                                                            </button>
+                                                                        ))}
+                                                                    {availableProtocols.filter(protocol => !(slide.stainProtocols || []).includes(protocol.name)).length > 2 && (
+                                                                        <span className="more-protocols">+{availableProtocols.filter(protocol => !(slide.stainProtocols || []).includes(protocol.name)).length - 2} more</span>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
                                         </div>
                                     )}
                                 </div>
