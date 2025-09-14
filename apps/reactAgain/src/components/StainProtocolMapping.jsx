@@ -6,6 +6,7 @@ import './StainProtocolMapping.css';
 const StainProtocolMapping = () => {
     const [dataStatus, setDataStatus] = useState(dataStore.getStatus());
     const [stainProtocols, setStainProtocols] = useState(protocolStore.stainProtocols);
+    const [availableProtocols, setAvailableProtocols] = useState([]);
     const [cases, setCases] = useState([]);
     const [currentCaseIndex, setCurrentCaseIndex] = useState(0);
     const [expandedGroups, setExpandedGroups] = useState(new Set());
@@ -22,6 +23,7 @@ const StainProtocolMapping = () => {
     useEffect(() => {
         const unsubscribeProtocols = protocolStore.subscribe(() => {
             setStainProtocols(protocolStore.stainProtocols);
+            setAvailableProtocols(protocolStore.stainProtocols || []);
         });
         return unsubscribeProtocols;
     }, []);
@@ -83,6 +85,11 @@ const StainProtocolMapping = () => {
     const handleApplyStainProtocol = (slides, protocolId) => {
         // TODO: Implement stain protocol application
         console.log('Applying stain protocol', protocolId, 'to slides:', slides);
+    };
+
+    const handleRemoveStainProtocol = (slides, protocolToRemove) => {
+        // TODO: Implement stain protocol removal
+        console.log('Removing stain protocol', protocolToRemove, 'from slides:', slides);
     };
 
     if (cases.length === 0) {
@@ -163,6 +170,13 @@ const StainProtocolMapping = () => {
                             const mappedCount = slides.filter(s => s.status === 'mapped').length;
                             const unmappedCount = slides.filter(s => s.status === 'unmapped').length;
 
+                            // Find protocols that are common to all slides in this group
+                            const commonProtocols = slides.length > 0 ? slides.reduce((common, slide) => {
+                                if (!slide.stainProtocols || slide.stainProtocols.length === 0) return [];
+                                if (common.length === 0) return slide.stainProtocols;
+                                return common.filter(protocol => slide.stainProtocols.includes(protocol));
+                            }, []) : [];
+
                             return (
                                 <div key={stainType} className="stain-group">
                                     <div
@@ -180,49 +194,80 @@ const StainProtocolMapping = () => {
                                         </div>
                                     </div>
 
-                                    {isExpanded && (
-                                        <>
-                                            <div className="slide-list">
-                                                {slides.map(slide => (
-                                                    <div key={slide.id} className={`slide-item ${slide.status === 'mapped' ? 'mapped' : 'unmapped'}`}>
-                                                        <div className="slide-main-info">
-                                                            <span>File: {slide.filename}</span>
-                                                            <span className="slide-id">ID: {slide.id}</span>
-                                                            {slide.regionType && (
-                                                                <span>Region: {slide.regionType}</span>
-                                                            )}
-                                                            <span className="status-indicator">
-                                                                {slide.status === 'mapped' ? '✓ Mapped' : '○ Unmapped'}
-                                                            </span>
-                                                        </div>
-                                                        {slide.stainProtocols && slide.stainProtocols.length > 0 && (
-                                                            <div className="existing-protocols">
-                                                                <strong>Existing Protocols:</strong> {Array.isArray(slide.stainProtocols) ? slide.stainProtocols.join(', ') : slide.stainProtocols}
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                    {/* Group-level common protocols */}
+                                    {commonProtocols.length > 0 && (
+                                        <div className="group-protocols">
+                                            <strong>Group Protocols:</strong>
+                                            <div className="protocol-chips">
+                                                {commonProtocols.map((protocol, idx) => (
+                                                    <span key={idx} className="protocol-chip group-chip">
+                                                        {protocol}
+                                                        <button
+                                                            className="remove-protocol-btn"
+                                                            onClick={() => handleRemoveStainProtocol(slides, protocol)}
+                                                            title={`Remove ${protocol} from all slides`}
+                                                        >
+                                                            ×
+                                                        </button>
+                                                    </span>
                                                 ))}
                                             </div>
+                                        </div>
+                                    )}
 
-                                            <div className="protocol-selection">
-                                                <label>Select Stain Protocol:</label>
-                                                <select
-                                                    className="protocol-select"
-                                                    onChange={(e) => {
-                                                        if (e.target.value) {
-                                                            handleApplyStainProtocol(slides, e.target.value);
-                                                        }
-                                                    }}
+                                    {/* Protocol selection - always visible */}
+                                    <div className="protocol-selection">
+                                        <label>Add Stain Protocol:</label>
+                                        <div className="available-protocols">
+                                            {availableProtocols.map(protocol => (
+                                                <button
+                                                    key={protocol.id}
+                                                    className="add-protocol-btn"
+                                                    onClick={() => handleApplyStainProtocol(slides, protocol.id)}
+                                                    title={`Add ${protocol.name} to all slides`}
                                                 >
-                                                    <option value="">Choose a protocol...</option>
-                                                    {stainProtocols.map(protocol => (
-                                                        <option key={protocol.id} value={protocol.id}>
-                                                            {protocol.name} ({protocol.id})
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                        </>
+                                                    + {protocol.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {isExpanded && (
+                                        <div className="slide-list">
+                                            {slides.map(slide => (
+                                                <div key={slide.id} className={`slide-item ${slide.status === 'mapped' ? 'mapped' : 'unmapped'}`}>
+                                                    <div className="slide-main-info">
+                                                        <span>File: {slide.filename}</span>
+                                                        <span className="slide-id">ID: {slide.id}</span>
+                                                        {slide.regionType && (
+                                                            <span>Region: {slide.regionType}</span>
+                                                        )}
+                                                        <span className="status-indicator">
+                                                            {slide.status === 'mapped' ? '✓ Mapped' : '○ Unmapped'}
+                                                        </span>
+                                                    </div>
+                                                    {slide.stainProtocols && slide.stainProtocols.length > 0 && (
+                                                        <div className="existing-protocols">
+                                                            <strong>Existing Protocols:</strong>
+                                                            <div className="protocol-chips">
+                                                                {slide.stainProtocols.map((protocol, idx) => (
+                                                                    <span key={idx} className="protocol-chip">
+                                                                        {protocol}
+                                                                        <button 
+                                                                            className="remove-protocol-btn"
+                                                                            onClick={() => handleRemoveStainProtocol([slide], protocol)}
+                                                                            title={`Remove ${protocol}`}
+                                                                        >
+                                                                            ×
+                                                                        </button>
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
                                     )}
                                 </div>
                             );

@@ -1828,7 +1828,7 @@ class DataStore {
                     stainProtocols = bdsaStainProtocol.split(',').map(p => p.trim()).filter(p => p);
                 }
             }
-            
+
             let regionProtocols = [];
             if (bdsaRegionProtocol) {
                 if (Array.isArray(bdsaRegionProtocol)) {
@@ -1853,14 +1853,14 @@ class DataStore {
             const isMapped = hasStainProtocols || hasRegionProtocols;
 
             // Debug logging for protocol detection
-            if (index < 10) { // Show more rows for debugging
+            if (index < 5) { // Show fewer rows but with more detail
                 console.log(`🔍 Row ${index} protocol detection:`, {
                     slideId,
                     filename: finalFilename,
                     bdsaStainProtocol,
-                    bdsaStainProtocolType: typeof bdsaStainProtocol,
+                    bdsaStainProtocolArray: Array.isArray(bdsaStainProtocol) ? bdsaStainProtocol : 'not array',
                     bdsaRegionProtocol,
-                    bdsaRegionProtocolType: typeof bdsaRegionProtocol,
+                    bdsaRegionProtocolArray: Array.isArray(bdsaRegionProtocol) ? bdsaRegionProtocol : 'not array',
                     stainProtocols,
                     regionProtocols,
                     localStainId,
