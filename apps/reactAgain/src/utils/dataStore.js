@@ -438,7 +438,9 @@ class DataStore {
                         localCaseId: existingBdsaData.localCaseId || null,
                         localStainID: existingBdsaData.localStainID || null,
                         localRegionId: existingBdsaData.localRegionId || null,
-                        bdsaCaseId: existingBdsaData.bdsaCaseId || null
+                        bdsaCaseId: existingBdsaData.bdsaCaseId || null,
+                        stainProtocols: existingBdsaData.bdsaStainProtocol || [],
+                        regionProtocols: existingBdsaData.bdsaRegionProtocol || []
                     }
                 });
             }
@@ -463,13 +465,17 @@ class DataStore {
                         localCaseId: existingBdsaData.localCaseId || null,
                         localStainID: existingBdsaData.localStainID || null,
                         localRegionId: existingBdsaData.localRegionId || null,
-                        bdsaCaseId: existingBdsaData.bdsaCaseId || null // Read existing bdsaCaseId from server
+                        bdsaCaseId: existingBdsaData.bdsaCaseId || null, // Read existing bdsaCaseId from server
+                        bdsaStainProtocol: existingBdsaData.bdsaStainProtocol || [],
+                        bdsaRegionProtocol: existingBdsaData.bdsaRegionProtocol || []
                     },
                     _dataSource: existingBdsaData.source ? {
                         localCaseId: 'dsa_server',
                         localStainID: 'dsa_server',
                         localRegionId: 'dsa_server',
-                        bdsaCaseId: 'dsa_server'
+                        bdsaCaseId: 'dsa_server',
+                        stainProtocols: 'dsa_server',
+                        regionProtocols: 'dsa_server'
                     } : {}, // Track where each field came from
                     _lastModified: new Date().toISOString()
                 }
@@ -1956,6 +1962,10 @@ class DataStore {
             protocolArray.push(protocolId);
             dataRow.BDSA.bdsaLocal[fieldName] = protocolArray;
 
+            // Mark item as modified
+            dataRow.BDSA._lastModified = new Date().toISOString();
+            this.modifiedItems.add(dataRow.id);
+
             this.saveToStorage();
             console.log(`✅ Added protocol ${protocolId} to slide ${slideId}. New protocols:`, protocolArray);
             this.notify();
@@ -2022,9 +2032,13 @@ class DataStore {
                 console.log(`✅ Removed from caseProtocolMappings. New mappings:`, additionalSlideProtocols[protocolType]);
             }
 
+            // Mark item as modified
+            dataRow.BDSA._lastModified = new Date().toISOString();
+            this.modifiedItems.add(dataRow.id);
+
             this.saveToStorage();
             this.notify();
-            console.log(`✅ Protocol ${protocolId} removed from slide ${slideId}`);
+            console.log(`✅ Protocol ${protocolId} removed from slide ${slideId} (marked as modified)`);
         } else {
             console.log(`❌ Protocol ${protocolId} not found in slide protocols:`, allProtocols);
         }

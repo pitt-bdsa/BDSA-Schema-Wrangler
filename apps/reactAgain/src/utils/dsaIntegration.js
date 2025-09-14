@@ -958,12 +958,16 @@ export const syncItemBdsaMetadata = async (baseUrl, item, girderToken, columnMap
         const localStainID = item.BDSA?.bdsaLocal?.localStainID || item[columnMapping.localStainID] || '';
         const localRegionId = item.BDSA?.bdsaLocal?.localRegionId || item[columnMapping.localRegionId] || '';
         const bdsaCaseId = item.BDSA?.bdsaLocal?.bdsaCaseId || '';
+        const bdsaStainProtocol = item.BDSA?.bdsaLocal?.bdsaStainProtocol || [];
+        const bdsaRegionProtocol = item.BDSA?.bdsaLocal?.bdsaRegionProtocol || [];
 
         console.log(`🔍 SYNC VALUES - Item ${itemId}:`, {
             localCaseId,
             localStainID,
             localRegionId,
             bdsaCaseId,
+            bdsaStainProtocol,
+            bdsaRegionProtocol,
             hasBDSAObject: !!item.BDSA,
             hasBdsaLocal: !!item.BDSA?.bdsaLocal,
             bdsaObject: item.BDSA,
@@ -977,17 +981,25 @@ export const syncItemBdsaMetadata = async (baseUrl, item, girderToken, columnMap
             localStainID,
             localRegionId,
             bdsaCaseId,
+            bdsaStainProtocol,
+            bdsaRegionProtocol,
             lastUpdated: new Date().toISOString(),
             source: 'BDSA-Schema-Wrangler'
         };
 
-        // Only sync if we have at least one local value or bdsaCaseId
-        if (!localCaseId && !localStainID && !localRegionId && !bdsaCaseId) {
+        // Only sync if we have at least one local value, bdsaCaseId, or protocol arrays
+        const hasProtocols = (Array.isArray(bdsaStainProtocol) && bdsaStainProtocol.length > 0) ||
+            (Array.isArray(bdsaRegionProtocol) && bdsaRegionProtocol.length > 0);
+
+        if (!localCaseId && !localStainID && !localRegionId && !bdsaCaseId && !hasProtocols) {
             console.log(`🚨 SYNC SKIP - Item ${itemId} has no local metadata values:`, {
                 localCaseId,
                 localStainID,
                 localRegionId,
                 bdsaCaseId,
+                bdsaStainProtocol,
+                bdsaRegionProtocol,
+                hasProtocols,
                 itemBDSA: item.BDSA,
                 columnMapping: columnMapping
             });
@@ -1011,7 +1023,9 @@ export const syncItemBdsaMetadata = async (baseUrl, item, girderToken, columnMap
             localCaseId,
             localStainID,
             localRegionId,
-            bdsaCaseId
+            bdsaCaseId,
+            bdsaStainProtocol,
+            bdsaRegionProtocol
         });
 
         if (existingMetadata) {
@@ -1027,16 +1041,20 @@ export const syncItemBdsaMetadata = async (baseUrl, item, girderToken, columnMap
                 existingMetadata.localCaseId !== localCaseId ||
                 normalizeForComparison(existingMetadata.localStainID) !== normalizeForComparison(localStainID) ||
                 normalizeForComparison(existingMetadata.localRegionId) !== normalizeForComparison(localRegionId) ||
-                existingMetadata.bdsaCaseId !== bdsaCaseId;
+                existingMetadata.bdsaCaseId !== bdsaCaseId ||
+                normalizeForComparison(existingMetadata.bdsaStainProtocol) !== normalizeForComparison(bdsaStainProtocol) ||
+                normalizeForComparison(existingMetadata.bdsaRegionProtocol) !== normalizeForComparison(bdsaRegionProtocol);
 
             console.log(`Skip check for item ${itemId}:`, {
                 existingMetadata: {
                     localCaseId: existingMetadata.localCaseId,
                     localStainID: existingMetadata.localStainID,
                     localRegionId: existingMetadata.localRegionId,
-                    bdsaCaseId: existingMetadata.bdsaCaseId
+                    bdsaCaseId: existingMetadata.bdsaCaseId,
+                    bdsaStainProtocol: existingMetadata.bdsaStainProtocol,
+                    bdsaRegionProtocol: existingMetadata.bdsaRegionProtocol
                 },
-                newValues: { localCaseId, localStainID, localRegionId, bdsaCaseId },
+                newValues: { localCaseId, localStainID, localRegionId, bdsaCaseId, bdsaStainProtocol, bdsaRegionProtocol },
                 hasChanges,
                 hasBeenModified,
                 willSkip: !hasChanges && !hasBeenModified
@@ -1397,6 +1415,9 @@ export const enhanceDataWithExistingMetadata = (dsaData) => {
             enhancedItem.BDSA.bdsaLocal.localCaseId = bdsaLocal.localCaseId || enhancedItem.BDSA.bdsaLocal.localCaseId || '';
             enhancedItem.BDSA.bdsaLocal.localStainID = bdsaLocal.localStainID || enhancedItem.BDSA.bdsaLocal.localStainID || '';
             enhancedItem.BDSA.bdsaLocal.localRegionId = bdsaLocal.localRegionId || enhancedItem.BDSA.bdsaLocal.localRegionId || '';
+            enhancedItem.BDSA.bdsaLocal.bdsaCaseId = bdsaLocal.bdsaCaseId || enhancedItem.BDSA.bdsaLocal.bdsaCaseId || '';
+            enhancedItem.BDSA.bdsaLocal.bdsaStainProtocol = bdsaLocal.bdsaStainProtocol || enhancedItem.BDSA.bdsaLocal.bdsaStainProtocol || [];
+            enhancedItem.BDSA.bdsaLocal.bdsaRegionProtocol = bdsaLocal.bdsaRegionProtocol || enhancedItem.BDSA.bdsaLocal.bdsaRegionProtocol || [];
 
             // Mark that this data came from server metadata
             enhancedItem._hasServerMetadata = true;

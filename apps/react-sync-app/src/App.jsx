@@ -42,11 +42,24 @@ const App = () => {
 
   const [sourceItems, setSourceItems] = useState([]);
   const [targetItems, setTargetItems] = useState([]);
+  const [modifiedItems, setModifiedItems] = useState(new Set());
   const [syncProgress, setSyncProgress] = useState({
     current: 0,
     total: 0,
     status: 'idle',
   });
+
+  // Calculate unique BDSA Case IDs from source items
+  const uniqueBdsaCaseIds = React.useMemo(() => {
+    const uniqueIds = new Set();
+    sourceItems.forEach(item => {
+      const bdsaCaseId = item.bdsaCaseId;
+      if (bdsaCaseId && bdsaCaseId !== 'unknown' && bdsaCaseId.trim() !== '') {
+        uniqueIds.add(bdsaCaseId);
+      }
+    });
+    return Array.from(uniqueIds);
+  }, [sourceItems]);
 
   const [syncResult, setSyncResult] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -203,20 +216,36 @@ const App = () => {
   };
 
   const processDsaItems = (items) => {
-    return items.map((item, index) => {
+    const newModifiedItems = new Set();
+
+    const processedItems = items.map((item, index) => {
       // Extract BDSA metadata from meta.BDSA.bdsaLocal (same as reactAgain app)
       const existingBdsaData = item.meta?.BDSA?.bdsaLocal || {};
+
+      // Check if this item has been modified locally (has _localLastModified)
+      const isModified = item._localLastModified || item.BDSA?._lastModified;
+      if (isModified) {
+        newModifiedItems.add(item._id || item.id);
+        console.log(`🔍 Found modified item: ${item._id || item.id}`, {
+          _localLastModified: item._localLastModified,
+          BDSA_lastModified: item.BDSA?._lastModified,
+          isModified
+        });
+      }
 
       // Debug: Log what we're extracting for the first few items
       if (index < 3) {
         console.log(`🔍 DEBUG - Extracting BDSA data for item ${index}:`, {
           itemId: item._id || item.id,
           existingBdsaData,
+          isModified,
           extractedValues: {
             localCaseId: existingBdsaData.localCaseId || null,
             localStainID: existingBdsaData.localStainID || null,
             localRegionId: existingBdsaData.localRegionId || null,
-            bdsaCaseId: existingBdsaData.bdsaCaseId || null
+            bdsaCaseId: existingBdsaData.bdsaCaseId || null,
+            bdsaStainProtocol: existingBdsaData.bdsaStainProtocol || [],
+            bdsaRegionProtocol: existingBdsaData.bdsaRegionProtocol || []
           }
         });
       }
@@ -248,7 +277,9 @@ const App = () => {
             localCaseId: existingBdsaData.localCaseId || null,
             localStainID: existingBdsaData.localStainID || null,
             localRegionId: existingBdsaData.localRegionId || null,
-            bdsaCaseId: existingBdsaData.bdsaCaseId || null
+            bdsaCaseId: existingBdsaData.bdsaCaseId || null,
+            bdsaStainProtocol: existingBdsaData.bdsaStainProtocol || [],
+            bdsaRegionProtocol: existingBdsaData.bdsaRegionProtocol || []
           },
           _dataSource: existingBdsaData.source ? {
             localCaseId: 'dsa_server',
@@ -262,6 +293,12 @@ const App = () => {
 
       return processedItem;
     });
+
+    // Update the modified items state
+    setModifiedItems(newModifiedItems);
+    console.log(`📊 Found ${newModifiedItems.size} modified items out of ${processedItems.length} total items`);
+
+    return processedItems;
   };
 
   const loadSourceItems = async () => {
@@ -281,6 +318,18 @@ const App = () => {
       // Use the same approach as reactAgain app - limit=0 to get all items at once
       const rawItems = await dsaClient.getResourceItems(config.sourceResourceId, 0, undefined, config.resourceType);
 
+      // Debug: Log the first few raw items to see their structure
+      console.log(`🔍 DEBUG - Raw items from DSA server (first 3):`, rawItems.slice(0, 3).map(item => ({
+        id: item._id || item.id,
+        name: item.name,
+        hasMeta: !!item.meta,
+        hasBDSA: !!item.meta?.BDSA,
+        hasBdsaLocal: !!item.meta?.BDSA?.bdsaLocal,
+        bdsaLocalKeys: item.meta?.BDSA?.bdsaLocal ? Object.keys(item.meta.BDSA.bdsaLocal) : [],
+        _localLastModified: item._localLastModified,
+        BDSA_lastModified: item.BDSA?._lastModified
+      })));
+
       // Process items to extract BDSA metadata
       const processedItems = processDsaItems(rawItems);
       setSourceItems(processedItems);
@@ -290,8 +339,25 @@ const App = () => {
         withCaseId: processedItems.filter(item => item.localCaseId).length,
         withStainId: processedItems.filter(item => item.localStainID).length,
         withRegionId: processedItems.filter(item => item.localRegionId).length,
-        withBdsaCaseId: processedItems.filter(item => item.bdsaCaseId).length
+        withBdsaCaseId: processedItems.filter(item => item.bdsaCaseId).length,
+        withStainProtocols: processedItems.filter(item => item.BDSA?.bdsaLocal?.bdsaStainProtocol && item.BDSA.bdsaLocal.bdsaStainProtocol.length > 0).length,
+        withRegionProtocols: processedItems.filter(item => item.BDSA?.bdsaLocal?.bdsaRegionProtocol && item.BDSA.bdsaLocal.bdsaRegionProtocol.length > 0).length
       });
+
+      // Debug: Show BDSA structure for first few items with protocols
+      const itemsWithProtocols = processedItems.filter(item =>
+        (item.BDSA?.bdsaLocal?.bdsaStainProtocol && item.BDSA.bdsaLocal.bdsaStainProtocol.length > 0) ||
+        (item.BDSA?.bdsaLocal?.bdsaRegionProtocol && item.BDSA.bdsaLocal.bdsaRegionProtocol.length > 0)
+      );
+      if (itemsWithProtocols.length > 0) {
+        console.log(`🔍 DEBUG - Items with protocols (first 3):`, itemsWithProtocols.slice(0, 3).map(item => ({
+          id: item._id || item.id,
+          name: item.name,
+          BDSA: item.BDSA,
+          bdsaStainProtocol: item.BDSA?.bdsaLocal?.bdsaStainProtocol,
+          bdsaRegionProtocol: item.BDSA?.bdsaLocal?.bdsaRegionProtocol
+        })));
+      }
     } catch (error) {
       setError('Failed to load source items: ' + error.message);
       console.error('Error loading source items:', error);
@@ -326,7 +392,9 @@ const App = () => {
         withCaseId: processedItems.filter(item => item.localCaseId).length,
         withStainId: processedItems.filter(item => item.localStainID).length,
         withRegionId: processedItems.filter(item => item.localRegionId).length,
-        withBdsaCaseId: processedItems.filter(item => item.bdsaCaseId).length
+        withBdsaCaseId: processedItems.filter(item => item.bdsaCaseId).length,
+        withStainProtocols: processedItems.filter(item => item.BDSA?.bdsaLocal?.bdsaStainProtocol && item.BDSA.bdsaLocal.bdsaStainProtocol.length > 0).length,
+        withRegionProtocols: processedItems.filter(item => item.BDSA?.bdsaLocal?.bdsaRegionProtocol && item.BDSA.bdsaLocal.bdsaRegionProtocol.length > 0).length
       });
     } catch (error) {
       setError('Failed to load target items: ' + error.message);
@@ -406,9 +474,19 @@ const App = () => {
       return;
     }
 
+    // Filter to only modified items
+    const itemsToSync = sourceItems.filter(item => modifiedItems.has(item._id || item.id));
+
+    if (itemsToSync.length === 0) {
+      setError('No modified items to sync. All items are up to date.');
+      return;
+    }
+
+    console.log(`🔄 Starting sync for ${itemsToSync.length} modified items out of ${sourceItems.length} total items`);
+
     setSyncProgress({
       current: 0,
-      total: sourceItems.length,
+      total: itemsToSync.length,
       status: 'running',
     });
 
@@ -435,9 +513,9 @@ const App = () => {
 
       result.createdFolders = folderStructure.createdFolders.map(f => f.name);
 
-      // Group items by patient using BDSA metadata
+      // Group modified items by patient using BDSA metadata
       const patientGroups = {};
-      sourceItems.forEach(item => {
+      itemsToSync.forEach(item => {
         // Use BDSA case ID if available, otherwise fall back to local case ID
         const patientId = item.bdsaCaseId || item.localCaseId || 'unknown';
         if (!patientGroups[patientId]) {
@@ -476,17 +554,64 @@ const App = () => {
             .replace('{regionId}', item.localRegionId || 'unknown')
             .replace('{originalName}', item.name || 'unknown');
 
-          // TODO: Implement actual item copying using dsaClient.copyItem()
-          // await dsaClient.copyItem(item._id, targetFolderId, newName);
+          // Copy the item to the target folder with the new name
+          const copiedItem = await dsaClient.copyItem(item._id, targetFolderId, newName);
 
-          // Simulate processing time
-          await new Promise(resolve => setTimeout(resolve, 300));
+          // Update the copied item with BDSA metadata to preserve all BDSA information
+          if (copiedItem) {
+            // Send the complete BDSA object - DSA server overwrites the entire top-level key
+            // Push the ENTIRE bdsaLocal object, not just specific fields
+            const completeBdsaObject = {
+              bdsaLocal: {
+                ...item.BDSA?.bdsaLocal || {}
+              },
+              _dataSource: item.BDSA?._dataSource || {},
+              _lastModified: item.BDSA?._lastModified || new Date().toISOString()
+            };
+
+            console.log(`🔍 DEBUG - BDSA object being sent for ${newName}:`, {
+              bdsaLocal: completeBdsaObject.bdsaLocal,
+              hasStainProtocols: (completeBdsaObject.bdsaLocal.bdsaStainProtocol || []).length > 0,
+              hasRegionProtocols: (completeBdsaObject.bdsaLocal.bdsaRegionProtocol || []).length > 0,
+              stainProtocols: completeBdsaObject.bdsaLocal.bdsaStainProtocol,
+              regionProtocols: completeBdsaObject.bdsaLocal.bdsaRegionProtocol
+            });
+
+            const metadataUpdate = {
+              meta: {
+                ...copiedItem.meta,
+                BDSA: completeBdsaObject
+              }
+            };
+
+            console.log(`🔍 POSTING TO DSA SERVER - Item ID: ${copiedItem._id}`);
+            console.log(`🔍 POSTING TO DSA SERVER - Metadata payload:`, metadataUpdate);
+            console.log(`🔍 POSTING TO DSA SERVER - BDSA object specifically:`, completeBdsaObject);
+            // Update the copied item with the preserved BDSA metadata
+            await dsaClient.updateItem(copiedItem._id, metadataUpdate);
+            console.log(`✅ Updated BDSA metadata for copied item: ${newName}`);
+          }
 
           result.processed++;
           result.copiedItems.push(newName);
           processedCount++;
         }
       }
+
+      // Clear modified status for successfully synced items
+      const successfullySyncedItems = new Set();
+      itemsToSync.forEach(item => {
+        successfullySyncedItems.add(item._id || item.id);
+      });
+
+      setModifiedItems(prev => {
+        const newSet = new Set(prev);
+        successfullySyncedItems.forEach(itemId => {
+          newSet.delete(itemId);
+        });
+        console.log(`🧹 Cleared ${successfullySyncedItems.size} items from modified status after successful sync`);
+        return newSet;
+      });
 
       setSyncProgress(prev => ({
         ...prev,
@@ -536,6 +661,52 @@ const App = () => {
           </button>
         </div>
       </div>
+
+      {/* Stats Panel */}
+      {sourceItems.length > 0 && (
+        <div className="stats-panel">
+          <div className="stats-grid">
+            <div className="stat-item">
+              <div className="stat-value">{sourceItems.length}</div>
+              <div className="stat-label">Total Source Items</div>
+            </div>
+            <div className="stat-item">
+              <div className="stat-value">{uniqueBdsaCaseIds.length}</div>
+              <div className="stat-label">Unique BDSA Case IDs</div>
+            </div>
+            <div className="stat-item">
+              <div className="stat-value">
+                {sourceItems.filter(item => item.bdsaCaseId && item.bdsaCaseId !== 'unknown' && item.bdsaCaseId.trim() !== '').length}
+              </div>
+              <div className="stat-label">Items with BDSA Case ID</div>
+            </div>
+            <div className="stat-item">
+              <div className="stat-value">
+                {sourceItems.filter(item => !item.bdsaCaseId || item.bdsaCaseId === 'unknown' || item.bdsaCaseId.trim() === '').length}
+              </div>
+              <div className="stat-label">Items Missing BDSA Case ID</div>
+            </div>
+            <div className="stat-item">
+              <div className="stat-value">
+                {sourceItems.filter(item => item.BDSA?.bdsaLocal?.bdsaStainProtocol && item.BDSA.bdsaLocal.bdsaStainProtocol.length > 0).length}
+              </div>
+              <div className="stat-label">Items with Stain Protocols</div>
+            </div>
+            <div className="stat-item">
+              <div className="stat-value">
+                {sourceItems.filter(item => item.BDSA?.bdsaLocal?.bdsaRegionProtocol && item.BDSA.bdsaLocal.bdsaRegionProtocol.length > 0).length}
+              </div>
+              <div className="stat-label">Items with Region Protocols</div>
+            </div>
+            <div className="stat-item">
+              <div className="stat-value" style={{ color: modifiedItems.size > 0 ? '#ff6b35' : '#007bff' }}>
+                {modifiedItems.size}
+              </div>
+              <div className="stat-label">Modified Items (Need Sync)</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="main-content">
         <div className="config-panel">
@@ -773,9 +944,9 @@ const App = () => {
                 <button
                   className="btn btn-success"
                   onClick={startSync}
-                  disabled={isLoading || sourceItems.length === 0 || syncProgress.status === 'running'}
+                  disabled={isLoading || sourceItems.length === 0 || syncProgress.status === 'running' || modifiedItems.size === 0}
                 >
-                  Start Sync
+                  Start Sync {modifiedItems.size > 0 && `(${modifiedItems.size} modified)`}
                 </button>
               </div>
             </div>
@@ -877,6 +1048,8 @@ const App = () => {
                         <div>Stain ID: {item.localStainID || 'N/A'}</div>
                         <div>Region ID: {item.localRegionId || 'N/A'}</div>
                         <div>BDSA Case ID: {item.bdsaCaseId || 'N/A'}</div>
+                        <div>Stain Protocols: {item.BDSA?.bdsaLocal?.bdsaStainProtocol && item.BDSA.bdsaLocal.bdsaStainProtocol.length > 0 ? item.BDSA.bdsaLocal.bdsaStainProtocol.join(', ') : 'N/A'}</div>
+                        <div>Region Protocols: {item.BDSA?.bdsaLocal?.bdsaRegionProtocol && item.BDSA.bdsaLocal.bdsaRegionProtocol.length > 0 ? item.BDSA.bdsaLocal.bdsaRegionProtocol.join(', ') : 'N/A'}</div>
                       </div>
                     </div>
                   </div>

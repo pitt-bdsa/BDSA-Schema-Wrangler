@@ -56,6 +56,7 @@ const ProtocolArrayCellRenderer = ({ value, data, colDef, api }) => {
             data.BDSA.bdsaLocal = {};
         }
         data.BDSA.bdsaLocal[fieldName] = newProtocols;
+        data.BDSA._lastModified = new Date().toISOString();
 
         // Mark as modified
         dataStore.modifiedItems.add(data.id);

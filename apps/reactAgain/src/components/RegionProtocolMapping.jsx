@@ -37,9 +37,24 @@ const RegionProtocolMapping = () => {
     useEffect(() => {
         if (dataStatus.processedData && dataStatus.processedData.length > 0) {
             const regionCases = dataStore.generateRegionProtocolCases();
+
+            // Only reset case index if the number of cases changed significantly
+            // (e.g., new cases added or cases removed), not just when data is updated
+            const previousCaseCount = cases.length;
+            const newCaseCount = regionCases.length;
+
             setCases(regionCases);
-            // Reset to first case when cases change
-            setCurrentCaseIndex(0);
+
+            // Only reset to first case if:
+            // 1. This is the initial load (no previous cases)
+            // 2. The number of cases changed significantly (more than just protocol updates)
+            // 3. Current case index is out of bounds
+            if (previousCaseCount === 0 ||
+                Math.abs(newCaseCount - previousCaseCount) > 0 ||
+                currentCaseIndex >= newCaseCount) {
+                setCurrentCaseIndex(0);
+            }
+            // Otherwise, keep the current case index to maintain user's position
         }
     }, [dataStatus.processedData]);
 
@@ -191,7 +206,7 @@ const RegionProtocolMapping = () => {
                             });
 
                             const allGroupProtocols = Object.keys(protocolCounts);
-                            const fullyAppliedProtocols = allGroupProtocols.filter(protocol => 
+                            const fullyAppliedProtocols = allGroupProtocols.filter(protocol =>
                                 protocolCounts[protocol] === slides.length
                             );
 
@@ -251,7 +266,7 @@ const RegionProtocolMapping = () => {
                                                             key={protocol.id}
                                                             className={`add-protocol-btn ${isPartiallyApplied ? 'partially-applied' : ''}`}
                                                             onClick={() => handleApplyRegionProtocol(slides, protocol.name)}
-                                                            title={isPartiallyApplied 
+                                                            title={isPartiallyApplied
                                                                 ? `Apply ${protocol.name} to remaining ${slides.length - currentCount} slides`
                                                                 : `Add ${protocol.name} to all slides`
                                                             }

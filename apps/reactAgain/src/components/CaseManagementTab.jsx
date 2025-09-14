@@ -6,6 +6,7 @@ import dsaAuthStore from '../utils/dsaAuthStore';
 import CaseStatsPanel from './CaseStatsPanel';
 import CaseIdMappingSection from './CaseIdMappingSection';
 import StainProtocolMapping from './StainProtocolMapping';
+import RegionProtocolMapping from './RegionProtocolMapping';
 
 const CaseManagementTab = () => {
     const [activeSubTab, setActiveSubTab] = useState('case-id-mapping');
@@ -442,6 +443,12 @@ const CaseManagementTab = () => {
                 >
                     Stain Protocol Mapping
                 </button>
+                <button
+                    className={`sub-tab-btn ${activeSubTab === 'region-protocol-mapping' ? 'active' : ''}`}
+                    onClick={() => setActiveSubTab('region-protocol-mapping')}
+                >
+                    Region Protocol Mapping
+                </button>
             </div>
 
             {/* Case ID Mapping Content */}
@@ -472,6 +479,11 @@ const CaseManagementTab = () => {
             {/* Stain Protocol Mapping Content */}
             {activeSubTab === 'stain-protocol-mapping' && (
                 <StainProtocolMapping />
+            )}
+
+            {/* Region Protocol Mapping Content */}
+            {activeSubTab === 'region-protocol-mapping' && (
+                <RegionProtocolMapping />
             )}
 
         </div>
