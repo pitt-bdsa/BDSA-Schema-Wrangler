@@ -21,10 +21,18 @@ const StainProtocolMapping = () => {
 
     // Subscribe to protocol store changes
     useEffect(() => {
+        // Clear localStorage to remove any fake protocols I added
+        localStorage.removeItem('bdsa_stain_protocols');
+
         const unsubscribeProtocols = protocolStore.subscribe(() => {
             setStainProtocols(protocolStore.stainProtocols);
             setAvailableProtocols(protocolStore.stainProtocols || []);
         });
+
+        // Initial load
+        setStainProtocols(protocolStore.stainProtocols);
+        setAvailableProtocols(protocolStore.stainProtocols || []);
+
         return unsubscribeProtocols;
     }, []);
 
@@ -83,13 +91,39 @@ const StainProtocolMapping = () => {
     };
 
     const handleApplyStainProtocol = (slides, protocolId) => {
-        // TODO: Implement stain protocol application
         console.log('Applying stain protocol', protocolId, 'to slides:', slides);
+
+        // Get the current case
+        const currentCase = cases[currentCaseIndex];
+        if (!currentCase) return;
+
+        // Apply protocol to each slide
+        slides.forEach(slide => {
+            dataStore.addProtocolMapping(currentCase.bdsaId, slide.id, protocolId, 'stain');
+        });
+
+        console.log(`✅ Applied protocol ${protocolId} to ${slides.length} slides`);
     };
 
     const handleRemoveStainProtocol = (slides, protocolToRemove) => {
-        // TODO: Implement stain protocol removal
-        console.log('Removing stain protocol', protocolToRemove, 'from slides:', slides);
+        console.log('🔍 Removing stain protocol', protocolToRemove, 'from slides:', slides);
+        console.log('🔍 Current case:', cases[currentCaseIndex]);
+
+        // Get the current case
+        const currentCase = cases[currentCaseIndex];
+        if (!currentCase) {
+            console.error('❌ No current case found');
+            return;
+        }
+
+        // Remove protocol from each slide
+        slides.forEach(slide => {
+            console.log(`🔍 Removing ${protocolToRemove} from slide ${slide.id} (${slide.filename})`);
+            console.log(`🔍 Slide current protocols:`, slide.stainProtocols);
+            dataStore.removeProtocolMapping(currentCase.bdsaId, slide.id, protocolToRemove, 'stain');
+        });
+
+        console.log(`✅ Removed protocol ${protocolToRemove} from ${slides.length} slides`);
     };
 
     if (cases.length === 0) {
@@ -170,12 +204,16 @@ const StainProtocolMapping = () => {
                             const mappedCount = slides.filter(s => s.status === 'mapped').length;
                             const unmappedCount = slides.filter(s => s.status === 'unmapped').length;
 
-                            // Find protocols that are common to all slides in this group
-                            const commonProtocols = slides.length > 0 ? slides.reduce((common, slide) => {
-                                if (!slide.stainProtocols || slide.stainProtocols.length === 0) return [];
-                                if (common.length === 0) return slide.stainProtocols;
-                                return common.filter(protocol => slide.stainProtocols.includes(protocol));
-                            }, []) : [];
+                            // Find all protocols that are applied to any slide in this group
+                            const allGroupProtocols = slides.length > 0 ? [...new Set(
+                                slides.flatMap(slide => slide.stainProtocols || [])
+                            )] : [];
+
+                            console.log(`🔍 Group ${stainType} protocols:`, allGroupProtocols);
+                            console.log(`🔍 Available protocols:`, availableProtocols.map(p => p.name));
+                            console.log(`🔍 Filtered add protocols:`, availableProtocols
+                                .filter(protocol => !allGroupProtocols.includes(protocol.name))
+                                .map(p => p.name));
 
                             return (
                                 <div key={stainType} className="stain-group">
@@ -194,12 +232,12 @@ const StainProtocolMapping = () => {
                                         </div>
                                     </div>
 
-                                    {/* Group-level common protocols */}
-                                    {commonProtocols.length > 0 && (
+                                    {/* Group-level protocols */}
+                                    {allGroupProtocols.length > 0 && (
                                         <div className="group-protocols">
                                             <strong>Group Protocols:</strong>
                                             <div className="protocol-chips">
-                                                {commonProtocols.map((protocol, idx) => (
+                                                {allGroupProtocols.map((protocol, idx) => (
                                                     <span key={idx} className="protocol-chip group-chip">
                                                         {protocol}
                                                         <button
@@ -219,16 +257,18 @@ const StainProtocolMapping = () => {
                                     <div className="protocol-selection">
                                         <label>Add Stain Protocol:</label>
                                         <div className="available-protocols">
-                                            {availableProtocols.map(protocol => (
-                                                <button
-                                                    key={protocol.id}
-                                                    className="add-protocol-btn"
-                                                    onClick={() => handleApplyStainProtocol(slides, protocol.id)}
-                                                    title={`Add ${protocol.name} to all slides`}
-                                                >
-                                                    + {protocol.name}
-                                                </button>
-                                            ))}
+                                            {availableProtocols
+                                                .filter(protocol => !allGroupProtocols.includes(protocol.name))
+                                                .map(protocol => (
+                                                    <button
+                                                        key={protocol.id}
+                                                        className="add-protocol-btn"
+                                                        onClick={() => handleApplyStainProtocol(slides, protocol.id)}
+                                                        title={`Add ${protocol.name} to all slides`}
+                                                    >
+                                                        + {protocol.name}
+                                                    </button>
+                                                ))}
                                         </div>
                                     </div>
 
@@ -253,7 +293,7 @@ const StainProtocolMapping = () => {
                                                                 {slide.stainProtocols.map((protocol, idx) => (
                                                                     <span key={idx} className="protocol-chip">
                                                                         {protocol}
-                                                                        <button 
+                                                                        <button
                                                                             className="remove-protocol-btn"
                                                                             onClick={() => handleRemoveStainProtocol([slide], protocol)}
                                                                             title={`Remove ${protocol}`}

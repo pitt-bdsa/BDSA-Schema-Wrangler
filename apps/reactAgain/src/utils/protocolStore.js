@@ -46,7 +46,7 @@ class ProtocolStore {
     // Migrate existing protocols with timestamp-based IDs to use protocol names as IDs
     migrateProtocolIds() {
         let migrated = false;
-        
+
         // Migrate stain protocols
         this.stainProtocols.forEach(protocol => {
             if (protocol.name && this.isTimestampId(protocol.id)) {
@@ -65,7 +65,7 @@ class ProtocolStore {
                 }
             }
         });
-        
+
         // Migrate region protocols
         this.regionProtocols.forEach(protocol => {
             if (protocol.name && this.isTimestampId(protocol.id)) {
@@ -84,14 +84,14 @@ class ProtocolStore {
                 }
             }
         });
-        
+
         if (migrated) {
             this.saveStainProtocols();
             this.saveRegionProtocols();
             console.log('🔄 Migrated protocol IDs to use protocol names instead of timestamps');
         }
     }
-    
+
     // Helper function to check if an ID is a timestamp
     isTimestampId(id) {
         // Check if the ID is a numeric string that looks like a timestamp
@@ -185,7 +185,7 @@ class ProtocolStore {
     addStainProtocol(protocol) {
         // Use the protocol name as the ID, ensuring uniqueness
         const protocolId = protocol.name || protocol.id || Date.now().toString();
-        
+
         // Check if a protocol with this ID already exists
         const existingIndex = this.stainProtocols.findIndex(p => p.id === protocolId);
         if (existingIndex !== -1) {
@@ -201,7 +201,7 @@ class ProtocolStore {
             this.notify();
             return this.stainProtocols[existingIndex];
         }
-        
+
         const newProtocol = {
             ...protocol,
             id: protocolId,
@@ -217,7 +217,7 @@ class ProtocolStore {
     addRegionProtocol(protocol) {
         // Use the protocol name as the ID, ensuring uniqueness
         const protocolId = protocol.name || protocol.id || Date.now().toString();
-        
+
         // Check if a protocol with this ID already exists
         const existingIndex = this.regionProtocols.findIndex(p => p.id === protocolId);
         if (existingIndex !== -1) {
@@ -233,7 +233,7 @@ class ProtocolStore {
             this.notify();
             return this.regionProtocols[existingIndex];
         }
-        
+
         const newProtocol = {
             ...protocol,
             id: protocolId,
@@ -557,6 +557,7 @@ class ProtocolStore {
         this.notify();
     }
 
+
     exportProtocols() {
         return {
             stainProtocols: this.stainProtocols,
@@ -595,5 +596,10 @@ class ProtocolStore {
 
 // Create singleton instance
 const protocolStore = new ProtocolStore();
+
+// Make it available globally for debugging
+if (typeof window !== 'undefined') {
+    window.protocolStore = protocolStore;
+}
 
 export default protocolStore;
