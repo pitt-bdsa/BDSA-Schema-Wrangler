@@ -9,42 +9,29 @@ import CaseIdMappingSection from './CaseIdMappingSection';
 
 const CaseManagementTab = () => {
     const [activeSubTab, setActiveSubTab] = useState('case-id-mapping');
-
-    // Protocol mapping state (handled by ProtocolMapping component)
     const [dataStatus, setDataStatus] = useState(dataStore.getStatus());
     const [bdsaInstitutionId, setBdsaInstitutionId] = useState('001');
     const [temporaryHideMapped, setTemporaryHideMapped] = useState(false);
-    const [showMappedCases, setShowMappedCases] = useState(true);
-    const [sortField, setSortField] = useState(null); // Start with no sorting
+    const [sortField, setSortField] = useState(null);
     const [sortDirection, setSortDirection] = useState('asc');
     const [isGenerating, setIsGenerating] = useState(false);
     const [isGeneratingAll, setIsGeneratingAll] = useState(false);
     const [generateAllProgress, setGenerateAllProgress] = useState({ current: 0, total: 0 });
-    const [forceUpdate, setForceUpdate] = useState(0);
 
     // Subscribe to data store updates
     useEffect(() => {
         const unsubscribe = dataStore.subscribe(() => {
-            console.log('🔔 Data store notification received, updating component state');
-            setDataStatus(dataStore.getStatus());
+            const newStatus = dataStore.getStatus();
+            setDataStatus(newStatus);
+
+            // Initialize case ID mappings when data becomes available
+            if (newStatus.processedData && newStatus.processedData.length > 0) {
+                dataStore.initializeCaseIdMappingsFromData();
+            }
         });
+
         return unsubscribe;
-    }, []);
-
-    // Initialize case ID mappings from existing data when data is loaded
-    useEffect(() => {
-        if (dataStatus.processedData && dataStatus.processedData.length > 0) {
-            dataStore.initializeCaseIdMappingsFromData();
-        }
-    }, [dataStatus.processedData]);
-
-    // Protocol mapping is now handled by the ProtocolMapping component
-
-    // Force update when case ID mappings change (since updateCaseIdMappings doesn't notify)
-    const forceCaseIdMappingsUpdate = () => {
-        setForceUpdate(prev => prev + 1);
-        setDataStatus(dataStore.getStatus());
-    };
+    }, []); // Only run once on mount
 
     // Reset the temporary filter when new items are generated
     const resetTemporaryFilter = () => {
@@ -92,17 +79,6 @@ const CaseManagementTab = () => {
                 isMapped: Boolean(caseIdMappings.get(caseId))
             }));
 
-        // Debug logging
-        console.log('🔍 Case ID Mapping Debug:', {
-            totalProcessedData: dataStatus.processedData?.length || 0,
-            caseIdCounts: Object.keys(caseIdCounts).length,
-            caseIdMappings: caseIdMappings.size,
-            allCases: allCases.length,
-            mappedCases: allCases.filter(c => c.isMapped).length,
-            unmappedCases: allCases.filter(c => !c.isMapped).length,
-            sampleUnmapped: allCases.filter(c => !c.isMapped).slice(0, 3)
-        });
-
         // Only apply sorting if a sort field is explicitly set
         if (sortField) {
             allCases.sort((a, b) => {
@@ -140,7 +116,7 @@ const CaseManagementTab = () => {
             return allCases.filter(caseData => !caseData.isMapped);
         }
         return allCases;
-    }, [dataStatus.processedData, dataStatus.caseIdMappings, temporaryHideMapped, sortField, sortDirection, forceUpdate]);
+    }, [dataStatus.processedData, dataStatus.caseIdMappings, temporaryHideMapped, sortField, sortDirection]);
 
     // Detect duplicate BDSA Case IDs
     const duplicateBdsaCaseIds = useMemo(() => {
@@ -241,7 +217,6 @@ const CaseManagementTab = () => {
 
             // Set the case ID directly in the data items (single source of truth)
             setCaseIdInData(localCaseId, bdsaCaseId);
-            forceCaseIdMappingsUpdate();
             resetTemporaryFilter(); // Show the newly generated item
 
         } finally {
@@ -260,8 +235,6 @@ const CaseManagementTab = () => {
             // Clear the case ID by setting it to null
             setCaseIdInData(localCaseId, null);
         }
-
-        forceCaseIdMappingsUpdate();
     };
 
     // Generate all unmapped case IDs
@@ -307,7 +280,6 @@ const CaseManagementTab = () => {
 
             // Update all mappings at once
             dataStore.updateCaseIdMappings(newMappings);
-            forceCaseIdMappingsUpdate();
             resetTemporaryFilter(); // Show all newly generated items
 
         } finally {
@@ -329,7 +301,6 @@ const CaseManagementTab = () => {
         });
 
         dataStore.updateCaseIdMappings(newMappings);
-        forceCaseIdMappingsUpdate();
     };
 
     // Sync case ID mappings to DSA server
@@ -424,7 +395,6 @@ const CaseManagementTab = () => {
 
                     // Update local case ID mappings
                     dataStore.updateCaseIdMappings(newMappings);
-                    forceCaseIdMappingsUpdate();
 
                     alert(`Case ID mappings pulled successfully!\n\nPulled ${result.pulled.caseIdMappings} case ID mappings from DSA server.`);
                 } else {
@@ -481,12 +451,10 @@ const CaseManagementTab = () => {
                     setBdsaInstitutionId={setBdsaInstitutionId}
                     filteredCaseIds={filteredCaseIds}
                     duplicateBdsaCaseIds={duplicateBdsaCaseIds}
-                    setShowMappedCases={setShowMappedCases}
                     clearDuplicates={clearDuplicates}
                     isGeneratingAll={isGeneratingAll}
                     generateAllProgress={generateAllProgress}
                     stats={stats}
-                    forceCaseIdMappingsUpdate={forceCaseIdMappingsUpdate}
                     temporaryHideMapped={temporaryHideMapped}
                     setTemporaryHideMapped={setTemporaryHideMapped}
                     generateAllCaseIds={generateAllCaseIds}

@@ -30,6 +30,85 @@ class DataStore {
 
         // Load from localStorage on initialization
         this.loadFromStorage();
+        this.migrateProtocolIdsInData();
+    }
+
+    // Migrate protocol IDs in processed data from timestamp-based IDs to protocol names
+    migrateProtocolIdsInData() {
+        if (!this.processedData || this.processedData.length === 0) {
+            return;
+        }
+
+        let migrated = false;
+
+        // Get protocol store instance directly (avoiding circular import issues)
+        // We'll access it through the global scope or pass it as a parameter
+        this.processedData.forEach(item => {
+            if (item.BDSA?.bdsaLocal) {
+                // Migrate stain protocols
+                if (item.BDSA.bdsaLocal.bdsaStainProtocol && Array.isArray(item.BDSA.bdsaLocal.bdsaStainProtocol)) {
+                    const updatedStainProtocols = item.BDSA.bdsaLocal.bdsaStainProtocol.map(protocolId => {
+                        // Check if this is a timestamp-based ID
+                        if (this.isTimestampId(protocolId)) {
+                            // For now, we'll need to handle this differently
+                            // The protocol store migration should have already happened
+                            // So we'll try to find the protocol by name in localStorage
+                            const storedProtocols = this.getStoredProtocols('stain');
+                            const protocol = storedProtocols.find(p => p.id === protocolId);
+                            if (protocol && protocol.name) {
+                                migrated = true;
+                                return protocol.name; // Use the protocol name as the new ID
+                            }
+                        }
+                        return protocolId;
+                    });
+                    item.BDSA.bdsaLocal.bdsaStainProtocol = updatedStainProtocols;
+                }
+
+                // Migrate region protocols
+                if (item.BDSA.bdsaLocal.bdsaRegionProtocol && Array.isArray(item.BDSA.bdsaLocal.bdsaRegionProtocol)) {
+                    const updatedRegionProtocols = item.BDSA.bdsaLocal.bdsaRegionProtocol.map(protocolId => {
+                        // Check if this is a timestamp-based ID
+                        if (this.isTimestampId(protocolId)) {
+                            // For now, we'll need to handle this differently
+                            // The protocol store migration should have already happened
+                            // So we'll try to find the protocol by name in localStorage
+                            const storedProtocols = this.getStoredProtocols('region');
+                            const protocol = storedProtocols.find(p => p.id === protocolId);
+                            if (protocol && protocol.name) {
+                                migrated = true;
+                                return protocol.name; // Use the protocol name as the new ID
+                            }
+                        }
+                        return protocolId;
+                    });
+                    item.BDSA.bdsaLocal.bdsaRegionProtocol = updatedRegionProtocols;
+                }
+            }
+        });
+
+        if (migrated) {
+            this.saveToStorage();
+            console.log('🔄 Migrated protocol IDs in processed data to use protocol names instead of timestamps');
+        }
+    }
+
+    // Helper to get stored protocols from localStorage
+    getStoredProtocols(type) {
+        try {
+            const key = type === 'stain' ? 'bdsa_stain_protocols' : 'bdsa_region_protocols';
+            const stored = localStorage.getItem(key);
+            return stored ? JSON.parse(stored) : [];
+        } catch (error) {
+            console.error('Error loading stored protocols:', error);
+            return [];
+        }
+    }
+
+    // Helper function to check if an ID is a timestamp
+    isTimestampId(id) {
+        // Check if the ID is a numeric string that looks like a timestamp
+        return /^\d{13}$/.test(id) || /^\d{10}$/.test(id);
     }
 
     // Event system for UI updates
@@ -47,6 +126,15 @@ class DataStore {
                 console.error('🔔 DataStore: Error in listener:', error);
             }
         });
+    }
+
+    // Force a data refresh by creating a new array reference
+    forceDataRefresh() {
+        if (this.processedData && this.processedData.length > 0) {
+            // Create a new array reference to trigger React re-renders
+            this.processedData = [...this.processedData];
+            console.log('🔄 DataStore: Forced data refresh - created new array reference');
+        }
     }
 
     // Sync event system
@@ -634,21 +722,9 @@ class DataStore {
                 };
             }
 
-            // Skip regex processing entirely if this item has server metadata or existing BDSA values
+            // Skip regex processing entirely if this item has server metadata
             if (updatedItem._hasServerMetadata) {
                 console.log(`⏭️ Skipping regex processing for item ${updatedItem.id} - has server metadata`);
-                return; // Skip this item entirely
-            }
-
-            // Also skip if item already has any BDSA values from any source
-            const hasExistingBdsaValues = updatedItem.BDSA?.bdsaLocal && (
-                (updatedItem.BDSA.bdsaLocal.localCaseId && updatedItem.BDSA.bdsaLocal.localCaseId.trim() !== '') ||
-                (updatedItem.BDSA.bdsaLocal.localStainID && updatedItem.BDSA.bdsaLocal.localStainID.trim() !== '') ||
-                (updatedItem.BDSA.bdsaLocal.localRegionId && updatedItem.BDSA.bdsaLocal.localRegionId.trim() !== '')
-            );
-
-            if (hasExistingBdsaValues) {
-                console.log(`⏭️ Skipping regex processing for item ${updatedItem.id} - already has BDSA values`);
                 return; // Skip this item entirely
             }
 

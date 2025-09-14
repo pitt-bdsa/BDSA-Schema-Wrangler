@@ -72,6 +72,7 @@ const InputDataTab = () => {
     });
     const [showDsaSync, setShowDsaSync] = useState(false);
     const [isDataRefresh, setIsDataRefresh] = useState(false);
+    const [hasAppliedInitialRegex, setHasAppliedInitialRegex] = useState(false);
 
     // Generate nested keys from an object (excluding meta.bdsaLocal fields)
 
@@ -105,7 +106,15 @@ const InputDataTab = () => {
     // Auto-apply regex rules when data is loaded (if no column mappings exist)
     // Only run this once when data is first loaded, not on every data change
     useEffect(() => {
-        if (dataStatus.processedData && dataStatus.processedData.length > 0 && !isDataRefresh) {
+        console.log('🔍 Auto-apply useEffect triggered:', {
+            hasData: dataStatus.processedData && dataStatus.processedData.length > 0,
+            dataLength: dataStatus.processedData?.length || 0,
+            isDataRefresh,
+            hasAppliedInitialRegex,
+            shouldRun: dataStatus.processedData && dataStatus.processedData.length > 0 && !isDataRefresh && !hasAppliedInitialRegex
+        });
+
+        if (dataStatus.processedData && dataStatus.processedData.length > 0 && !isDataRefresh && !hasAppliedInitialRegex) {
             // Check which fields need regex extraction on a per-field basis
             const fieldsNeedingExtraction = {
                 localCaseId: 0,
@@ -132,19 +141,24 @@ const InputDataTab = () => {
             // If any fields need extraction, apply regex rules
             const totalNeedingExtraction = Object.values(fieldsNeedingExtraction).reduce((sum, count) => sum + count, 0);
 
+            console.log(`🔍 Fields needing extraction:`, fieldsNeedingExtraction, `Total: ${totalNeedingExtraction}`);
+
             if (totalNeedingExtraction > 0) {
                 console.log(`🔄 Found items needing regex extraction:`, fieldsNeedingExtraction);
                 console.log(`🔄 Auto-applying regex rules to extract missing field values...`);
-                // Don't mark items as modified during initial data processing
-                const result = dataStore.applyRegexRules(regexRules, false);
+                // Mark items as modified so they can be synced to DSA
+                const result = dataStore.applyRegexRules(regexRules, true);
                 if (result.success) {
-                    console.log(`✅ Auto-applied regex rules: ${result.extractedCount} items updated (not marked as modified)`);
+                    console.log(`✅ Auto-applied regex rules: ${result.extractedCount} items updated (marked as modified for sync)`);
                 }
             } else {
                 console.log('🔄 All items already have BDSA field values, skipping auto-apply of regex rules');
             }
+
+            // Mark that we've applied initial regex to prevent infinite loop
+            setHasAppliedInitialRegex(true);
         }
-    }, [dataStatus.processedData, dataStatus.dataSource, isDataRefresh]); // Removed regexRules from dependencies
+    }, [dataStatus.processedData, dataStatus.dataSource, isDataRefresh, hasAppliedInitialRegex]); // Removed regexRules from dependencies
 
     // Auto-load DSA data when authenticated and no data is loaded
     useEffect(() => {
@@ -164,6 +178,7 @@ const InputDataTab = () => {
         // Clear data when switching data sources
         if (newDataSource !== dataStatus.dataSource) {
             dataStore.clearData();
+            setHasAppliedInitialRegex(false); // Reset regex flag when clearing data
         }
     };
 
@@ -238,6 +253,7 @@ const InputDataTab = () => {
             dataStore.clearData();
             setCsvFile(null);
             setError(null);
+            setHasAppliedInitialRegex(false); // Reset regex flag when clearing data
         }
     };
 

@@ -16,6 +16,95 @@
     color: #333;
 }
 
+/* Arrow-based case navigation */
+.case-navigation {
+    margin-top: 15px;
+}
+
+.case-navigator {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.nav-arrow {
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 12px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 18px;
+    font-weight: bold;
+    transition: all 0.2s ease;
+    min-width: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.nav-arrow:hover {
+    background: #0056b3;
+    transform: scale(1.05);
+}
+
+.nav-arrow:active {
+    transform: scale(0.95);
+}
+
+.case-display {
+    flex: 1;
+    background: white;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    padding: 20px;
+    transition: all 0.2s ease;
+    min-height: 80px;
+    display: flex;
+    align-items: center;
+}
+
+.case-info {
+    width: 100%;
+}
+
+.case-id {
+    font-size: 20px;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 8px;
+}
+
+.case-details {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.local-id {
+    color: #666;
+    font-size: 14px;
+}
+
+.unmapped-count {
+    color: #dc3545;
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.case-summary {
+    text-align: center;
+    color: #666;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.case-summary p {
+    margin: 5px 0;
+}
+
+/* Legacy dropdown styles (kept for fallback) */
 .case-selection select {
     width: 100%;
     padding: 10px;
@@ -51,6 +140,16 @@
     color: #333;
 }
 
+.section-description {
+    color: #666;
+    font-style: italic;
+    margin-bottom: 20px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    border-left: 4px solid #007bff;
+}
+
 .stain-group {
     margin-bottom: 30px;
     padding: 20px;
@@ -64,6 +163,28 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 15px;
+}
+
+.group-title {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    flex: 1;
+}
+
+.group-title:hover {
+    opacity: 0.8;
+}
+
+.expand-icon {
+    margin-right: 8px;
+    font-size: 12px;
+    transition: transform 0.2s ease;
+    color: #666;
+}
+
+.expand-icon.expanded {
+    transform: rotate(90deg);
 }
 
 .group-header h4 {
@@ -163,4 +284,214 @@
 
 .protocol-btn:hover {
     background: #0056b3;
+}
+
+.protocol-btn.stain {
+    background: #28a745;
+}
+
+.protocol-btn.stain:hover {
+    background: #218838;
+}
+
+.protocol-btn.region {
+    background: #17a2b8;
+}
+
+.protocol-btn.region:hover {
+    background: #138496;
+}
+
+/* Protocol selection sections */
+.protocol-selection {
+    margin-top: 20px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border: 1px solid #dee2e6;
+}
+
+.protocol-selection h5 {
+    margin-top: 0;
+    color: #333;
+    border-bottom: 2px solid #007bff;
+    padding-bottom: 8px;
+}
+
+.token-info {
+    background: white;
+    padding: 15px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    border: 1px solid #e9ecef;
+}
+
+.token-info h6 {
+    margin-top: 0;
+    color: #495057;
+    font-size: 1rem;
+}
+
+.token-info p {
+    margin: 8px 0;
+    color: #666;
+}
+
+.protocol-type-section {
+    margin-bottom: 25px;
+    padding: 15px;
+    background: white;
+    border-radius: 4px;
+    border: 1px solid #e9ecef;
+}
+
+.protocol-type-section h6 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #333;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.batch-info {
+    margin-top: 10px;
+    padding: 8px 12px;
+    background: #e3f2fd;
+    border-radius: 4px;
+    border-left: 4px solid #2196f3;
+}
+
+.batch-info small {
+    color: #1976d2;
+    font-weight: 500;
+}
+
+/* Current protocols display */
+.current-protocols {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #e8f5e8;
+    border-radius: 4px;
+    border: 1px solid #c3e6cb;
+}
+
+.current-protocols h5 {
+    margin-top: 0;
+    color: #2d5a2d;
+    font-size: 0.9rem;
+}
+
+.slide-protocols {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 10px;
+    background: white;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    border: 1px solid #d4edda;
+}
+
+.slide-name {
+    font-weight: 500;
+    color: #333;
+    min-width: 200px;
+}
+
+.protocol-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.protocol-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.protocol-tag.stain {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.protocol-tag.region {
+    background: #d1ecf1;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
+}
+
+.remove-protocol {
+    background: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    font-size: 0.7rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.remove-protocol:hover {
+    background: #c82333;
+}
+
+/* Individual slides display */
+.individual-slides {
+    margin: 15px 0;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    border: 1px solid #e9ecef;
+}
+
+.individual-slides h5 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #495057;
+    font-size: 0.9rem;
+}
+
+.slide-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background: white;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    border: 1px solid #dee2e6;
+}
+
+.slide-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+}
+
+.slide-info .slide-name {
+    font-weight: 500;
+    color: #333;
+}
+
+.slide-tokens {
+    font-size: 0.8rem;
+    color: #666;
+    font-style: italic;
+}
+
+.slide-item .slide-protocols {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
 }

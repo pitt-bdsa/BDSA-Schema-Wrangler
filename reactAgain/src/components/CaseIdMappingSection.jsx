@@ -6,12 +6,10 @@ const CaseIdMappingSection = ({
     setBdsaInstitutionId,
     filteredCaseIds,
     duplicateBdsaCaseIds,
-    setShowMappedCases,
     clearDuplicates,
     isGeneratingAll,
     generateAllProgress,
     stats,
-    forceCaseIdMappingsUpdate,
     temporaryHideMapped,
     setTemporaryHideMapped,
     generateAllCaseIds,
@@ -66,9 +64,6 @@ const CaseIdMappingSection = ({
                         </span>
                     </div>
                     <div className="warning-actions">
-                        <button className="view-duplicates-btn" onClick={() => setShowMappedCases(true)}>
-                            View duplicates ({duplicateBdsaCaseIds.size})
-                        </button>
                         <button className="clear-duplicates-btn" onClick={clearDuplicates}>
                             🗑️ Clear Duplicates ({duplicateBdsaCaseIds.size})
                         </button>
@@ -116,7 +111,6 @@ const CaseIdMappingSection = ({
                                                     className="resolve-conflict-btn"
                                                     onClick={() => {
                                                         dataStore.resolveCaseIdConflict(localCaseId, bdsaCaseId);
-                                                        forceCaseIdMappingsUpdate();
                                                     }}
                                                 >
                                                     Keep: {bdsaCaseId}
@@ -126,7 +120,6 @@ const CaseIdMappingSection = ({
                                                 className="clear-conflict-btn"
                                                 onClick={() => {
                                                     dataStore.clearCaseIdConflict(localCaseId);
-                                                    forceCaseIdMappingsUpdate();
                                                 }}
                                             >
                                                 Clear All
@@ -157,7 +150,6 @@ const CaseIdMappingSection = ({
                                                     className="resolve-conflict-btn"
                                                     onClick={() => {
                                                         dataStore.resolveBdsaCaseIdConflict(bdsaCaseId, localCaseId);
-                                                        forceCaseIdMappingsUpdate();
                                                     }}
                                                 >
                                                     Keep: {localCaseId}
@@ -167,7 +159,6 @@ const CaseIdMappingSection = ({
                                                 className="clear-conflict-btn"
                                                 onClick={() => {
                                                     dataStore.clearBdsaCaseIdConflict(bdsaCaseId);
-                                                    forceCaseIdMappingsUpdate();
                                                 }}
                                             >
                                                 Clear All

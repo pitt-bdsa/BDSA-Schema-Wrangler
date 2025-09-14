@@ -40,6 +40,62 @@ class ProtocolStore {
         this.regionProtocols = this.loadRegionProtocols();
         this.conflicts = this.loadConflicts();
         this.lastSync = this.loadLastSync();
+        this.migrateProtocolIds();
+    }
+
+    // Migrate existing protocols with timestamp-based IDs to use protocol names as IDs
+    migrateProtocolIds() {
+        let migrated = false;
+        
+        // Migrate stain protocols
+        this.stainProtocols.forEach(protocol => {
+            if (protocol.name && this.isTimestampId(protocol.id)) {
+                // Check if a protocol with this name already exists
+                const existingProtocol = this.stainProtocols.find(p => p.id === protocol.name);
+                if (!existingProtocol) {
+                    protocol.id = protocol.name;
+                    migrated = true;
+                } else {
+                    // Remove duplicate protocol with timestamp ID
+                    const index = this.stainProtocols.indexOf(protocol);
+                    if (index > -1) {
+                        this.stainProtocols.splice(index, 1);
+                        migrated = true;
+                    }
+                }
+            }
+        });
+        
+        // Migrate region protocols
+        this.regionProtocols.forEach(protocol => {
+            if (protocol.name && this.isTimestampId(protocol.id)) {
+                // Check if a protocol with this name already exists
+                const existingProtocol = this.regionProtocols.find(p => p.id === protocol.name);
+                if (!existingProtocol) {
+                    protocol.id = protocol.name;
+                    migrated = true;
+                } else {
+                    // Remove duplicate protocol with timestamp ID
+                    const index = this.regionProtocols.indexOf(protocol);
+                    if (index > -1) {
+                        this.regionProtocols.splice(index, 1);
+                        migrated = true;
+                    }
+                }
+            }
+        });
+        
+        if (migrated) {
+            this.saveStainProtocols();
+            this.saveRegionProtocols();
+            console.log('🔄 Migrated protocol IDs to use protocol names instead of timestamps');
+        }
+    }
+    
+    // Helper function to check if an ID is a timestamp
+    isTimestampId(id) {
+        // Check if the ID is a numeric string that looks like a timestamp
+        return /^\d{13}$/.test(id) || /^\d{10}$/.test(id);
     }
 
     // Event system for UI updates
@@ -127,9 +183,28 @@ class ProtocolStore {
 
     // Protocol Management
     addStainProtocol(protocol) {
+        // Use the protocol name as the ID, ensuring uniqueness
+        const protocolId = protocol.name || protocol.id || Date.now().toString();
+        
+        // Check if a protocol with this ID already exists
+        const existingIndex = this.stainProtocols.findIndex(p => p.id === protocolId);
+        if (existingIndex !== -1) {
+            // Update existing protocol instead of creating duplicate
+            this.stainProtocols[existingIndex] = {
+                ...this.stainProtocols[existingIndex],
+                ...protocol,
+                id: protocolId,
+                _localModified: true,
+                _remoteVersion: null
+            };
+            this.saveStainProtocols();
+            this.notify();
+            return this.stainProtocols[existingIndex];
+        }
+        
         const newProtocol = {
             ...protocol,
-            id: Date.now().toString(),
+            id: protocolId,
             _localModified: true,
             _remoteVersion: null
         };
@@ -140,9 +215,28 @@ class ProtocolStore {
     }
 
     addRegionProtocol(protocol) {
+        // Use the protocol name as the ID, ensuring uniqueness
+        const protocolId = protocol.name || protocol.id || Date.now().toString();
+        
+        // Check if a protocol with this ID already exists
+        const existingIndex = this.regionProtocols.findIndex(p => p.id === protocolId);
+        if (existingIndex !== -1) {
+            // Update existing protocol instead of creating duplicate
+            this.regionProtocols[existingIndex] = {
+                ...this.regionProtocols[existingIndex],
+                ...protocol,
+                id: protocolId,
+                _localModified: true,
+                _remoteVersion: null
+            };
+            this.saveRegionProtocols();
+            this.notify();
+            return this.regionProtocols[existingIndex];
+        }
+        
         const newProtocol = {
             ...protocol,
-            id: Date.now().toString(),
+            id: protocolId,
             _localModified: true,
             _remoteVersion: null
         };
