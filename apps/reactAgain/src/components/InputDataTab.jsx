@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
 import dataStore, { getItemsToSyncCount } from '../utils/dataStore';
@@ -17,8 +16,6 @@ import { useColumnVisibility } from '../hooks/useColumnVisibility';
 import './InputDataTab.css';
 
 
-// Register AG Grid modules
-ModuleRegistry.registerModules([AllCommunityModule]);
 
 const InputDataTab = () => {
     const [dataSource, setDataSource] = useState(DATA_SOURCE_TYPES.DSA);
