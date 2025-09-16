@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import dataStore from '../utils/dataStore';
 
 const CaseIdMappingSection = ({
@@ -14,6 +14,8 @@ const CaseIdMappingSection = ({
     setTemporaryHideMapped,
     showOnlyDuplicates,
     setShowOnlyDuplicates,
+    caseIdFilter,
+    setCaseIdFilter,
     generateAllCaseIds,
     isGeneratingAll: isGenerating,
     handleSyncCaseIdMappingsToDSA,
@@ -26,6 +28,9 @@ const CaseIdMappingSection = ({
     handleSort,
     getSortIcon
 }) => {
+    // Track the original institution ID value for confirmation
+    const originalInstitutionId = useRef(bdsaInstitutionId);
+
     return (
         <div className="case-id-mapping-content">
             {/* Mapping Settings */}
@@ -36,11 +41,48 @@ const CaseIdMappingSection = ({
                         id="institution-id"
                         type="text"
                         value={bdsaInstitutionId}
-                        onChange={(e) => setBdsaInstitutionId(e.target.value)}
+                        onChange={(e) => {
+                            // Just update the local state, don't trigger confirmation yet
+                            setBdsaInstitutionId(e.target.value);
+                        }}
+                        onBlur={(e) => {
+                            const newValue = e.target.value.trim();
+                            const originalValue = originalInstitutionId.current;
+
+                            // Only show confirmation if there's an actual change and original value exists
+                            if (originalValue && originalValue.trim() !== '' && newValue !== originalValue && newValue !== '') {
+                                const confirmMessage = `Are you sure you want to change the BDSA Institution ID from "${originalValue}" to "${newValue}"?\n\nThis will affect all future BDSA Case ID generation.`;
+                                if (!window.confirm(confirmMessage)) {
+                                    // Reset to original value if user cancels
+                                    setBdsaInstitutionId(originalValue);
+                                    e.target.value = originalValue;
+                                } else {
+                                    // Update the ref to the new value
+                                    originalInstitutionId.current = newValue;
+                                }
+                            } else if (newValue !== originalValue) {
+                                // Update the ref when value changes (even if no confirmation needed)
+                                originalInstitutionId.current = newValue;
+                            }
+                        }}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                e.target.blur(); // Trigger the blur handler
+                            }
+                        }}
                         className="institution-id-input"
-                        placeholder="001"
+                        placeholder="Auto-set from DSA collection (or enter manually)"
+                        style={{
+                            backgroundColor: bdsaInstitutionId ? '#f0f8ff' : '#fff',
+                            borderColor: bdsaInstitutionId ? '#4a90e2' : '#ccc'
+                        }}
                     />
-                    <small>Used for generating BDSA Case IDs (e.g., BDSA-001-0001)</small>
+                    <small>
+                        {bdsaInstitutionId
+                            ? `Used for generating BDSA Case IDs (e.g., BDSA-${bdsaInstitutionId}-0001)`
+                            : 'Will be auto-set when you pull data from DSA, or enter manually if needed'
+                        }
+                    </small>
                 </div>
                 <div className="setting-group">
                     <label>Data Source Column:</label>
@@ -99,6 +141,38 @@ const CaseIdMappingSection = ({
                         <p>Total unique cases: {filteredCaseIds.length}</p>
                     </div>
                     <div className="mapping-controls">
+                        <div className="search-filter">
+                            <input
+                                type="text"
+                                placeholder="Search by Local Case ID or BDSA Case ID..."
+                                value={caseIdFilter}
+                                onChange={(e) => setCaseIdFilter(e.target.value)}
+                                className="case-search-input"
+                                style={{
+                                    padding: '8px 12px',
+                                    border: '1px solid #ddd',
+                                    borderRadius: '4px',
+                                    fontSize: '14px',
+                                    minWidth: '300px'
+                                }}
+                            />
+                            {caseIdFilter && (
+                                <button
+                                    onClick={() => setCaseIdFilter('')}
+                                    className="clear-search-btn"
+                                    style={{
+                                        marginLeft: '8px',
+                                        padding: '8px 12px',
+                                        border: '1px solid #ccc',
+                                        borderRadius: '4px',
+                                        backgroundColor: '#f5f5f5',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Clear
+                                </button>
+                            )}
+                        </div>
                         <button
                             className={`toggle-mapped-btn ${temporaryHideMapped ? 'active' : ''}`}
                             onClick={() => setTemporaryHideMapped(!temporaryHideMapped)}

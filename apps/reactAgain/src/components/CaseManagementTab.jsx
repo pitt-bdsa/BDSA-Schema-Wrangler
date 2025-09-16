@@ -11,9 +11,10 @@ import RegionProtocolMapping from './RegionProtocolMapping';
 const CaseManagementTab = () => {
     const [activeSubTab, setActiveSubTab] = useState('case-id-mapping');
     const [dataStatus, setDataStatus] = useState(dataStore.getStatus());
-    const [bdsaInstitutionId, setBdsaInstitutionId] = useState('001');
+    const [bdsaInstitutionId, setBdsaInstitutionId] = useState('');
     const [temporaryHideMapped, setTemporaryHideMapped] = useState(false);
     const [showOnlyDuplicates, setShowOnlyDuplicates] = useState(false);
+    const [caseIdFilter, setCaseIdFilter] = useState('');
     const [sortField, setSortField] = useState(null);
     const [sortDirection, setSortDirection] = useState('asc');
     const [isGenerating, setIsGenerating] = useState(false);
@@ -48,73 +49,79 @@ const CaseManagementTab = () => {
 
     // Protocol mapping functions are now handled by the ProtocolMapping component
 
-    // Get unique case IDs from the data
-    const getUniqueCaseIds = () => {
-        if (!dataStatus.processedData || dataStatus.processedData.length === 0) {
-            return [];
-        }
-
-        const caseIdCounts = {};
-
-        // Count occurrences of each local case ID
-        dataStatus.processedData.forEach((row) => {
-            const localCaseId = row.BDSA?.bdsaLocal?.localCaseId;
-            if (localCaseId) {
-                caseIdCounts[localCaseId] = (caseIdCounts[localCaseId] || 0) + 1;
+    // Get unique case IDs from the data (memoized for stability)
+    const getUniqueCaseIds = useMemo(() => {
+        return () => {
+            if (!dataStatus.processedData || dataStatus.processedData.length === 0) {
+                return [];
             }
-        });
 
-        // Read case ID mappings directly from the data items (single source of truth)
-        const caseIdMappings = new Map();
-        dataStatus.processedData?.forEach((item) => {
-            const localCaseId = item.BDSA?.bdsaLocal?.localCaseId;
-            const bdsaCaseId = item.BDSA?.bdsaLocal?.bdsaCaseId;
-            if (localCaseId) {
-                // Only set mapping if BDSA Case ID exists, otherwise leave as undefined
-                if (bdsaCaseId) {
-                    // console.log(`🔍 Mapping: localCaseId="${localCaseId}" → bdsaCaseId="${bdsaCaseId}"`);
-                    caseIdMappings.set(localCaseId, bdsaCaseId);
-                }
-            }
-        });
+            const caseIdCounts = {};
 
-        const allCases = Object.entries(caseIdCounts)
-            .map(([caseId, count]) => ({
-                localCaseId: caseId,
-                rowCount: count,
-                bdsaCaseId: caseIdMappings.get(caseId) || null,
-                isMapped: Boolean(caseIdMappings.get(caseId))
-            }));
-
-        // Only apply sorting if a sort field is explicitly set
-        if (sortField) {
-            allCases.sort((a, b) => {
-                let aValue, bValue;
-                switch (sortField) {
-                    case 'rowCount':
-                        aValue = a.rowCount;
-                        bValue = b.rowCount;
-                        break;
-                    case 'bdsaCaseId':
-                        aValue = a.bdsaCaseId || '';
-                        bValue = b.bdsaCaseId || '';
-                        break;
-                    default:
-                        aValue = a.localCaseId;
-                        bValue = b.localCaseId;
-                        break;
-                }
-
-                if (sortDirection === 'asc') {
-                    return aValue > bValue ? 1 : -1;
-                } else {
-                    return aValue < bValue ? 1 : -1;
+            // Count occurrences of each local case ID
+            dataStatus.processedData.forEach((row) => {
+                const localCaseId = row.BDSA?.bdsaLocal?.localCaseId;
+                if (localCaseId) {
+                    caseIdCounts[localCaseId] = (caseIdCounts[localCaseId] || 0) + 1;
                 }
             });
-        }
 
-        return allCases;
-    };
+            // Read case ID mappings directly from the data items (single source of truth)
+            const caseIdMappings = new Map();
+            dataStatus.processedData?.forEach((item) => {
+                const localCaseId = item.BDSA?.bdsaLocal?.localCaseId;
+                const bdsaCaseId = item.BDSA?.bdsaLocal?.bdsaCaseId;
+                if (localCaseId) {
+                    // Only set mapping if BDSA Case ID exists, otherwise leave as undefined
+                    if (bdsaCaseId) {
+                        // console.log(`🔍 Mapping: localCaseId="${localCaseId}" → bdsaCaseId="${bdsaCaseId}"`);
+                        caseIdMappings.set(localCaseId, bdsaCaseId);
+                    }
+                }
+            });
+
+            const allCases = Object.entries(caseIdCounts)
+                .map(([caseId, count]) => ({
+                    localCaseId: caseId,
+                    rowCount: count,
+                    bdsaCaseId: caseIdMappings.get(caseId) || null,
+                    isMapped: Boolean(caseIdMappings.get(caseId))
+                }));
+
+            // Always provide a stable sort to prevent rows from jumping around during edits
+            if (sortField) {
+                // User has explicitly chosen a sort field - respect that choice
+                allCases.sort((a, b) => {
+                    let aValue, bValue;
+                    switch (sortField) {
+                        case 'rowCount':
+                            aValue = a.rowCount;
+                            bValue = b.rowCount;
+                            break;
+                        case 'bdsaCaseId':
+                            aValue = a.bdsaCaseId || '';
+                            bValue = b.bdsaCaseId || '';
+                            break;
+                        default:
+                            aValue = a.localCaseId;
+                            bValue = b.localCaseId;
+                            break;
+                    }
+
+                    if (sortDirection === 'asc') {
+                        return aValue > bValue ? 1 : -1;
+                    } else {
+                        return aValue < bValue ? 1 : -1;
+                    }
+                });
+            } else {
+                // No user sorting - maintain stable order by localCaseId to prevent jumping during edits
+                allCases.sort((a, b) => a.localCaseId.localeCompare(b.localCaseId));
+            }
+
+            return allCases;
+        };
+    }, [dataStatus.processedData, sortField, sortDirection]);
 
     // Detect duplicate BDSA Case IDs
     const duplicateBdsaCaseIds = useMemo(() => {
@@ -138,10 +145,20 @@ const CaseManagementTab = () => {
         return duplicates;
     }, [dataStatus.processedData, dataStatus.caseIdMappings]);
 
-    // Filter cases based on mapped status and duplicates
+    // Filter cases based on mapped status, duplicates, and search
     const filteredCaseIds = useMemo(() => {
         const allCases = getUniqueCaseIds();
         let filtered = allCases;
+
+        // Apply search filter
+        if (caseIdFilter && caseIdFilter.trim() !== '') {
+            const searchTerm = caseIdFilter.toLowerCase().trim();
+            filtered = filtered.filter(caseData => {
+                const localCaseId = caseData.localCaseId?.toLowerCase() || '';
+                const bdsaCaseId = caseData.bdsaCaseId?.toLowerCase() || '';
+                return localCaseId.includes(searchTerm) || bdsaCaseId.includes(searchTerm);
+            });
+        }
 
         if (temporaryHideMapped) {
             filtered = filtered.filter(caseData => !caseData.isMapped);
@@ -154,7 +171,7 @@ const CaseManagementTab = () => {
         }
 
         return filtered;
-    }, [dataStatus.processedData, dataStatus.caseIdMappings, temporaryHideMapped, showOnlyDuplicates, duplicateBdsaCaseIds, sortField, sortDirection]);
+    }, [dataStatus.processedData, dataStatus.caseIdMappings, temporaryHideMapped, showOnlyDuplicates, duplicateBdsaCaseIds, sortField, sortDirection, caseIdFilter]);
 
     // Get statistics
     const stats = useMemo(() => {
@@ -242,7 +259,12 @@ const CaseManagementTab = () => {
 
     // Generate sequential BDSA Case ID
     const generateSequentialBdsaCaseId = (localCaseId) => {
-        if (!localCaseId || !bdsaInstitutionId) {
+        if (!localCaseId) {
+            return;
+        }
+
+        if (!bdsaInstitutionId || bdsaInstitutionId.trim() === '') {
+            alert('Please set the BDSA Institution ID first. You can:\n1. Pull data from DSA to auto-set it\n2. Enter it manually in the Institution ID field');
             return;
         }
 
@@ -299,6 +321,11 @@ const CaseManagementTab = () => {
 
     // Generate all unmapped case IDs
     const generateAllCaseIds = async () => {
+        if (!bdsaInstitutionId || bdsaInstitutionId.trim() === '') {
+            alert('Please set the BDSA Institution ID first. You can:\n1. Pull data from DSA to auto-set it\n2. Enter it manually in the Institution ID field');
+            return;
+        }
+
         const unmappedCases = filteredCaseIds.filter(caseData => !caseData.isMapped);
         if (unmappedCases.length === 0) {
             return;
@@ -449,14 +476,31 @@ const CaseManagementTab = () => {
                 if (result.caseIdMappings && result.caseIdMappings.mappings) {
                     // Convert the pulled mappings to the local format
                     const newMappings = {};
+                    let extractedInstitutionId = null;
+
                     result.caseIdMappings.mappings.forEach(mapping => {
                         newMappings[mapping.localCaseId] = mapping.bdsaCaseId;
+
+                        // Extract institution ID from BDSA Case ID if not already set
+                        if (!extractedInstitutionId && mapping.bdsaCaseId) {
+                            const match = mapping.bdsaCaseId.match(/BDSA-(\d{3})-/);
+                            if (match) {
+                                extractedInstitutionId = match[1];
+                            }
+                        }
                     });
 
                     // Update local case ID mappings
                     dataStore.updateCaseIdMappings(newMappings);
 
-                    alert(`Case ID mappings pulled successfully!\n\nPulled ${result.pulled.caseIdMappings} case ID mappings from DSA server.`);
+                    // Auto-set institution ID if we extracted one and it's different from current
+                    if (extractedInstitutionId && extractedInstitutionId !== bdsaInstitutionId) {
+                        setBdsaInstitutionId(extractedInstitutionId);
+                        console.log(`🏛️ Auto-set BDSA Institution ID to: ${extractedInstitutionId} (from DSA collection)`);
+                    }
+
+                    const institutionMsg = extractedInstitutionId ? `\n\nInstitution ID auto-set to: ${extractedInstitutionId}` : '';
+                    alert(`Case ID mappings pulled successfully!\n\nPulled ${result.pulled.caseIdMappings} case ID mappings from DSA server.${institutionMsg}`);
                 } else {
                     alert('No case ID mappings found in DSA server.');
                 }
@@ -525,6 +569,8 @@ const CaseManagementTab = () => {
                     setTemporaryHideMapped={setTemporaryHideMapped}
                     showOnlyDuplicates={showOnlyDuplicates}
                     setShowOnlyDuplicates={setShowOnlyDuplicates}
+                    caseIdFilter={caseIdFilter}
+                    setCaseIdFilter={setCaseIdFilter}
                     generateAllCaseIds={generateAllCaseIds}
                     handleSyncCaseIdMappingsToDSA={handleSyncCaseIdMappingsToDSA}
                     handlePullCaseIdMappingsFromDSA={handlePullCaseIdMappingsFromDSA}
