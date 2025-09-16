@@ -341,6 +341,49 @@
     gap: 8px;
 }
 
+.conflict-details {
+    margin-top: 10px;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
+}
+
+.conflict-details p {
+    margin: 0 0 8px 0;
+    font-weight: 500;
+    color: #495057;
+    font-size: 14px;
+}
+
+.conflict-details ul {
+    margin: 0 0 10px 0;
+    padding-left: 0;
+    list-style: none;
+}
+
+.conflict-details li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.conflict-details li:last-child {
+    border-bottom: none;
+}
+
+.local-case-id {
+    font-family: monospace;
+    font-weight: 600;
+    color: #495057;
+    background-color: #e9ecef;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 13px;
+}
+
 .resolve-conflict-btn {
     padding: 6px 12px;
     background-color: #28a745;
@@ -474,6 +517,55 @@
     background-color: #0056b3;
 }
 
+.show-duplicates-btn {
+    padding: 8px 16px;
+    background-color: #ffc107;
+    color: #856404;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.show-duplicates-btn:hover {
+    background-color: #e0a800;
+    transform: translateY(-1px);
+}
+
+.show-duplicates-btn.active {
+    background-color: #856404;
+    color: white;
+}
+
+.show-duplicates-btn.active:hover {
+    background-color: #6c4a00;
+}
+
+.refresh-conflicts-btn {
+    padding: 8px 16px;
+    background-color: #17a2b8;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.refresh-conflicts-btn:hover {
+    background-color: #138496;
+    transform: translateY(-1px);
+}
+
 .generate-all-btn {
     background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
     color: white;
@@ -588,6 +680,18 @@
     box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
 }
 
+.bdsa-case-id-input.duplicate {
+    background-color: #fff3cd !important;
+    border: 2px solid #ffc107 !important;
+    color: #856404 !important;
+    font-weight: bold !important;
+}
+
+.bdsa-case-id-input.duplicate:focus {
+    border-color: #e0a800 !important;
+    box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.3) !important;
+}
+
 .generate-bdsa-id-btn {
     padding: 6px 12px;
     background-color: #007bff;
@@ -624,6 +728,24 @@
     border: 2px solid #ffc107 !important;
     color: #856404 !important;
     font-weight: bold !important;
+}
+
+/* Orange highlighting for duplicate BDSA Case IDs in table */
+.case-id-table tr.duplicate-bdsa-case {
+    background-color: #fff3cd !important;
+    border-left: 4px solid #ffc107 !important;
+}
+
+.case-id-table tr.duplicate-bdsa-case td {
+    background-color: #fff3cd !important;
+}
+
+.case-id-table tr.duplicate-bdsa-case .mapped-case-id {
+    color: #856404 !important;
+    font-weight: bold !important;
+    background-color: #ffeaa7 !important;
+    padding: 2px 6px !important;
+    border-radius: 3px !important;
 }
 
 /* Protocol Mapping Content */

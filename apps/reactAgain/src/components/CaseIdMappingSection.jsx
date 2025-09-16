@@ -12,6 +12,8 @@ const CaseIdMappingSection = ({
     stats,
     temporaryHideMapped,
     setTemporaryHideMapped,
+    showOnlyDuplicates,
+    setShowOnlyDuplicates,
     generateAllCaseIds,
     isGeneratingAll: isGenerating,
     handleSyncCaseIdMappingsToDSA,
@@ -87,116 +89,50 @@ const CaseIdMappingSection = ({
                 </div>
             )}
 
-            {/* Conflict Resolution Section */}
-            {(stats.localConflictCount > 0 || stats.bdsaConflictCount > 0) && (
+            {/* BDSA Case ID Conflicts - Simple Version */}
+            {stats.bdsaConflictCount > 0 && (
                 <div className="conflict-resolution-section">
-                    <h3>⚠️ Conflict Resolution Required</h3>
+                    <h3>⚠️ BDSA Case ID Conflicts Detected</h3>
+                    <p>The following BDSA Case IDs are mapped to multiple local case IDs. Choose which local case ID should keep each BDSA Case ID:</p>
 
-                    {/* Local Case ID Conflicts */}
-                    {stats.localConflictCount > 0 && (
-                        <div className="conflict-group">
-                            <h4>Local Case ID Conflicts ({stats.localConflictCount})</h4>
-                            <p>Same local case ID mapped to multiple BDSA Case IDs:</p>
-                            <div className="conflict-list">
-                                {Object.entries(stats.localCaseIdConflicts).map(([localCaseId, bdsaCaseIds]) => (
-                                    <div key={localCaseId} className="conflict-item">
-                                        <div className="conflict-header">
-                                            <strong>{localCaseId}</strong>
-                                            <span className="conflict-count">→ {bdsaCaseIds.length} BDSA IDs</span>
-                                        </div>
-                                        <div className="conflict-options">
-                                            {bdsaCaseIds.map((bdsaCaseId) => (
+                    <div className="conflict-list">
+                        {Object.entries(stats.bdsaCaseIdConflicts).map(([bdsaCaseId, localCaseIds]) => (
+                            <div key={bdsaCaseId} className="conflict-item">
+                                <div className="conflict-header">
+                                    <strong>BDSA Case ID: {bdsaCaseId}</strong>
+                                    <span className="conflict-count">({localCaseIds.length} conflicting local IDs)</span>
+                                </div>
+                                <div className="conflict-details">
+                                    <p>Conflicting Local Case IDs:</p>
+                                    <ul>
+                                        {localCaseIds.map((localCaseId) => (
+                                            <li key={localCaseId}>
+                                                <span className="local-case-id">{localCaseId}</span>
                                                 <button
-                                                    key={bdsaCaseId}
                                                     className="resolve-conflict-btn"
                                                     onClick={() => {
-                                                        dataStore.resolveCaseIdConflict(localCaseId, bdsaCaseId);
+                                                        console.log(`Resolving conflict: keeping ${localCaseId} for ${bdsaCaseId}`);
+                                                        dataStore.resolveBdsaCaseIdConflict(bdsaCaseId, localCaseId);
                                                     }}
                                                 >
-                                                    Keep: {bdsaCaseId}
+                                                    Keep This One
                                                 </button>
-                                            ))}
-                                            <button
-                                                className="clear-conflict-btn"
-                                                onClick={() => {
-                                                    dataStore.clearCaseIdConflict(localCaseId);
-                                                }}
-                                            >
-                                                Clear All
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                    <button
+                                        className="clear-conflict-btn"
+                                        onClick={() => {
+                                            console.log(`Clearing all conflicts for ${bdsaCaseId}`);
+                                            dataStore.clearBdsaCaseIdConflict(bdsaCaseId);
+                                        }}
+                                    >
+                                        Remove BDSA Case ID from All
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    )}
-
-                    {/* BDSA Case ID Conflicts */}
-                    {stats.bdsaConflictCount > 0 && (
-                        <div className="conflict-group">
-                            <h4>BDSA Case ID Conflicts ({stats.bdsaConflictCount})</h4>
-                            <p>Same BDSA Case ID mapped to multiple local case IDs:</p>
-                            <div className="conflict-list">
-                                {Object.entries(stats.bdsaCaseIdConflicts).map(([bdsaCaseId, localCaseIds]) => {
-                                    // Check if this conflict is resolved or cleared
-                                    const isResolved = localCaseIds.includes('RESOLVED');
-                                    const isCleared = localCaseIds.includes('CLEARED');
-                                    const isActive = !isResolved && !isCleared;
-
-                                    // Filter out the status markers for display
-                                    const displayLocalIds = localCaseIds.filter(id => id !== 'RESOLVED' && id !== 'CLEARED');
-
-                                    return (
-                                        <div key={bdsaCaseId} className={`conflict-item ${isResolved ? 'resolved' : isCleared ? 'cleared' : 'active'}`}>
-                                            <div className="conflict-header">
-                                                <strong>{bdsaCaseId}</strong>
-                                                <span className="conflict-count">
-                                                    {isResolved ? '✅ Resolved' : isCleared ? '🗑️ Cleared' : `→ ${displayLocalIds.length} Local IDs`}
-                                                </span>
-                                            </div>
-                                            {isActive && (
-                                                <div className="conflict-options">
-                                                    {displayLocalIds.map((localCaseId) => (
-                                                        <button
-                                                            key={localCaseId}
-                                                            className="resolve-conflict-btn"
-                                                            onClick={() => {
-                                                                dataStore.resolveBdsaCaseIdConflict(bdsaCaseId, localCaseId);
-                                                            }}
-                                                        >
-                                                            Keep: {localCaseId}
-                                                        </button>
-                                                    ))}
-                                                    <button
-                                                        className="clear-conflict-btn"
-                                                        onClick={() => {
-                                                            dataStore.clearBdsaCaseIdConflict(bdsaCaseId);
-                                                        }}
-                                                    >
-                                                        Clear All
-                                                    </button>
-                                                </div>
-                                            )}
-                                            {(isResolved || isCleared) && (
-                                                <div className="conflict-status">
-                                                    {isResolved && (
-                                                        <span className="status-message">
-                                                            ✅ Resolved: Kept mapping for {displayLocalIds[0]}
-                                                        </span>
-                                                    )}
-                                                    {isCleared && (
-                                                        <span className="status-message">
-                                                            🗑️ Cleared: Removed BDSA Case ID from all items
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
+                        ))}
+                    </div>
                 </div>
             )}
 
@@ -216,6 +152,20 @@ const CaseIdMappingSection = ({
                         >
                             👤 {temporaryHideMapped ? 'Show All' : 'Hide Mapped'}
                         </button>
+                        {duplicateBdsaCaseIds.size > 0 && (
+                            <button
+                                className={`show-duplicates-btn ${showOnlyDuplicates ? 'active' : ''}`}
+                                onClick={() => {
+                                    setShowOnlyDuplicates(!showOnlyDuplicates);
+                                    // Reset the hide mapped filter when showing duplicates
+                                    if (!showOnlyDuplicates && temporaryHideMapped) {
+                                        setTemporaryHideMapped(false);
+                                    }
+                                }}
+                            >
+                                🟠 {showOnlyDuplicates ? 'Show All' : `Show Only Duplicates (${duplicateBdsaCaseIds.size})`}
+                            </button>
+                        )}
                         <button
                             className="generate-all-btn"
                             onClick={generateAllCaseIds}
@@ -237,6 +187,19 @@ const CaseIdMappingSection = ({
                         >
                             ⬇️ Pull from DSA
                         </button>
+                        {duplicateBdsaCaseIds.size > 0 && (
+                            <button
+                                className="refresh-conflicts-btn"
+                                onClick={() => {
+                                    // Re-initialize conflicts to refresh the display
+                                    dataStore.initializeCaseIdMappingsFromData();
+                                    console.log('Refreshed conflict detection');
+                                }}
+                                title="Refresh conflict detection after fixing duplicates"
+                            >
+                                🔄 Refresh Conflicts
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -266,32 +229,66 @@ const CaseIdMappingSection = ({
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredCaseIds.map((caseId) => (
-                                <tr key={caseId.localCaseId} className={caseId.isMapped ? 'mapped' : 'unmapped'}>
-                                    <td>{caseId.localCaseId}</td>
-                                    <td>
-                                        {caseId.isMapped ? (
-                                            <span className="mapped-case-id">{caseId.bdsaCaseId}</span>
-                                        ) : (
-                                            <span className="unmapped-case-id">Not mapped</span>
-                                        )}
-                                    </td>
-                                    <td>{caseId.rowCount}</td>
-                                    <td>
-                                        {!caseId.isMapped ? (
-                                            <button
-                                                className="generate-case-id-btn"
-                                                onClick={() => generateCaseId(caseId.localCaseId)}
-                                                disabled={isGenerating}
-                                            >
-                                                {isGenerating ? '⏳' : '🚀'} Generate
-                                            </button>
-                                        ) : (
-                                            <span className="mapped-indicator">✓ Mapped</span>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
+                            {filteredCaseIds.map((caseId) => {
+                                const isDuplicate = caseId.bdsaCaseId && duplicateBdsaCaseIds.has(caseId.bdsaCaseId);
+                                return (
+                                    <tr
+                                        key={caseId.localCaseId}
+                                        className={`${caseId.isMapped ? 'mapped' : 'unmapped'} ${isDuplicate ? 'duplicate-bdsa-case' : ''}`}
+                                    >
+                                        <td>{caseId.localCaseId}</td>
+                                        <td>
+                                            {caseId.isMapped ? (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <input
+                                                        type="text"
+                                                        defaultValue={caseId.bdsaCaseId}
+                                                        onBlur={(e) => {
+                                                            // Only update when user finishes editing (clicks away)
+                                                            const newValue = e.target.value.trim();
+                                                            if (newValue !== caseId.bdsaCaseId) {
+                                                                console.log(`🔧 Updating BDSA Case ID for localCaseId "${caseId.localCaseId}": "${caseId.bdsaCaseId}" → "${newValue}"`);
+                                                                dataStore.setCaseIdInData(caseId.localCaseId, newValue);
+                                                            }
+                                                        }}
+                                                        onKeyDown={(e) => {
+                                                            // Also update on Enter key press
+                                                            if (e.key === 'Enter') {
+                                                                e.target.blur(); // This will trigger onBlur
+                                                            }
+                                                        }}
+                                                        className={`bdsa-case-id-input ${isDuplicate ? 'duplicate' : ''}`}
+                                                        style={{
+                                                            flex: 1,
+                                                            minWidth: '150px'
+                                                        }}
+                                                    />
+                                                    {isDuplicate && <span style={{ fontSize: '0.8em', color: '#856404' }}>🟠 DUPLICATE</span>}
+                                                </div>
+                                            ) : (
+                                                <span className="unmapped-case-id">Not mapped</span>
+                                            )}
+                                        </td>
+                                        <td>{caseId.rowCount}</td>
+                                        <td>
+                                            {!caseId.isMapped ? (
+                                                <button
+                                                    className="generate-case-id-btn"
+                                                    onClick={() => generateCaseId(caseId.localCaseId)}
+                                                    disabled={isGenerating}
+                                                >
+                                                    {isGenerating ? '⏳' : '🚀'} Generate
+                                                </button>
+                                            ) : (
+                                                <span className="mapped-indicator">
+                                                    ✓ Mapped
+                                                    {isDuplicate && <span style={{ marginLeft: '4px' }}>🟠</span>}
+                                                </span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>

@@ -1043,9 +1043,11 @@ class DataStore {
             return;
         }
 
+        console.log(`🔍 setCaseIdInData called: localCaseId="${localCaseId}", bdsaCaseId="${bdsaCaseId}"`);
         let updatedCount = 0;
         this.processedData.forEach((item) => {
             if (item.BDSA?.bdsaLocal?.localCaseId === localCaseId) {
+                console.log(`🔧 Found matching item: localCaseId="${item.BDSA?.bdsaLocal?.localCaseId}", current bdsaCaseId="${item.BDSA?.bdsaLocal?.bdsaCaseId}"`);
                 if (!item.BDSA) {
                     item.BDSA = {};
                 }
@@ -1352,7 +1354,8 @@ class DataStore {
         this.bdsaCaseIdConflicts.set(bdsaCaseId, new Set([chosenLocalCaseId, 'RESOLVED']));
 
         this.saveToStorage();
-        this.notify();
+        // Don't immediately notify to allow user to track fixes
+        // this.notify();
         console.log(`Resolved BDSA Case ID conflict for "${bdsaCaseId}": kept mapping for "${chosenLocalCaseId}", removed from ${updatedCount} other items`);
     }
 
@@ -1393,7 +1396,8 @@ class DataStore {
         this.bdsaCaseIdConflicts.set(bdsaCaseId, new Set(['CLEARED']));
 
         this.saveToStorage();
-        this.notify();
+        // Don't immediately notify to allow user to track fixes
+        // this.notify();
         console.log(`Cleared BDSA Case ID conflict for "${bdsaCaseId}": removed BDSA Case ID from ${updatedCount} items`);
     }
 

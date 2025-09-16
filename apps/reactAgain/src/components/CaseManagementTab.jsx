@@ -13,6 +13,7 @@ const CaseManagementTab = () => {
     const [dataStatus, setDataStatus] = useState(dataStore.getStatus());
     const [bdsaInstitutionId, setBdsaInstitutionId] = useState('001');
     const [temporaryHideMapped, setTemporaryHideMapped] = useState(false);
+    const [showOnlyDuplicates, setShowOnlyDuplicates] = useState(false);
     const [sortField, setSortField] = useState(null);
     const [sortDirection, setSortDirection] = useState('asc');
     const [isGenerating, setIsGenerating] = useState(false);
@@ -35,10 +36,13 @@ const CaseManagementTab = () => {
         return unsubscribe;
     }, []); // Only run once on mount
 
-    // Reset the temporary filter when new items are generated
+    // Reset the temporary filters when new items are generated
     const resetTemporaryFilter = () => {
         if (temporaryHideMapped) {
             setTemporaryHideMapped(false);
+        }
+        if (showOnlyDuplicates) {
+            setShowOnlyDuplicates(false);
         }
     };
 
@@ -68,6 +72,7 @@ const CaseManagementTab = () => {
             if (localCaseId) {
                 // Only set mapping if BDSA Case ID exists, otherwise leave as undefined
                 if (bdsaCaseId) {
+                    console.log(`🔍 Mapping: localCaseId="${localCaseId}" → bdsaCaseId="${bdsaCaseId}"`);
                     caseIdMappings.set(localCaseId, bdsaCaseId);
                 }
             }
@@ -111,20 +116,12 @@ const CaseManagementTab = () => {
         return allCases;
     };
 
-    // Filter cases based on mapped status
-    const filteredCaseIds = useMemo(() => {
-        const allCases = getUniqueCaseIds();
-        if (temporaryHideMapped) {
-            return allCases.filter(caseData => !caseData.isMapped);
-        }
-        return allCases;
-    }, [dataStatus.processedData, dataStatus.caseIdMappings, temporaryHideMapped, sortField, sortDirection]);
-
     // Detect duplicate BDSA Case IDs
     const duplicateBdsaCaseIds = useMemo(() => {
+        const allCases = getUniqueCaseIds();
         const bdsaCaseIdCounts = new Map();
 
-        filteredCaseIds.forEach(caseData => {
+        allCases.forEach(caseData => {
             if (caseData.bdsaCaseId) {
                 const count = bdsaCaseIdCounts.get(caseData.bdsaCaseId) || 0;
                 bdsaCaseIdCounts.set(caseData.bdsaCaseId, count + 1);
@@ -139,7 +136,25 @@ const CaseManagementTab = () => {
         });
 
         return duplicates;
-    }, [filteredCaseIds]);
+    }, [dataStatus.processedData, dataStatus.caseIdMappings]);
+
+    // Filter cases based on mapped status and duplicates
+    const filteredCaseIds = useMemo(() => {
+        const allCases = getUniqueCaseIds();
+        let filtered = allCases;
+
+        if (temporaryHideMapped) {
+            filtered = filtered.filter(caseData => !caseData.isMapped);
+        }
+
+        if (showOnlyDuplicates) {
+            filtered = filtered.filter(caseData =>
+                caseData.bdsaCaseId && duplicateBdsaCaseIds.has(caseData.bdsaCaseId)
+            );
+        }
+
+        return filtered;
+    }, [dataStatus.processedData, dataStatus.caseIdMappings, temporaryHideMapped, showOnlyDuplicates, duplicateBdsaCaseIds, sortField, sortDirection]);
 
     // Get statistics
     const stats = useMemo(() => {
@@ -475,6 +490,8 @@ const CaseManagementTab = () => {
                     stats={stats}
                     temporaryHideMapped={temporaryHideMapped}
                     setTemporaryHideMapped={setTemporaryHideMapped}
+                    showOnlyDuplicates={showOnlyDuplicates}
+                    setShowOnlyDuplicates={setShowOnlyDuplicates}
                     generateAllCaseIds={generateAllCaseIds}
                     handleSyncCaseIdMappingsToDSA={handleSyncCaseIdMappingsToDSA}
                     handlePullCaseIdMappingsFromDSA={handlePullCaseIdMappingsFromDSA}
