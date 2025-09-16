@@ -36,6 +36,16 @@ const ApplyAllCasesModal = ({ isOpen, onClose, onApplyAll, protocolType, totalCa
         setIsComplete(false);
         setResults(null);
 
+        // Show initial progress
+        setProgress({
+            current: 0,
+            total: totalCases || 0,
+            percentage: 0,
+            applied: 0,
+            skipped: 0,
+            currentCase: 'Starting...'
+        });
+
         try {
             const results = await onApplyAll((updateProgress) => {
                 setProgress(updateProgress);
@@ -100,10 +110,10 @@ const ApplyAllCasesModal = ({ isOpen, onClose, onApplyAll, protocolType, totalCa
                     {(isRunning || isComplete) && (
                         <div className="apply-all-progress">
                             <div className="progress-header">
-                                <h3>Processing Cases...</h3>
+                                <h3>{isComplete ? 'Processing Complete' : 'Processing Cases...'}</h3>
                                 {progress.currentCase && (
                                     <div className="current-case">
-                                        Currently processing: <strong>{progress.currentCase}</strong>
+                                        {isComplete ? 'Completed' : 'Currently processing'}: <strong>{progress.currentCase}</strong>
                                     </div>
                                 )}
                             </div>

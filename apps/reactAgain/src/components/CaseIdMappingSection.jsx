@@ -89,53 +89,6 @@ const CaseIdMappingSection = ({
                 </div>
             )}
 
-            {/* BDSA Case ID Conflicts - Simple Version */}
-            {stats.bdsaConflictCount > 0 && (
-                <div className="conflict-resolution-section">
-                    <h3>⚠️ BDSA Case ID Conflicts Detected</h3>
-                    <p>The following BDSA Case IDs are mapped to multiple local case IDs. Choose which local case ID should keep each BDSA Case ID:</p>
-
-                    <div className="conflict-list">
-                        {Object.entries(stats.bdsaCaseIdConflicts).map(([bdsaCaseId, localCaseIds]) => (
-                            <div key={bdsaCaseId} className="conflict-item">
-                                <div className="conflict-header">
-                                    <strong>BDSA Case ID: {bdsaCaseId}</strong>
-                                    <span className="conflict-count">({localCaseIds.length} conflicting local IDs)</span>
-                                </div>
-                                <div className="conflict-details">
-                                    <p>Conflicting Local Case IDs:</p>
-                                    <ul>
-                                        {localCaseIds.map((localCaseId) => (
-                                            <li key={localCaseId}>
-                                                <span className="local-case-id">{localCaseId}</span>
-                                                <button
-                                                    className="resolve-conflict-btn"
-                                                    onClick={() => {
-                                                        console.log(`Resolving conflict: keeping ${localCaseId} for ${bdsaCaseId}`);
-                                                        dataStore.resolveBdsaCaseIdConflict(bdsaCaseId, localCaseId);
-                                                    }}
-                                                >
-                                                    Keep This One
-                                                </button>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                    <button
-                                        className="clear-conflict-btn"
-                                        onClick={() => {
-                                            console.log(`Clearing all conflicts for ${bdsaCaseId}`);
-                                            dataStore.clearBdsaCaseIdConflict(bdsaCaseId);
-                                        }}
-                                    >
-                                        Remove BDSA Case ID from All
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
             {/* Case ID Table */}
             <div className="case-id-mapping-table">
                 <div className="mapping-summary">
@@ -187,19 +140,6 @@ const CaseIdMappingSection = ({
                         >
                             ⬇️ Pull from DSA
                         </button>
-                        {duplicateBdsaCaseIds.size > 0 && (
-                            <button
-                                className="refresh-conflicts-btn"
-                                onClick={() => {
-                                    // Re-initialize conflicts to refresh the display
-                                    dataStore.initializeCaseIdMappingsFromData();
-                                    console.log('Refreshed conflict detection');
-                                }}
-                                title="Refresh conflict detection after fixing duplicates"
-                            >
-                                🔄 Refresh Conflicts
-                            </button>
-                        )}
                     </div>
                 </div>
 
@@ -242,9 +182,9 @@ const CaseIdMappingSection = ({
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                     <input
                                                         type="text"
-                                                        defaultValue={caseId.bdsaCaseId}
-                                                        onBlur={(e) => {
-                                                            // Only update when user finishes editing (clicks away)
+                                                        value={caseId.bdsaCaseId || ''}
+                                                        onChange={(e) => {
+                                                            // Update immediately as user types for better UX
                                                             const newValue = e.target.value.trim();
                                                             if (newValue !== caseId.bdsaCaseId) {
                                                                 console.log(`🔧 Updating BDSA Case ID for localCaseId "${caseId.localCaseId}": "${caseId.bdsaCaseId}" → "${newValue}"`);
@@ -252,9 +192,9 @@ const CaseIdMappingSection = ({
                                                             }
                                                         }}
                                                         onKeyDown={(e) => {
-                                                            // Also update on Enter key press
+                                                            // Handle Enter key
                                                             if (e.key === 'Enter') {
-                                                                e.target.blur(); // This will trigger onBlur
+                                                                e.target.blur();
                                                             }
                                                         }}
                                                         className={`bdsa-case-id-input ${isDuplicate ? 'duplicate' : ''}`}

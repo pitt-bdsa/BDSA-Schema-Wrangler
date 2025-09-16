@@ -288,6 +288,11 @@ const StainProtocolMapping = () => {
             };
             progressCallback(progress);
 
+            // Add a small delay to make progress visible (only if there are many cases)
+            if (cases.length > 10 && caseIndex < cases.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+
             // Use the caseData directly instead of relying on state updates
             if (caseData) {
                 const allStainSlides = getAllStainSlides(caseData);

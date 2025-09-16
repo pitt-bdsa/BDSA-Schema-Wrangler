@@ -386,7 +386,7 @@ const CaseManagementTab = () => {
             const dsaConfig = {
                 baseUrl: config.baseUrl,
                 resourceId: config.resourceId,
-                token: authStatus.token
+                token: dsaAuthStore.token
             };
 
             // Get current case ID mappings
@@ -433,7 +433,7 @@ const CaseManagementTab = () => {
             const dsaConfig = {
                 baseUrl: config.baseUrl,
                 resourceId: config.resourceId,
-                token: authStatus.token
+                token: dsaAuthStore.token
             };
 
             // Confirm before overwriting local mappings
