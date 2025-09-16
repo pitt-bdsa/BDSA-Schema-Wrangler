@@ -61,19 +61,21 @@ const ProtocolArrayCellRenderer = ({ value, data, colDef, api }) => {
         // Mark as modified
         dataStore.modifiedItems.add(data.id);
         dataStore.saveToStorage();
-        dataStore.notify();
 
-        // Don't refresh the grid while modal is open - it will refresh when modal closes
+        // Don't notify while modal is open - this causes re-renders that close the modal
+        // The notification will happen when the modal closes
     };
 
     const handleClose = () => {
         setIsEditing(false);
+        // Now notify data store that changes have been made
+        dataStore.notify();
         // Refresh the grid when modal closes to show updated data
         api.refreshCells({ rowNodes: [api.getRowNode(data.id)] });
     };
 
     const modalContent = isEditing && (
-        <div className="protocol-edit-modal-overlay" onClick={handleClose}>
+        <div className="protocol-edit-modal-overlay">
             <div className="protocol-edit-modal" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-header">
                     <h3>Edit Protocols</h3>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import dataStore, { getProtocolSuggestions } from '../utils/dataStore';
 import protocolStore from '../utils/protocolStore';
+import ApplyAllCasesModal from './ApplyAllCasesModal';
 import './StainProtocolMapping.css'; // Reuse the same styles
 
 const RegionProtocolMapping = () => {
@@ -10,6 +11,7 @@ const RegionProtocolMapping = () => {
     const [cases, setCases] = useState([]);
     const [currentCaseIndex, setCurrentCaseIndex] = useState(0);
     const [expandedGroups, setExpandedGroups] = useState(new Set());
+    const [showApplyAllModal, setShowApplyAllModal] = useState(false);
 
     // Subscribe to data store changes
     useEffect(() => {
@@ -138,11 +140,11 @@ const RegionProtocolMapping = () => {
         setExpandedGroups(newExpanded);
     };
 
-    const handleApplyRegionProtocol = (slides, protocolId) => {
+    const handleApplyRegionProtocol = (slides, protocolId, targetCase = null) => {
         console.log('Applying region protocol', protocolId, 'to slides:', slides);
 
-        // Get the current case
-        const currentCase = cases[currentCaseIndex];
+        // Use the provided target case, or fall back to current case
+        const currentCase = targetCase || cases[currentCaseIndex];
         if (!currentCase) return;
 
         // Apply protocol to each slide
@@ -207,8 +209,9 @@ const RegionProtocolMapping = () => {
             const suggestion = getSuggestionForRegionType(regionType);
             console.log(`🔍 Processing region type "${regionType}":`, suggestion);
 
-            // Only apply if we have high confidence (>= 80%) and it's an exact match
-            if (suggestion.suggested && suggestion.confidence >= 0.8 && suggestion.isExactMatch) {
+            // Only apply if we have high confidence (>= 80%), it's an exact match, and it's not IGNORE
+            if (suggestion.suggested && suggestion.confidence >= 0.8 && suggestion.isExactMatch &&
+                suggestion.suggested.toUpperCase() !== 'IGNORE') {
                 // Check if this protocol is already fully applied to all slides
                 const alreadyApplied = slides.every(slide =>
                     slide.regionProtocols && slide.regionProtocols.includes(suggestion.suggested)
@@ -250,6 +253,85 @@ const RegionProtocolMapping = () => {
                 : 'ℹ️ No region types found in this case.';
             console.log(message);
         }
+    };
+
+    // Auto-apply suggestions for ALL cases
+    const handleAutoApplyAllCases = async (progressCallback) => {
+        console.log('🚀 Starting auto-apply suggestions for ALL cases');
+        console.log(`📊 Total cases to process: ${cases.length}`);
+
+        let totalProcessed = 0;
+        let totalApplied = 0;
+        let totalSkipped = 0;
+
+        for (let caseIndex = 0; caseIndex < cases.length; caseIndex++) {
+            const caseData = cases[caseIndex];
+            console.log(`\n🔍 Processing case ${caseIndex + 1}/${cases.length}: ${caseData.bdsaId}`);
+
+            // Update progress
+            const progress = {
+                current: caseIndex + 1,
+                total: cases.length,
+                percentage: ((caseIndex + 1) / cases.length) * 100,
+                applied: totalApplied,
+                skipped: totalSkipped,
+                currentCase: caseData.bdsaId
+            };
+            progressCallback(progress);
+
+            // Use the caseData directly instead of relying on state updates
+            if (caseData) {
+                const allRegionSlides = getAllRegionSlides(caseData);
+                const regionGroups = groupSlidesByRegionType(allRegionSlides);
+
+                let caseApplied = 0;
+                let caseSkipped = 0;
+
+                Object.entries(regionGroups).forEach(([regionType, slides]) => {
+                    const suggestion = getSuggestionForRegionType(regionType);
+
+                    // Use the same logic as the single-case auto-apply
+                    if (suggestion.suggested && suggestion.confidence >= 0.8 && suggestion.isExactMatch &&
+                        suggestion.suggested.toUpperCase() !== 'IGNORE') {
+                        // Check if this protocol is already fully applied to all slides
+                        const alreadyApplied = slides.every(slide =>
+                            slide.regionProtocols && slide.regionProtocols.includes(suggestion.suggested)
+                        );
+
+                        if (!alreadyApplied) {
+                            console.log(`  ✅ Applying suggestion: ${regionType} → ${suggestion.suggested} to case ${caseData.bdsaId}`);
+                            handleApplyRegionProtocol(slides, suggestion.suggested, caseData);
+                            caseApplied++;
+                        }
+                    } else {
+                        caseSkipped++;
+                    }
+                });
+
+                totalApplied += caseApplied;
+                totalSkipped += caseSkipped;
+                totalProcessed++;
+            }
+        }
+
+        // Final progress update
+        const finalProgress = {
+            current: cases.length,
+            total: cases.length,
+            percentage: 100,
+            applied: totalApplied,
+            skipped: totalSkipped,
+            currentCase: 'Complete'
+        };
+        progressCallback(finalProgress);
+
+        console.log(`🎯 Auto-apply ALL cases complete: ${totalApplied} applied, ${totalSkipped} skipped across ${totalProcessed} cases`);
+
+        return {
+            processed: totalProcessed,
+            applied: totalApplied,
+            skipped: totalSkipped
+        };
     };
 
     if (cases.length === 0) {
@@ -295,6 +377,13 @@ const RegionProtocolMapping = () => {
                         disabled={cases.length <= 1}
                     >
                         →
+                    </button>
+                    <button
+                        className="apply-all-cases-btn"
+                        onClick={() => setShowApplyAllModal(true)}
+                        title="Auto-apply high-confidence region protocol suggestions to all region types across ALL cases"
+                    >
+                        🚀 Apply to All Cases
                     </button>
                 </div>
                 <div className="auto-apply-section">
@@ -489,6 +578,14 @@ const RegionProtocolMapping = () => {
                     </div>
                 )}
             </div>
+
+            <ApplyAllCasesModal
+                isOpen={showApplyAllModal}
+                onClose={() => setShowApplyAllModal(false)}
+                onApplyAll={handleAutoApplyAllCases}
+                protocolType="region"
+                totalCases={cases.length}
+            />
         </div>
     );
 };

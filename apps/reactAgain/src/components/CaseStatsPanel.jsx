@@ -4,8 +4,12 @@ const CaseStatsPanel = ({ stats }) => {
     return (
         <div className="case-stats">
             <div className="stat-item">
-                <span className="stat-number">{stats.unmappedSlides}</span>
-                <span className="stat-label">Unmapped Slides</span>
+                <span className="stat-number">{stats.unmappedStainSlides}</span>
+                <span className="stat-label">Unmapped Stain Slides</span>
+            </div>
+            <div className="stat-item">
+                <span className="stat-number">{stats.unmappedRegionSlides}</span>
+                <span className="stat-label">Unmapped Region Slides</span>
             </div>
             <div className="stat-item">
                 <span className="stat-number">{stats.mappedCases}</span>

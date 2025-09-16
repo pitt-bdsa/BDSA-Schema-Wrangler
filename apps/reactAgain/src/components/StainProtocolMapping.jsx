@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import dataStore, { getProtocolSuggestions } from '../utils/dataStore';
 import protocolStore from '../utils/protocolStore';
+import ApplyAllCasesModal from './ApplyAllCasesModal';
 import './StainProtocolMapping.css';
 
 const StainProtocolMapping = () => {
@@ -10,6 +11,7 @@ const StainProtocolMapping = () => {
     const [cases, setCases] = useState([]);
     const [currentCaseIndex, setCurrentCaseIndex] = useState(0);
     const [expandedGroups, setExpandedGroups] = useState(new Set());
+    const [showApplyAllModal, setShowApplyAllModal] = useState(false);
 
     // Subscribe to data store changes
     useEffect(() => {
@@ -138,11 +140,11 @@ const StainProtocolMapping = () => {
         setExpandedGroups(newExpanded);
     };
 
-    const handleApplyStainProtocol = (slides, protocolId) => {
+    const handleApplyStainProtocol = (slides, protocolId, targetCase = null) => {
         console.log('Applying stain protocol', protocolId, 'to slides:', slides);
 
-        // Get the current case
-        const currentCase = cases[currentCaseIndex];
+        // Use the provided target case, or fall back to current case
+        const currentCase = targetCase || cases[currentCaseIndex];
         if (!currentCase) return;
 
         // Apply protocol to each slide
@@ -216,8 +218,9 @@ const StainProtocolMapping = () => {
             const suggestion = getSuggestionForStainType(stainType);
             console.log(`🔍 Processing stain type "${stainType}":`, suggestion);
 
-            // Only apply if we have high confidence (>= 80%) and it's an exact match
-            if (suggestion.suggested && suggestion.confidence >= 0.8 && suggestion.isExactMatch) {
+            // Only apply if we have high confidence (>= 80%), it's an exact match, and it's not IGNORE
+            if (suggestion.suggested && suggestion.confidence >= 0.8 && suggestion.isExactMatch &&
+                suggestion.suggested.toUpperCase() !== 'IGNORE') {
                 // Check if this protocol is already fully applied to all slides
                 const alreadyApplied = slides.every(slide =>
                     slide.stainProtocols && slide.stainProtocols.includes(suggestion.suggested)
@@ -261,6 +264,88 @@ const StainProtocolMapping = () => {
         }
     };
 
+    // Auto-apply suggestions for ALL cases with progress callback
+    const handleAutoApplyAllCases = async (progressCallback) => {
+        console.log('🚀 Starting auto-apply suggestions for ALL cases');
+        console.log(`📊 Total cases to process: ${cases.length}`);
+
+        let totalProcessed = 0;
+        let totalApplied = 0;
+        let totalSkipped = 0;
+
+        for (let caseIndex = 0; caseIndex < cases.length; caseIndex++) {
+            const caseData = cases[caseIndex];
+            console.log(`\n🔍 Processing case ${caseIndex + 1}/${cases.length}: ${caseData.bdsaId}`);
+
+            // Update progress
+            const progress = {
+                current: caseIndex + 1,
+                total: cases.length,
+                percentage: ((caseIndex + 1) / cases.length) * 100,
+                applied: totalApplied,
+                skipped: totalSkipped,
+                currentCase: caseData.bdsaId
+            };
+            progressCallback(progress);
+
+            // Use the caseData directly instead of relying on state updates
+            if (caseData) {
+                const allStainSlides = getAllStainSlides(caseData);
+                const stainGroups = groupSlidesByStainType(allStainSlides);
+
+                let caseApplied = 0;
+                let caseSkipped = 0;
+
+                Object.entries(stainGroups).forEach(([stainType, slides]) => {
+                    const suggestion = getSuggestionForStainType(stainType);
+
+                    // Use the same logic as the single-case auto-apply
+                    if (suggestion.suggested && suggestion.confidence >= 0.8 && suggestion.isExactMatch &&
+                        suggestion.suggested.toUpperCase() !== 'IGNORE') {
+                        // Check if this protocol is already fully applied to all slides
+                        const alreadyApplied = slides.every(slide =>
+                            slide.stainProtocols && slide.stainProtocols.includes(suggestion.suggested)
+                        );
+
+                        if (!alreadyApplied) {
+                            console.log(`  ✅ Applying suggestion: ${stainType} → ${suggestion.suggested} to case ${caseData.bdsaId}`);
+                            handleApplyStainProtocol(slides, suggestion.suggested, caseData);
+                            caseApplied++;
+                        }
+                    } else {
+                        caseSkipped++;
+                    }
+                });
+
+                totalApplied += caseApplied;
+                totalSkipped += caseSkipped;
+                totalProcessed++;
+            }
+        }
+
+        // Final progress update
+        const finalProgress = {
+            current: cases.length,
+            total: cases.length,
+            percentage: 100,
+            applied: totalApplied,
+            skipped: totalSkipped,
+            currentCase: null
+        };
+        progressCallback(finalProgress);
+
+        console.log(`\n🎯 Auto-apply ALL cases complete:`);
+        console.log(`  📊 Total cases processed: ${totalProcessed}`);
+        console.log(`  📊 Total suggestions applied: ${totalApplied}`);
+        console.log(`  📊 Total suggestions skipped: ${totalSkipped}`);
+
+        return {
+            processed: totalProcessed,
+            applied: totalApplied,
+            skipped: totalSkipped
+        };
+    };
+
     if (cases.length === 0) {
         return (
             <div className="stain-protocol-mapping">
@@ -283,21 +368,21 @@ const StainProtocolMapping = () => {
     const allStainSlides = getAllStainSlides(currentCase);
     const stainGroups = groupSlidesByStainType(allStainSlides);
 
-    // Debug logging
-    console.log('🔍 DEBUG - Current case:', {
-        bdsaId: currentCase.bdsaId,
-        localCaseId: currentCase.localCaseId,
-        totalSlides: currentCase.slides.length,
-        stainSlides: allStainSlides.length,
-        allSlides: currentCase.slides.map(s => ({
-            id: s.id,
-            stainType: s.stainType,
-            status: s.status,
-            hasStainProtocol: s.hasStainProtocol
-        }))
-    });
+    // Debug logging (commented out to reduce console noise)
+    // console.log('🔍 DEBUG - Current case:', {
+    //     bdsaId: currentCase.bdsaId,
+    //     localCaseId: currentCase.localCaseId,
+    //     totalSlides: currentCase.slides.length,
+    //     stainSlides: allStainSlides.length,
+    //     allSlides: currentCase.slides.map(s => ({
+    //         id: s.id,
+    //         stainType: s.stainType,
+    //         status: s.status,
+    //         hasStainProtocol: s.hasStainProtocol
+    //     }))
+    // });
 
-    console.log('🔍 DEBUG - Stain groups:', stainGroups);
+    // console.log('🔍 DEBUG - Stain groups:', stainGroups);
 
     return (
         <div className="stain-protocol-mapping">
@@ -320,6 +405,13 @@ const StainProtocolMapping = () => {
                         disabled={cases.length <= 1}
                     >
                         →
+                    </button>
+                    <button
+                        className="apply-all-cases-btn"
+                        onClick={() => setShowApplyAllModal(true)}
+                        title="Auto-apply high-confidence protocol suggestions to all stain types across ALL cases"
+                    >
+                        🚀 Apply to All Cases
                     </button>
                 </div>
                 <div className="auto-apply-section">
@@ -517,6 +609,15 @@ const StainProtocolMapping = () => {
                     </div>
                 )}
             </div>
+
+            {/* Apply All Cases Modal */}
+            <ApplyAllCasesModal
+                isOpen={showApplyAllModal}
+                onClose={() => setShowApplyAllModal(false)}
+                onApplyAll={handleAutoApplyAllCases}
+                protocolType="stain"
+                totalCases={cases.length}
+            />
         </div>
     );
 };

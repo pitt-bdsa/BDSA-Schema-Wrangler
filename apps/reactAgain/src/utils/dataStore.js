@@ -1413,11 +1413,11 @@ class DataStore {
             return data;
         }
 
-        console.log('🔧 DEBUG - initializeBdsaStructure called, checking first item:', {
-            hasBDSA: !!data[0]?.BDSA,
-            hasBdsaLocal: !!data[0]?.BDSA?.bdsaLocal,
-            bdsaLocalValues: data[0]?.BDSA?.bdsaLocal
-        });
+        // console.log('🔧 DEBUG - initializeBdsaStructure called, checking first item:', {
+        //     hasBDSA: !!data[0]?.BDSA,
+        //     hasBdsaLocal: !!data[0]?.BDSA?.bdsaLocal,
+        //     bdsaLocalValues: data[0]?.BDSA?.bdsaLocal
+        // });
 
         return data.map(item => {
             // Initialize BDSA structure if it doesn't exist
@@ -2116,15 +2116,25 @@ class DataStore {
             }
 
             if (itemStainType && protocols && Array.isArray(protocols) && protocols.length > 0) {
-                console.log(`🔍 FOUND MAPPING: ${itemStainType} -> ${protocols.join(', ')}`);
-                if (!mappings.has(itemStainType)) {
-                    mappings.set(itemStainType, new Map());
-                }
+                // Filter out IGNORE protocols from suggestion calculations
+                const nonIgnoreProtocols = protocols.filter(protocol =>
+                    protocol && protocol.toUpperCase() !== 'IGNORE'
+                );
 
-                const typeMappings = mappings.get(itemStainType);
-                protocols.forEach(protocol => {
-                    typeMappings.set(protocol, (typeMappings.get(protocol) || 0) + 1);
-                });
+                // Only include this mapping if there are non-IGNORE protocols
+                if (nonIgnoreProtocols.length > 0) {
+                    console.log(`🔍 FOUND MAPPING: ${itemStainType} -> ${nonIgnoreProtocols.join(', ')} (filtered out IGNORE)`);
+                    if (!mappings.has(itemStainType)) {
+                        mappings.set(itemStainType, new Map());
+                    }
+
+                    const typeMappings = mappings.get(itemStainType);
+                    nonIgnoreProtocols.forEach(protocol => {
+                        typeMappings.set(protocol, (typeMappings.get(protocol) || 0) + 1);
+                    });
+                } else {
+                    console.log(`🔍 SKIPPING MAPPING: ${itemStainType} -> ${protocols.join(', ')} (only IGNORE protocols)`);
+                }
             }
         });
 

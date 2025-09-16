@@ -72,7 +72,7 @@ const CaseManagementTab = () => {
             if (localCaseId) {
                 // Only set mapping if BDSA Case ID exists, otherwise leave as undefined
                 if (bdsaCaseId) {
-                    console.log(`🔍 Mapping: localCaseId="${localCaseId}" → bdsaCaseId="${bdsaCaseId}"`);
+                    // console.log(`🔍 Mapping: localCaseId="${localCaseId}" → bdsaCaseId="${bdsaCaseId}"`);
                     caseIdMappings.set(localCaseId, bdsaCaseId);
                 }
             }
@@ -159,10 +159,42 @@ const CaseManagementTab = () => {
     // Get statistics
     const stats = useMemo(() => {
         const allCases = getUniqueCaseIds();
-        const unmappedSlides = dataStatus.processedData?.filter(row =>
-            !row.BDSA?.bdsaLocal?.localCaseId ||
-            !row.BDSA?.bdsaLocal?.bdsaCaseId
-        ).length || 0;
+        // Count slides that don't have BDSA stain protocol assignments
+        const unmappedStainSlides = dataStatus.processedData?.filter(row => {
+            const hasStainProtocols = row.BDSA?.bdsaLocal?.bdsaStainProtocol &&
+                Array.isArray(row.BDSA.bdsaLocal.bdsaStainProtocol) &&
+                row.BDSA.bdsaLocal.bdsaStainProtocol.length > 0;
+            return !hasStainProtocols;
+        }).length || 0;
+
+        // Debug: Let's see what's actually in the data
+        if (dataStatus.processedData && dataStatus.processedData.length > 0) {
+            const sampleRows = dataStatus.processedData.slice(0, 3);
+            // console.log('🔍 DEBUG - Sample data rows for unmapped count:', sampleRows.map(row => ({
+            //     id: row.id || row._id,
+            //     bdsaStainProtocol: row.BDSA?.bdsaLocal?.bdsaStainProtocol,
+            //     hasStainProtocols: !!(row.BDSA?.bdsaLocal?.bdsaStainProtocol &&
+            //         Array.isArray(row.BDSA.bdsaLocal.bdsaStainProtocol) &&
+            //         row.BDSA.bdsaLocal.bdsaStainProtocol.length > 0)
+            // })));
+
+            const mappedCount = dataStatus.processedData.filter(row => {
+                const hasStainProtocols = row.BDSA?.bdsaLocal?.bdsaStainProtocol &&
+                    Array.isArray(row.BDSA.bdsaLocal.bdsaStainProtocol) &&
+                    row.BDSA.bdsaLocal.bdsaStainProtocol.length > 0;
+                return hasStainProtocols;
+            }).length;
+
+            // console.log(`🔍 DEBUG - Unmapped count: ${unmappedStainSlides}, Mapped count: ${mappedCount}, Total: ${dataStatus.processedData.length}`);
+        }
+
+        // Count slides that don't have BDSA region protocol assignments
+        const unmappedRegionSlides = dataStatus.processedData?.filter(row => {
+            const hasRegionProtocols = row.BDSA?.bdsaLocal?.bdsaRegionProtocol &&
+                Array.isArray(row.BDSA.bdsaLocal.bdsaRegionProtocol) &&
+                row.BDSA.bdsaLocal.bdsaRegionProtocol.length > 0;
+            return !hasRegionProtocols;
+        }).length || 0;
 
         const mappedCases = allCases.filter(caseData => caseData.isMapped).length;
 
@@ -182,17 +214,18 @@ const CaseManagementTab = () => {
         const bdsaConflictCount = Object.keys(bdsaCaseIdConflicts).length;
 
         // Debug logging to see what's happening
-        console.log('🔍 Conflict Detection Debug:', {
-            localConflictCount,
-            bdsaConflictCount,
-            localCaseIdConflicts,
-            bdsaCaseIdConflicts,
-            totalCases: allCases.length,
-            processedDataLength: dataStatus.processedData?.length
-        });
+        // console.log('🔍 Conflict Detection Debug:', {
+        //     localConflictCount,
+        //     bdsaConflictCount,
+        //     localCaseIdConflicts,
+        //     bdsaCaseIdConflicts,
+        //     totalCases: allCases.length,
+        //     processedDataLength: dataStatus.processedData?.length
+        // });
 
         return {
-            unmappedSlides,
+            unmappedStainSlides,
+            unmappedRegionSlides,
             mappedCases,
             bdsaCaseIds: bdsaCaseIds.size,
             localCaseIdConflicts,
