@@ -1962,7 +1962,7 @@ class DataStore {
     }
 
     // Add protocol mapping to a specific slide
-    addProtocolMapping(bdsaCaseId, slideId, protocolId, protocolType) {
+    addProtocolMapping(bdsaCaseId, slideId, protocolId, protocolType, batchMode = false) {
         console.log(`🔍 addProtocolMapping called: ${bdsaCaseId}, ${slideId}, ${protocolId}, ${protocolType}`);
 
         // Find the data row that matches this case and slide
@@ -1995,9 +1995,12 @@ class DataStore {
             dataRow.BDSA._lastModified = new Date().toISOString();
             this.modifiedItems.add(dataRow.id);
 
-            this.saveToStorage();
+            // Only save to storage and notify if not in batch mode
+            if (!batchMode) {
+                this.saveToStorage();
+                this.notify();
+            }
             console.log(`✅ Added protocol ${protocolId} to slide ${slideId}. New protocols:`, protocolArray);
-            this.notify();
         } else {
             console.log(`🔔 Protocol ${protocolId} already exists for slide ${slideId}`);
         }

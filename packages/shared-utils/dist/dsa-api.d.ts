@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { DSAConfig, DSAItem } from '@bdsa/shared-types';
 export declare class DSAApiClient {
     private client;
@@ -5,6 +6,7 @@ export declare class DSAApiClient {
     private token;
     constructor(config: DSAConfig);
     setToken(token: string): void;
+    getToken(): string;
     setConfig(config: DSAConfig): void;
     private normalizeBaseUrl;
     getNormalizedBaseUrl(): string;
@@ -36,6 +38,11 @@ export declare class DSAApiClient {
     ensureFolderExists(parentResourceId: string, folderName: string, description?: string, parentType?: 'folder' | 'collection'): Promise<DSAItem>;
     copyItem(itemId: string, targetFolderId: string, newName?: string): Promise<DSAItem>;
     moveItem(itemId: string, targetFolderId: string): Promise<DSAItem>;
+    uploadFile(parentId: string, file: File, parentType?: 'folder' | 'collection', replaceExisting?: boolean): Promise<{
+        success: boolean;
+        item?: DSAItem;
+        error?: string;
+    }>;
     batchUpdateItems(updates: Array<{
         itemId: string;
         updates: Partial<DSAItem>;

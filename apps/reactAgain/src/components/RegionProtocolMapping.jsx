@@ -140,7 +140,7 @@ const RegionProtocolMapping = () => {
         setExpandedGroups(newExpanded);
     };
 
-    const handleApplyRegionProtocol = (slides, protocolId, targetCase = null) => {
+    const handleApplyRegionProtocol = (slides, protocolId, targetCase = null, batchMode = false) => {
         console.log('Applying region protocol', protocolId, 'to slides:', slides);
 
         // Use the provided target case, or fall back to current case
@@ -149,7 +149,7 @@ const RegionProtocolMapping = () => {
 
         // Apply protocol to each slide
         slides.forEach(slide => {
-            dataStore.addProtocolMapping(currentCase.bdsaId, slide.id, protocolId, 'region');
+            dataStore.addProtocolMapping(currentCase.bdsaId, slide.id, protocolId, 'region', batchMode);
         });
 
         console.log(`✅ Applied protocol ${protocolId} to ${slides.length} slides`);
@@ -279,9 +279,9 @@ const RegionProtocolMapping = () => {
             };
             progressCallback(progress);
 
-            // Add a small delay to make progress visible (only if there are many cases)
+            // Add a small delay to make progress visible (reduced from 100ms to 20ms for better performance)
             if (cases.length > 10 && caseIndex < cases.length - 1) {
-                await new Promise(resolve => setTimeout(resolve, 100));
+                await new Promise(resolve => setTimeout(resolve, 20));
             }
 
             // Use the caseData directly instead of relying on state updates
@@ -305,7 +305,7 @@ const RegionProtocolMapping = () => {
 
                         if (!alreadyApplied) {
                             console.log(`  ✅ Applying suggestion: ${regionType} → ${suggestion.suggested} to case ${caseData.bdsaId}`);
-                            handleApplyRegionProtocol(slides, suggestion.suggested, caseData);
+                            handleApplyRegionProtocol(slides, suggestion.suggested, caseData, true); // Use batch mode
                             caseApplied++;
                         }
                     } else {
@@ -329,6 +329,10 @@ const RegionProtocolMapping = () => {
             currentCase: 'Complete'
         };
         progressCallback(finalProgress);
+
+        // Save all changes to storage and notify listeners (batch operation complete)
+        dataStore.saveToStorage();
+        dataStore.notify();
 
         console.log(`🎯 Auto-apply ALL cases complete: ${totalApplied} applied, ${totalSkipped} skipped across ${totalProcessed} cases`);
 

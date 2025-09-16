@@ -24,6 +24,9 @@ export class DSAApiClient {
     setToken(token) {
         this.token = token;
     }
+    getToken() {
+        return this.token;
+    }
     setConfig(config) {
         this.config = config;
         const normalizedBaseUrl = this.normalizeBaseUrl(config.baseUrl);
@@ -370,6 +373,94 @@ export class DSAApiClient {
         catch (error) {
             console.error('Failed to move item:', error);
             throw new Error(`Failed to move item: ${error.message}`);
+        }
+    }
+    // File upload operations
+    async uploadFile(parentId, file, parentType = 'collection', replaceExisting = true) {
+        try {
+            console.log('🔧 Starting file upload with parameters:', {
+                parentId,
+                parentType,
+                fileName: file.name,
+                fileSize: file.size,
+                fileType: file.type,
+                replaceExisting
+            });
+            // Check if file already exists and delete it if replaceExisting is true
+            if (replaceExisting) {
+                try {
+                    const existingItems = await this.getResourceItems(parentId, 0, undefined, parentType);
+                    const existingFile = existingItems.find(item => item.name === file.name);
+                    if (existingFile) {
+                        console.log('🔧 Found existing file, deleting it first:', existingFile._id);
+                        await this.client.delete(`/api/v1/item/${existingFile._id}`);
+                        console.log('✅ Existing file deleted');
+                    }
+                }
+                catch (error) {
+                    console.warn('⚠️ Failed to check/delete existing file, continuing with upload:', error);
+                }
+            }
+            // Step 1: Start the upload (create upload session)
+            const uploadParams = {
+                parentType: parentType,
+                parentId: parentId,
+                name: file.name,
+                size: file.size.toString(),
+                mimeType: file.type || 'application/x-yaml'
+            };
+            console.log('🔧 File details:', {
+                name: file.name,
+                size: file.size,
+                type: file.type,
+                lastModified: file.lastModified
+            });
+            console.log('🔧 Starting upload with params:', uploadParams);
+            // Build the URI with parameters
+            const queryString = new URLSearchParams(uploadParams).toString();
+            const url = `/api/v1/file?${queryString}`;
+            console.log('🔧 Making request to:', url);
+            const startUploadResponse = await this.client.post(url);
+            const upload = startUploadResponse.data;
+            console.log('✅ Upload session started:', upload);
+            console.log('🔧 Upload session details:', {
+                chunkSize: upload.chunkSize,
+                minimumChunkSize: upload.minimumChunkSize,
+                fileSize: file.size
+            });
+            // Step 2: Upload the file content
+            console.log('🔧 Uploading file chunk:', {
+                fileSize: file.size,
+                chunkSize: upload.chunkSize,
+                minimumChunkSize: upload.minimumChunkSize
+            });
+            // Get the file content as ArrayBuffer
+            const fileBuffer = await file.arrayBuffer();
+            const chunkResponse = await this.client.post('/api/v1/file/chunk', fileBuffer, {
+                headers: {
+                    'Content-Type': 'application/octet-stream',
+                },
+                params: {
+                    uploadId: upload._id,
+                    offset: 0
+                }
+            });
+            const result = chunkResponse.data;
+            console.log('✅ File upload complete:', result);
+            return {
+                success: true,
+                item: result,
+            };
+        }
+        catch (error) {
+            console.error('Failed to upload file:', error);
+            console.error('Error response:', error.response?.data);
+            console.error('Error status:', error.response?.status);
+            console.error('Error headers:', error.response?.headers);
+            return {
+                success: false,
+                error: error.response?.data?.message || error.message || 'Upload failed',
+            };
         }
     }
     // Batch operations

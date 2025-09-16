@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { DSAApiClient } from '@bdsa/shared-utils';
+import AuthSection from './components/AuthSection';
+import BdsaConfigSection from './components/BdsaConfigSection';
+import SyncControlsSection from './components/SyncControlsSection';
+import SyncResultsSection from './components/SyncResultsSection';
+import LargeImageConfigSection from './components/LargeImageConfigSection';
+import DebugModal from './components/DebugModal';
+import { generateNormalizedName } from './utils/naming';
 import './App.css';
 
 const App = () => {
@@ -271,46 +278,6 @@ const App = () => {
     }
   };
 
-  // Function to generate normalized names using BDSA protocol data
-  const generateNormalizedName = (item) => {
-    const bdsaCaseId = item.bdsaCaseId || 'unknown';
-    const bdsaRegionProtocol = (item.BDSA?.bdsaLocal?.bdsaRegionProtocol && item.BDSA.bdsaLocal.bdsaRegionProtocol.length > 0)
-      ? item.BDSA.bdsaLocal.bdsaRegionProtocol[0]
-      : 'unknown';
-    const bdsaStainProtocol = (item.BDSA?.bdsaLocal?.bdsaStainProtocol && item.BDSA.bdsaLocal.bdsaStainProtocol.length > 0)
-      ? item.BDSA.bdsaLocal.bdsaStainProtocol[0]
-      : 'unknown';
-
-    console.log('🔍 Naming debug:', {
-      template: metadataConfig.bdsaNamingTemplate,
-      bdsaCaseId,
-      bdsaRegionProtocol,
-      bdsaStainProtocol,
-      itemBDSA: item.BDSA,
-      itemBdsaLocal: item.BDSA?.bdsaLocal
-    });
-
-    // Extract file extension from original name
-    const originalName = item.name || 'unknown';
-    const fileExtension = originalName.includes('.') ? originalName.split('.').pop() : '';
-    const baseName = originalName.includes('.') ? originalName.substring(0, originalName.lastIndexOf('.')) : originalName;
-    
-    let result = metadataConfig.bdsaNamingTemplate
-      .replace('{bdsaCaseId}', bdsaCaseId)
-      .replace('{bdsaRegionProtocol}', bdsaRegionProtocol)
-      .replace('{bdsaStainProtocol}', bdsaStainProtocol)
-      .replace('{region}', bdsaRegionProtocol)  // Also support shorter placeholders
-      .replace('{stain}', bdsaStainProtocol)    // Also support shorter placeholders
-      .replace('{originalName}', baseName);     // Use base name without extension
-    
-    // Add the original file extension if it exists
-    if (fileExtension) {
-      result += `.${fileExtension}`;
-    }
-
-    console.log('🔍 Naming result:', result);
-    return result;
-  };
 
   const processDsaItems = (items) => {
     const newModifiedItems = new Set();
@@ -634,202 +601,70 @@ const App = () => {
 
       let processedCount = 0;
 
-      setSyncProgress(prev => ({
-        ...prev,
-        current: 1,
-        currentItem: `${item.bdsaCaseId || item.localCaseId || 'unknown'}: ${item.name}`,
-      }));
+      // Process each item
+      for (const item of itemsToProcess) {
+        const bdsaCaseId = item.bdsaCaseId || item.localCaseId || 'unknown';
 
-      // Generate normalized name using the new naming function
-      const newName = generateNormalizedName(item);
-      console.log(`🧪 Generated new name: ${item.name} → ${newName}`);
-      console.log(`🧪 Item BDSA data:`, {
-        bdsaCaseId: item.bdsaCaseId,
-        bdsaRegionProtocol: item.BDSA?.bdsaLocal?.bdsaRegionProtocol,
-        bdsaStainProtocol: item.BDSA?.bdsaLocal?.bdsaStainProtocol,
-        useBdsaProtocols: metadataConfig.useBdsaProtocols,
-        bdsaNamingTemplate: metadataConfig.bdsaNamingTemplate
-      });
+        // Find the target folder for this case
+        const targetFolderId = caseIdToFolderId[bdsaCaseId];
+        if (!targetFolderId) {
+          console.warn(`⚠️ No target folder found for case ID: ${bdsaCaseId}, skipping item: ${item.name}`);
+          continue;
+        }
 
-      // Check for duplicates before copying
-      console.log(`🧪 Checking for duplicates in target folder: ${targetFolderId}`);
-      const isDuplicate = await checkForDuplicate(targetFolderId, newName);
-      if (isDuplicate) {
-        console.log(`⏭️ Skipping duplicate: ${newName} already exists in target folder`);
-        result.skippedDuplicates.push(newName);
-      } else {
+        setSyncProgress(prev => ({
+          ...prev,
+          current: processedCount + 1,
+          currentItem: `${bdsaCaseId}: ${item.name}`,
+        }));
+
+        // Generate normalized name
+        const newName = generateNormalizedName(item, metadataConfig.bdsaNamingTemplate);
+        console.log(`🧪 Generated new name: ${item.name} → ${newName}`);
+
+        // Check for duplicates before copying
+        const isDuplicate = await checkForDuplicate(targetFolderId, newName);
+        if (isDuplicate) {
+          console.log(`⏭️ Skipping duplicate: ${newName} already exists in target folder`);
+          result.skippedDuplicates.push(newName);
+          continue;
+        }
+
         try {
-          console.log(`🧪 Attempting to copy item:`, {
-            sourceItemId: item._id,
-            targetFolderId: targetFolderId,
-            newName: newName,
-            originalName: item.name
-          });
-
           // Copy the item to the target folder with the new name
-          console.log(`🧪 Calling dsaClient.copyItem with:`, {
-            itemId: item._id,
-            targetFolderId: targetFolderId,
-            newName: newName
-          });
-
-          // DEBUG: Log target folder info
-          console.log(`🧪 Target folder info:`, {
-            targetFolderId: targetFolderId,
-            targetFolderName: targetFolder.name,
-            sourceResourceId: config.sourceResourceId,
-            targetResourceId: config.targetResourceId
-          });
-
-          // DEBUG: Show exactly what we're sending to the copy API
-          const copyPayload = {
-            folderId: targetFolderId,
-            name: newName
-          };
-          const copyApiUrl = `${dsaClient.getNormalizedBaseUrl()}/api/v1/item/${item._id}/copy`;
-
-          console.log(`🧪 COPY API REQUEST DETAILS:`, {
-            method: 'POST',
-            url: copyApiUrl,
-            itemId: item._id,
-            targetFolderId: targetFolderId,
-            newName: newName,
-            payload: copyPayload,
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer [REDACTED]'
-            }
-          });
-
-          console.log(`🧪 RAW POST REQUEST:`, {
-            method: 'POST',
-            url: copyApiUrl,
-            data: copyPayload
-          });
-
-          console.log(`🧪 EXACT PAYLOAD BEING SENT:`, JSON.stringify(copyPayload, null, 2));
-
           const copiedItem = await dsaClient.copyItem(item._id, targetFolderId, newName);
 
-          console.log(`🧪 Copy result:`, {
-            success: !!copiedItem,
-            copiedItemId: copiedItem?._id,
-            copiedItemName: copiedItem?.name,
-            copiedItemParentId: copiedItem?.parentId,
-            copiedItemFolderId: copiedItem?.folderId,
-            fullResponse: copiedItem
-          });
+          console.log(`✅ Successfully copied: ${item.name} → ${newName}`);
 
-          console.log(`🧪 COPY API RESPONSE ANALYSIS:`, {
-            hasId: !!copiedItem?._id,
-            hasName: !!copiedItem?.name,
-            hasParentId: !!copiedItem?.parentId,
-            hasFolderId: !!copiedItem?.folderId,
-            responseKeys: copiedItem ? Object.keys(copiedItem) : 'no response'
-          });
-
-          // CRITICAL DEBUG: Let's verify where the copied item actually ended up
-          try {
-            const copiedItemDetails = await dsaClient.getItem(copiedItem._id);
-            console.log(`🔍 COPIED ITEM VERIFICATION:`, {
-              copiedItemId: copiedItem._id,
-              copiedItemName: copiedItemDetails.name,
-              copiedItemParentId: copiedItemDetails.parentId,
-              expectedParentId: targetFolderId,
-              isInCorrectFolder: copiedItemDetails.parentId === targetFolderId,
-              targetFolderId: targetFolderId,
-              sourceResourceId: config.sourceResourceId,
-              targetResourceId: config.targetResourceId
-            });
-
-            if (copiedItemDetails.parentId !== targetFolderId) {
-              console.error(`❌ CRITICAL ERROR: Copied item is in WRONG folder!`);
-              console.error(`❌ Expected parent: ${targetFolderId}`);
-              console.error(`❌ Actual parent: ${copiedItemDetails.parentId}`);
-            }
-          } catch (error) {
-            console.error(`❌ Failed to verify copied item:`, error);
-          }
-
-          // DEBUG: Show copy operation details
-          setDebugInfo({
-            type: 'COPY_OPERATION',
-            title: 'Copy Operation Result',
-            data: {
-              sourceItemId: item._id,
-              sourceItemName: item.name,
-              bdsaCaseId: bdsaCaseId,
-              sourceResourceId: config.sourceResourceId,
-              targetResourceId: config.targetResourceId,
-              targetFolderId: targetFolderId,
-              targetFolderName: targetFolder.name,
-              newName: newName,
-              copySuccess: !!copiedItem,
-              copiedItemId: copiedItem?._id,
-              copiedItemName: copiedItem?.name,
-              copiedItemParentId: copiedItem?.parentId,
-              fullResponse: copiedItem
-            }
-          });
-
-          // Update the copied item with BDSA metadata to preserve all BDSA information
-          if (copiedItem) {
-            // Send the complete BDSA object - DSA server overwrites the entire top-level key
-            const completeBdsaObject = {
+          // Update metadata for the copied item
+          const metadataUpdate = {
+            BDSA: {
               bdsaLocal: {
-                ...item.BDSA?.bdsaLocal || {}
-              },
-              _dataSource: item.BDSA?._dataSource || {},
-              _lastModified: item.BDSA?._lastModified || new Date().toISOString()
-            };
-
-            const metadataUpdate = {
-              meta: {
-                ...copiedItem.meta,
-                BDSA: completeBdsaObject
+                ...item.BDSA?.bdsaLocal,
+                lastUpdated: new Date().toISOString(),
+                source: 'BDSA-Schema-Wrangler-Sync'
               }
-            };
+            }
+          };
 
-            console.log(`🧪 Updating metadata for copied item:`, {
-              itemId: copiedItem._id,
-              metadataUpdate: metadataUpdate
-            });
+          await dsaClient.updateItem(copiedItem._id, metadataUpdate);
+          console.log(`✅ Updated metadata for: ${newName}`);
 
-            // DEBUG: Show metadata update details
-            setDebugInfo({
-              type: 'METADATA_UPDATE',
-              title: 'Metadata Update Operation',
-              data: {
-                copiedItemId: copiedItem._id,
-                metadataUpdatePayload: metadataUpdate
-              }
-            });
+          result.copiedItems.push({
+            originalName: item.name,
+            newName: newName,
+            caseId: bdsaCaseId,
+            targetFolder: caseIdToFolderId[bdsaCaseId]
+          });
 
-            // Update the copied item with the preserved BDSA metadata
-            const updateResult = await dsaClient.updateItem(copiedItem._id, metadataUpdate);
-
-            // DEBUG: Show update result
-            setDebugInfo({
-              type: 'METADATA_RESULT',
-              title: 'Metadata Update Result',
-              data: {
-                updateSuccess: !!updateResult,
-                updateResult: updateResult
-              }
-            });
-
-            console.log(`✅ Successfully copied and updated: ${newName}`);
-          } else {
-            console.warn(`⚠️ Copy operation returned null/undefined for: ${newName}`);
-          }
-
-          result.processed++;
-          result.copiedItems.push(newName);
-        } catch (copyError) {
-          console.error(`❌ Failed to copy ${item.name}:`, copyError);
-          result.errors.push(`Failed to copy ${item.name}: ${copyError.message}`);
+          processedCount++;
+        } catch (error) {
+          console.error(`❌ Failed to copy item ${item.name}:`, error);
+          result.errors.push(`Failed to copy ${item.name}: ${error.message}`);
         }
       }
+
+      result.processed = processedCount;
 
       setSyncProgress(prev => ({
         ...prev,
@@ -995,65 +830,13 @@ const App = () => {
             )}
           </div>
 
-          <div className="auth-section">
-            {authStatus.isAuthenticated ? (
-              <div className="auth-status authenticated">
-                <p>✅ Authenticated as: {authStatus.user?.name || 'Unknown User'}</p>
-                <p>Server: {authStatus.serverUrl}</p>
-                {authStatus.lastLogin && (
-                  <p>Last login: {new Date(authStatus.lastLogin).toLocaleString()}</p>
-                )}
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  disabled={isLoading}
-                  className="logout-btn"
-                >
-                  Logout
-                </button>
-              </div>
-            ) : (
-              <div className="auth-form">
-                <h4>Authentication</h4>
-                <form onSubmit={(e) => {
-                  e.preventDefault();
-                  const formData = new FormData(e.target);
-                  const username = formData.get('username');
-                  const password = formData.get('password');
-                  if (username && password) {
-                    handleAuthenticate(username, password);
-                  }
-                }}>
-                  <label>
-                    Username:
-                    <input
-                      type="text"
-                      name="username"
-                      required
-                      disabled={isLoading}
-                    />
-                  </label>
-
-                  <label>
-                    Password:
-                    <input
-                      type="password"
-                      name="password"
-                      required
-                      disabled={isLoading}
-                    />
-                  </label>
-
-                  <button
-                    type="submit"
-                    disabled={isLoading || !config.baseUrl}
-                  >
-                    {isLoading ? 'Authenticating...' : 'Login'}
-                  </button>
-                </form>
-              </div>
-            )}
-          </div>
+          <AuthSection
+            authStatus={authStatus}
+            isLoading={isLoading}
+            onAuthenticate={handleAuthenticate}
+            onLogout={handleLogout}
+            config={config}
+          />
 
           {error && (
             <div className="error-message">
@@ -1062,150 +845,33 @@ const App = () => {
           )}
 
           {authStatus.isAuthenticated && (
-            <div className="metadata-config">
-              <h3>Metadata Configuration</h3>
-              <div className="config-section">
-                <label>
-                  Case ID Key:
-                  <input
-                    type="text"
-                    value={metadataConfig.caseIdKey}
-                    onChange={(e) => handleMetadataConfigChange('caseIdKey', e.target.value)}
-                    placeholder="caseID"
-                    disabled={isLoading}
-                  />
-                </label>
-
-                <label>
-                  Stain ID Key:
-                  <input
-                    type="text"
-                    value={metadataConfig.stainIdKey}
-                    onChange={(e) => handleMetadataConfigChange('stainIdKey', e.target.value)}
-                    placeholder="stainID"
-                    disabled={isLoading}
-                  />
-                </label>
-
-                <label>
-                  Region ID Key:
-                  <input
-                    type="text"
-                    value={metadataConfig.regionIdKey}
-                    onChange={(e) => handleMetadataConfigChange('regionIdKey', e.target.value)}
-                    placeholder="regionName"
-                    disabled={isLoading}
-                  />
-                </label>
-
-                <label>
-                  Patient ID Pattern:
-                  <input
-                    type="text"
-                    value={metadataConfig.patientIdPattern}
-                    onChange={(e) => handleMetadataConfigChange('patientIdPattern', e.target.value)}
-                    placeholder="^([A-Z0-9]+)-"
-                    disabled={isLoading}
-                  />
-                </label>
-
-                <label>
-                  Naming Template:
-                  <input
-                    type="text"
-                    value={metadataConfig.namingTemplate}
-                    onChange={(e) => handleMetadataConfigChange('namingTemplate', e.target.value)}
-                    placeholder="{patientId}-{region}-{stain}"
-                    disabled={isLoading}
-                  />
-                </label>
-
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={metadataConfig.useBdsaProtocols}
-                    onChange={(e) => handleMetadataConfigChange('useBdsaProtocols', e.target.checked)}
-                    disabled={isLoading}
-                  />
-                  Use BDSA Protocol-based Naming
-                </label>
-
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={metadataConfig.syncAllItems}
-                    onChange={(e) => handleMetadataConfigChange('syncAllItems', e.target.checked)}
-                    disabled={isLoading}
-                  />
-                  Sync All Items (not just modified ones)
-                </label>
-
-                {metadataConfig.useBdsaProtocols && (
-                  <label>
-                    BDSA Naming Template:
-                    <input
-                      type="text"
-                      value={metadataConfig.bdsaNamingTemplate}
-                      onChange={(e) => handleMetadataConfigChange('bdsaNamingTemplate', e.target.value)}
-                      placeholder="{bdsaCaseId}-{bdsaRegionProtocol}-{bdsaStainProtocol}"
-                      disabled={isLoading}
-                    />
-                    <small className="help-text">
-                      Available placeholders: {'{bdsaCaseId}'}, {'{bdsaRegionProtocol}'}, {'{bdsaStainProtocol}'}, {'{originalName}'}
-                    </small>
-                  </label>
-                )}
-              </div>
-            </div>
+            <BdsaConfigSection
+              metadataConfig={metadataConfig}
+              onConfigChange={handleMetadataConfigChange}
+              isLoading={isLoading}
+            />
           )}
 
           {authStatus.isAuthenticated && (
-            <div className="sync-controls">
-              <h3>Sync Controls</h3>
-              <div className="form-group">
-                <button
-                  className="btn btn-secondary"
-                  onClick={loadSourceItems}
-                  disabled={isLoading}
-                >
-                  {isLoading ? 'Loading...' : 'Load Source Items'}
-                </button>
-                <span className="item-count">
-                  {sourceItems.length} items loaded
-                </span>
-              </div>
+            <LargeImageConfigSection
+              dsaClient={dsaClient}
+              config={config}
+              isLoading={isLoading}
+              onError={setError}
+            />
+          )}
 
-              <div className="form-group">
-                <button
-                  className="btn btn-secondary"
-                  onClick={loadTargetItems}
-                  disabled={isLoading}
-                >
-                  {isLoading ? 'Loading...' : 'Load Target Items'}
-                </button>
-                <span className="item-count">
-                  {targetItems.length} items loaded
-                </span>
-              </div>
-
-              <div className="form-group">
-                <button
-                  className="btn btn-primary"
-                  onClick={createTargetFolderStructure}
-                  disabled={isLoading || sourceItems.length === 0}
-                  style={{ marginRight: '10px' }}
-                >
-                  Create Folders
-                </button>
-                <button
-                  className="btn btn-success"
-                  onClick={startSync}
-                  disabled={isLoading || sourceItems.length === 0 || syncProgress.status === 'running'}
-                >
-                  Start Sync {modifiedItems.size > 0 && `(${modifiedItems.size} modified)`}
-                </button>
-              </div>
-            </div>
+          {authStatus.isAuthenticated && (
+            <SyncControlsSection
+              sourceItems={sourceItems}
+              targetItems={targetItems}
+              isLoading={isLoading}
+              syncProgress={syncProgress}
+              onLoadSourceItems={loadSourceItems}
+              onLoadTargetItems={loadTargetItems}
+              onCreateFolders={createTargetFolderStructure}
+              onStartSync={startSync}
+            />
           )}
         </div>
 
