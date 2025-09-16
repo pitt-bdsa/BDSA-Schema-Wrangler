@@ -338,10 +338,21 @@ export class DSAApiClient {
     // Copy operations
     async copyItem(itemId, targetFolderId, newName) {
         try {
-            const response = await this.client.post(`/api/v1/item/${itemId}/copy`, {
+            const params = new URLSearchParams();
+            params.append('folderId', targetFolderId);
+            if (newName) {
+                params.append('name', newName);
+            }
+            const url = `/api/v1/item/${itemId}/copy?${params.toString()}`;
+            console.log(`🔧 DSA API copyItem called with:`, {
+                itemId,
                 targetFolderId,
-                name: newName,
+                newName,
+                url,
+                params: params.toString()
             });
+            const response = await this.client.post(url);
+            console.log(`🔧 DSA API copyItem response:`, response.data);
             return response.data;
         }
         catch (error) {

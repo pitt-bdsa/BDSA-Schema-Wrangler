@@ -172,6 +172,139 @@
   margin-top: 8px;
 }
 
+/* Checkbox label styling */
+.checkbox-label {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.checkbox-label input[type="checkbox"] {
+  margin-top: 0;
+  margin-right: 8px;
+}
+
+/* Help text styling */
+.help-text {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: #6c757d;
+  font-style: italic;
+}
+
+/* Details element styling for skipped duplicates */
+details {
+  margin-top: 8px;
+  padding: 8px;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+}
+
+details summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: #495057;
+  margin-bottom: 8px;
+}
+
+details ul {
+  margin: 8px 0 0 0;
+  padding-left: 20px;
+}
+
+details li {
+  margin: 4px 0;
+  font-size: 0.9rem;
+  color: #6c757d;
+}
+
+/* Conditional BDSA naming template styling */
+.config-section label:has(input[type="text"]:placeholder-shown) {
+  margin-bottom: 16px;
+}
+
+/* Debug Modal Styles */
+.debug-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.debug-modal {
+  background: white;
+  border-radius: 8px;
+  max-width: 80vw;
+  max-height: 80vh;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.debug-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.debug-modal-header h3 {
+  margin: 0;
+  color: #333;
+}
+
+.debug-close-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: #666;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.debug-close-btn:hover {
+  background: #e9ecef;
+  color: #333;
+}
+
+.debug-modal-content {
+  padding: 20px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.debug-json {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  padding: 16px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 400px;
+  overflow-y: auto;
+  margin-bottom: 16px;
+}
+
+.debug-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .form-group {
@@ -183,5 +316,14 @@
     margin-left: 0;
     margin-top: 8px;
     text-align: center;
+  }
+
+  .debug-modal {
+    max-width: 95vw;
+    max-height: 90vh;
+  }
+
+  .debug-actions {
+    flex-direction: column;
   }
 }
