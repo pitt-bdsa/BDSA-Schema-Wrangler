@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import dataStore from '../utils/dataStore';
+import dataStore, { getProtocolSuggestions } from '../utils/dataStore';
 import protocolStore from '../utils/protocolStore';
 import './StainProtocolMapping.css';
 
@@ -90,6 +90,43 @@ const StainProtocolMapping = () => {
         setCurrentCaseIndex(newIndex);
     };
 
+    // Skip to next case with unmapped stain protocols
+    const handleSkipToNextUnmapped = () => {
+        // Force a refresh of the cases data to get the latest state
+        const freshCases = dataStore.generateStainProtocolCases();
+        let foundIndex = -1;
+
+        // Search forward from current position
+        for (let i = 0; i < freshCases.length; i++) {
+            const caseIndex = (currentCaseIndex + i) % freshCases.length;
+            const caseData = freshCases[caseIndex];
+
+            if (caseData && caseData.slides) {
+                const allStainSlides = getAllStainSlides(caseData);
+                const stainGroups = groupSlidesByStainType(allStainSlides);
+
+                // Check if any stain group has unmapped slides
+                const hasUnmapped = Object.entries(stainGroups).some(([stainType, slides]) => {
+                    const unmappedCount = slides.filter(s => !s.stainProtocols || s.stainProtocols.length === 0).length;
+                    return unmappedCount > 0;
+                });
+
+                if (hasUnmapped) {
+                    foundIndex = caseIndex;
+                    break;
+                }
+            }
+        }
+
+        if (foundIndex !== -1) {
+            setCurrentCaseIndex(foundIndex);
+            console.log(`⏭️ Skipped to case ${freshCases[foundIndex].bdsaId} with unmapped stain protocols`);
+        } else {
+            console.log('🎉 No more cases with unmapped stain protocols found!');
+            alert('🎉 Great job! No more cases with unmapped stain protocols found.');
+        }
+    };
+
     // Toggle group expansion
     const toggleGroupExpansion = (stainType) => {
         const newExpanded = new Set(expandedGroups);
@@ -135,6 +172,93 @@ const StainProtocolMapping = () => {
         });
 
         console.log(`✅ Removed protocol ${protocolToRemove} from ${slides.length} slides`);
+    };
+
+    // Get suggestion for a specific stain type
+    const getSuggestionForStainType = (stainType) => {
+        const suggestion = getProtocolSuggestions(stainType, 'stain');
+        console.log(`🔍 GETTING SUGGESTION for ${stainType}:`, suggestion);
+        return suggestion;
+    };
+
+    // Check if a protocol is suggested for a stain type
+    const isProtocolSuggested = (protocolName, stainType) => {
+        const suggestion = getSuggestionForStainType(stainType);
+        console.log(`🔍 SUGGESTION CHECK - ${stainType}:`, {
+            protocolName,
+            suggestion,
+            isSuggested: suggestion.suggested === protocolName
+        });
+        return suggestion.suggested === protocolName;
+    };
+
+    // Get suggestion confidence for a protocol
+    const getSuggestionConfidence = (protocolName, stainType) => {
+        const suggestion = getSuggestionForStainType(stainType);
+        return suggestion.suggested === protocolName ? suggestion.confidence : 0;
+    };
+
+    // Auto-apply suggestions for the current case
+    const handleAutoApplySuggestions = () => {
+        const currentCase = cases[currentCaseIndex];
+        if (!currentCase) return;
+
+        const allStainSlides = getAllStainSlides(currentCase);
+        const stainGroups = groupSlidesByStainType(allStainSlides);
+
+        let appliedCount = 0;
+        let skippedCount = 0;
+        const skippedTypes = [];
+
+        console.log('🚀 Starting auto-apply suggestions for case:', currentCase.bdsaId);
+
+        Object.entries(stainGroups).forEach(([stainType, slides]) => {
+            const suggestion = getSuggestionForStainType(stainType);
+            console.log(`🔍 Processing stain type "${stainType}":`, suggestion);
+
+            // Only apply if we have high confidence (>= 80%) and it's an exact match
+            if (suggestion.suggested && suggestion.confidence >= 0.8 && suggestion.isExactMatch) {
+                // Check if this protocol is already fully applied to all slides
+                const alreadyApplied = slides.every(slide =>
+                    slide.stainProtocols && slide.stainProtocols.includes(suggestion.suggested)
+                );
+
+                if (!alreadyApplied) {
+                    console.log(`✅ Applying suggestion: ${stainType} → ${suggestion.suggested}`);
+                    handleApplyStainProtocol(slides, suggestion.suggested);
+                    appliedCount++;
+                } else {
+                    console.log(`ℹ️ Suggestion already applied: ${stainType} → ${suggestion.suggested}`);
+                }
+            } else {
+                skippedCount++;
+                skippedTypes.push({
+                    type: stainType,
+                    reason: suggestion.suggested
+                        ? `Low confidence (${Math.round(suggestion.confidence * 100)}%)`
+                        : 'No suggestion available'
+                });
+                console.log(`⚠️ Skipping ${stainType}:`, suggestion.suggested ? `Low confidence (${Math.round(suggestion.confidence * 100)}%)` : 'No suggestion');
+            }
+        });
+
+        // Show results with better feedback
+        console.log(`🎯 Auto-apply complete: ${appliedCount} applied, ${skippedCount} skipped`);
+
+        // Log results to console instead of showing alert
+        if (appliedCount > 0) {
+            const message = `✅ Auto-applied ${appliedCount} protocol suggestion(s)!` +
+                (skippedCount > 0
+                    ? ` ⚠️ Skipped ${skippedCount} stain type(s) due to ambiguity: ${skippedTypes.map(t => `${t.type} (${t.reason})`).join(', ')}`
+                    : ' 🎉 All suggestions applied successfully!'
+                );
+            console.log(message);
+        } else {
+            const message = skippedCount > 0
+                ? `⚠️ No suggestions applied. Skipped ${skippedCount} stain type(s) due to ambiguity: ${skippedTypes.map(t => `${t.type} (${t.reason})`).join(', ')}`
+                : 'ℹ️ No stain types found in this case.';
+            console.log(message);
+        }
     };
 
     if (cases.length === 0) {
@@ -196,6 +320,22 @@ const StainProtocolMapping = () => {
                         disabled={cases.length <= 1}
                     >
                         →
+                    </button>
+                </div>
+                <div className="auto-apply-section">
+                    <button
+                        className="auto-apply-btn"
+                        onClick={handleAutoApplySuggestions}
+                        title="Auto-apply high-confidence protocol suggestions to all stain types in this case"
+                    >
+                        ⚡ Auto-Apply Suggestions
+                    </button>
+                    <button
+                        className="skip-unmapped-btn"
+                        onClick={handleSkipToNextUnmapped}
+                        title="Skip to the next case that has unmapped stain protocols"
+                    >
+                        ⏭️ Skip to Next Unmapped
                     </button>
                 </div>
             </div>
@@ -282,16 +422,22 @@ const StainProtocolMapping = () => {
                                                 .map(protocol => {
                                                     const isPartiallyApplied = allGroupProtocols.includes(protocol.name);
                                                     const currentCount = protocolCounts[protocol.name] || 0;
+                                                    const isSuggested = isProtocolSuggested(protocol.name, stainType);
+                                                    const confidence = getSuggestionConfidence(protocol.name, stainType);
+
                                                     return (
                                                         <button
                                                             key={protocol.id}
-                                                            className={`add-protocol-btn ${isPartiallyApplied ? 'partially-applied' : ''}`}
+                                                            className={`add-protocol-btn ${isPartiallyApplied ? 'partially-applied' : ''} ${isSuggested ? 'suggested' : ''}`}
                                                             onClick={() => handleApplyStainProtocol(slides, protocol.name)}
-                                                            title={isPartiallyApplied
-                                                                ? `Apply ${protocol.name} to remaining ${slides.length - currentCount} slides`
-                                                                : `Add ${protocol.name} to all slides`
+                                                            title={isSuggested
+                                                                ? `⭐ SUGGESTED: ${protocol.name} (${Math.round(confidence * 100)}% confidence) - ${getSuggestionForStainType(stainType).reason}`
+                                                                : isPartiallyApplied
+                                                                    ? `Apply ${protocol.name} to remaining ${slides.length - currentCount} slides`
+                                                                    : `Add ${protocol.name} to all slides`
                                                             }
                                                         >
+                                                            {isSuggested && '⭐ '}
                                                             + {protocol.name}
                                                             {isPartiallyApplied && ` (${currentCount}/${slides.length})`}
                                                         </button>

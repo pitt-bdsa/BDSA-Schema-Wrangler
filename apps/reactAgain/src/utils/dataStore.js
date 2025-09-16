@@ -169,8 +169,23 @@ class DataStore {
                 this.dataLoadTimestamp = data.dataLoadTimestamp;
                 this.modifiedItems = new Set(data.modifiedItems || []);
                 this.caseIdMappings = new Map(data.caseIdMappings || []);
-                this.caseIdConflicts = new Map(data.caseIdConflicts || []);
-                this.bdsaCaseIdConflicts = new Map(data.bdsaCaseIdConflicts || []);
+
+                // Restore caseIdConflicts with proper Set values
+                this.caseIdConflicts = new Map();
+                if (data.caseIdConflicts) {
+                    for (const [localCaseId, bdsaIds] of data.caseIdConflicts) {
+                        this.caseIdConflicts.set(localCaseId, new Set(bdsaIds));
+                    }
+                }
+
+                // Restore bdsaCaseIdConflicts with proper Set values
+                this.bdsaCaseIdConflicts = new Map();
+                if (data.bdsaCaseIdConflicts) {
+                    for (const [bdsaCaseId, localIds] of data.bdsaCaseIdConflicts) {
+                        this.bdsaCaseIdConflicts.set(bdsaCaseId, new Set(localIds));
+                    }
+                }
+
                 this.caseProtocolMappings = new Map(data.caseProtocolMappings || []);
             }
         } catch (error) {
@@ -1124,7 +1139,9 @@ class DataStore {
      * Handles conflicts where the same localCaseId has different bdsaCaseId values
      */
     initializeCaseIdMappingsFromData() {
+        console.log('🔍 initializeCaseIdMappingsFromData called with', this.processedData?.length, 'items');
         if (!this.processedData || this.processedData.length === 0) {
+            console.log('🔍 No processed data available for conflict detection');
             return;
         }
 
@@ -1186,9 +1203,13 @@ class DataStore {
         console.log(`Initialized case ID mappings from data: ${mappings.size} mappings found`);
         if (conflicts.size > 0) {
             console.warn(`⚠️ Found ${conflicts.size} local case ID conflicts that need resolution`);
+            console.log('🔍 Local conflicts:', conflicts);
         }
         if (bdsaConflicts.size > 0) {
             console.warn(`⚠️ Found ${bdsaConflicts.size} BDSA case ID conflicts that need resolution`);
+            console.log('🔍 BDSA conflicts:', bdsaConflicts);
+        } else {
+            console.log('🔍 No BDSA conflicts detected');
         }
     }
 
@@ -1326,10 +1347,12 @@ class DataStore {
             }
         }
 
-        // Remove the conflict
-        this.bdsaCaseIdConflicts.delete(bdsaCaseId);
+        // Mark the conflict as resolved instead of deleting it
+        // This allows the UI to show it as resolved rather than disappearing
+        this.bdsaCaseIdConflicts.set(bdsaCaseId, new Set([chosenLocalCaseId, 'RESOLVED']));
 
         this.saveToStorage();
+        this.notify();
         console.log(`Resolved BDSA Case ID conflict for "${bdsaCaseId}": kept mapping for "${chosenLocalCaseId}", removed from ${updatedCount} other items`);
     }
 
@@ -1365,10 +1388,12 @@ class DataStore {
             this.caseIdMappings.delete(localCaseId);
         }
 
-        // Remove the conflict
-        this.bdsaCaseIdConflicts.delete(bdsaCaseId);
+        // Mark the conflict as cleared instead of deleting it
+        // This allows the UI to show it as resolved rather than disappearing
+        this.bdsaCaseIdConflicts.set(bdsaCaseId, new Set(['CLEARED']));
 
         this.saveToStorage();
+        this.notify();
         console.log(`Cleared BDSA Case ID conflict for "${bdsaCaseId}": removed BDSA Case ID from ${updatedCount} items`);
     }
 
@@ -2043,6 +2068,166 @@ class DataStore {
             console.log(`❌ Protocol ${protocolId} not found in slide protocols:`, allProtocols);
         }
     }
+
+    /**
+     * Get protocol suggestions based on existing mappings in the collection
+     * @param {string} stainType - The stain type to get suggestions for
+     * @param {string} protocolType - 'stain' or 'region'
+     * @returns {Object} Suggestion data with recommended protocol and confidence
+     */
+    getProtocolSuggestions(stainType, protocolType = 'stain') {
+        console.log(`🔍 ANALYZING SUGGESTIONS for ${stainType} (${protocolType}):`, {
+            dataLength: this.processedData?.length || 0,
+            hasData: !!this.processedData
+        });
+
+        if (!this.processedData || this.processedData.length === 0) {
+            return { suggested: null, confidence: 0, reason: 'No data available' };
+        }
+
+        // For suggestions, we need to look at the BDSA metadata structure
+        // The protocols are stored in BDSA.bdsaLocal as bdsaStainProtocol/bdsaRegionProtocol
+        const protocolField = protocolType === 'stain' ? 'bdsaStainProtocol' : 'bdsaRegionProtocol';
+        const typeField = protocolType === 'stain' ? 'localStainID' : 'localRegionId';
+
+        // Collect all mappings for this stain/region type across all cases
+        const mappings = new Map(); // stainType -> Set of protocols used
+
+        this.processedData.forEach((item, index) => {
+            const itemStainType = item.BDSA?.bdsaLocal?.[typeField];
+            const protocols = item.BDSA?.bdsaLocal?.[protocolField];
+
+            // Debug first few items to see the data structure
+            if (index < 3) {
+                console.log(`🔍 DEBUG ITEM ${index}:`, {
+                    itemStainType,
+                    protocols,
+                    BDSA: item.BDSA,
+                    bdsaLocal: item.BDSA?.bdsaLocal,
+                    protocolField,
+                    typeField,
+                    allKeys: Object.keys(item),
+                    bdsaLocalKeys: item.BDSA?.bdsaLocal ? Object.keys(item.BDSA.bdsaLocal) : 'no bdsaLocal'
+                });
+            }
+
+            if (itemStainType && protocols && Array.isArray(protocols) && protocols.length > 0) {
+                console.log(`🔍 FOUND MAPPING: ${itemStainType} -> ${protocols.join(', ')}`);
+                if (!mappings.has(itemStainType)) {
+                    mappings.set(itemStainType, new Map());
+                }
+
+                const typeMappings = mappings.get(itemStainType);
+                protocols.forEach(protocol => {
+                    typeMappings.set(protocol, (typeMappings.get(protocol) || 0) + 1);
+                });
+            }
+        });
+
+        console.log(`🔍 ALL MAPPINGS FOUND:`, Array.from(mappings.entries()));
+
+        // Check for exact 1:1 mapping
+        if (mappings.has(stainType)) {
+            const typeMappings = mappings.get(stainType);
+            const entries = Array.from(typeMappings.entries());
+
+            if (entries.length === 1) {
+                // Perfect 1:1 mapping
+                const [protocol, count] = entries[0];
+                return {
+                    suggested: protocol,
+                    confidence: 1.0,
+                    reason: `Perfect 1:1 mapping: ${stainType} → ${protocol} (${count} cases)`,
+                    isExactMatch: true
+                };
+            } else if (entries.length > 1) {
+                // Multiple protocols, find the most common
+                entries.sort((a, b) => b[1] - a[1]);
+                const [mostCommonProtocol, count] = entries[0];
+                const totalCases = Array.from(typeMappings.values()).reduce((sum, c) => sum + c, 0);
+                const confidence = count / totalCases;
+
+                return {
+                    suggested: mostCommonProtocol,
+                    confidence: confidence,
+                    reason: `Most common mapping: ${stainType} → ${mostCommonProtocol} (${count}/${totalCases} cases, ${Math.round(confidence * 100)}%)`,
+                    isExactMatch: false,
+                    alternatives: entries.slice(1).map(([protocol, count]) => ({ protocol, count }))
+                };
+            }
+        }
+
+        // Check for similar stain types (fuzzy matching)
+        const similarTypes = Array.from(mappings.keys()).filter(type =>
+            type.toLowerCase().includes(stainType.toLowerCase()) ||
+            stainType.toLowerCase().includes(type.toLowerCase())
+        );
+
+        if (similarTypes.length > 0) {
+            // Find the most common protocol across similar types
+            const similarMappings = new Map();
+            similarTypes.forEach(type => {
+                const typeMappings = mappings.get(type);
+                typeMappings.forEach((count, protocol) => {
+                    similarMappings.set(protocol, (similarMappings.get(protocol) || 0) + count);
+                });
+            });
+
+            if (similarMappings.size > 0) {
+                const entries = Array.from(similarMappings.entries());
+                entries.sort((a, b) => b[1] - a[1]);
+                const [suggestedProtocol, totalCount] = entries[0];
+
+                return {
+                    suggested: suggestedProtocol,
+                    confidence: 0.6, // Lower confidence for fuzzy matches
+                    reason: `Similar types use: ${suggestedProtocol} (${totalCount} cases across similar types)`,
+                    isExactMatch: false,
+                    similarTypes: similarTypes
+                };
+            }
+        }
+
+        return {
+            suggested: null,
+            confidence: 0,
+            reason: `No existing mappings found for ${stainType}`
+        };
+    }
+
+    /**
+     * Get all protocol suggestions for a given protocol type
+     * @param {string} protocolType - 'stain' or 'region'
+     * @returns {Map} Map of stain/region types to their suggestions
+     */
+    getAllProtocolSuggestions(protocolType = 'stain') {
+        const suggestions = new Map();
+
+        if (!this.processedData || this.processedData.length === 0) {
+            return suggestions;
+        }
+
+        const typeField = protocolType === 'stain' ? 'stainType' : 'regionType';
+
+        // Get all unique stain/region types in the data
+        const types = new Set();
+        this.processedData.forEach(item => {
+            const type = item[typeField];
+            if (type) {
+                types.add(type);
+            }
+        });
+
+        // Get suggestions for each type
+        types.forEach(type => {
+            const suggestion = this.getProtocolSuggestions(type, protocolType);
+            if (suggestion.suggested) {
+                suggestions.set(type, suggestion);
+            }
+        });
+
+        return suggestions;
+    }
 }
 
 // Create singleton instance
@@ -2064,6 +2249,8 @@ export const loadDsaData = (dsaAuthStore) => dataStore.loadDsaData(dsaAuthStore)
 export const generateUnmappedCases = () => dataStore.generateUnmappedCases();
 export const generateStainProtocolCases = () => dataStore.generateStainProtocolCases();
 export const generateRegionProtocolCases = () => dataStore.generateRegionProtocolCases();
+export const getProtocolSuggestions = (stainType, protocolType) => dataStore.getProtocolSuggestions(stainType, protocolType);
+export const getAllProtocolSuggestions = (protocolType) => dataStore.getAllProtocolSuggestions(protocolType);
 
 // Export constants for sync events
 export const DATA_CHANGE_EVENTS = {

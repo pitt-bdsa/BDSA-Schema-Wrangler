@@ -26,6 +26,7 @@ const CaseManagementTab = () => {
             setDataStatus(newStatus);
 
             // Initialize case ID mappings when data becomes available
+            // This should run every time data changes to re-detect conflicts
             if (newStatus.processedData && newStatus.processedData.length > 0) {
                 dataStore.initializeCaseIdMappingsFromData();
             }
@@ -165,6 +166,16 @@ const CaseManagementTab = () => {
         const localConflictCount = Object.keys(localCaseIdConflicts).length;
         const bdsaConflictCount = Object.keys(bdsaCaseIdConflicts).length;
 
+        // Debug logging to see what's happening
+        console.log('🔍 Conflict Detection Debug:', {
+            localConflictCount,
+            bdsaConflictCount,
+            localCaseIdConflicts,
+            bdsaCaseIdConflicts,
+            totalCases: allCases.length,
+            processedDataLength: dataStatus.processedData?.length
+        });
+
         return {
             unmappedSlides,
             mappedCases,
@@ -174,7 +185,7 @@ const CaseManagementTab = () => {
             localConflictCount,
             bdsaConflictCount
         };
-    }, [dataStatus.processedData]);
+    }, [dataStatus.processedData, dataStatus.caseIdConflicts, dataStatus.bdsaCaseIdConflicts]);
 
     // Generate sequential BDSA Case ID (alias for generateCaseId)
     const generateCaseId = (localCaseId) => {

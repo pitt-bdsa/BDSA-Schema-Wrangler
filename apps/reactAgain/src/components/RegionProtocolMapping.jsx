@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import dataStore from '../utils/dataStore';
+import dataStore, { getProtocolSuggestions } from '../utils/dataStore';
 import protocolStore from '../utils/protocolStore';
 import './StainProtocolMapping.css'; // Reuse the same styles
 
@@ -90,6 +90,43 @@ const RegionProtocolMapping = () => {
         setCurrentCaseIndex(newIndex);
     };
 
+    // Skip to next case with unmapped region protocols
+    const handleSkipToNextUnmapped = () => {
+        // Force a refresh of the cases data to get the latest state
+        const freshCases = dataStore.generateRegionProtocolCases();
+        let foundIndex = -1;
+
+        // Search forward from current position
+        for (let i = 0; i < freshCases.length; i++) {
+            const caseIndex = (currentCaseIndex + i) % freshCases.length;
+            const caseData = freshCases[caseIndex];
+
+            if (caseData && caseData.slides) {
+                const allRegionSlides = getAllRegionSlides(caseData);
+                const regionGroups = groupSlidesByRegionType(allRegionSlides);
+
+                // Check if any region group has unmapped slides
+                const hasUnmapped = Object.entries(regionGroups).some(([regionType, slides]) => {
+                    const unmappedCount = slides.filter(s => !s.regionProtocols || s.regionProtocols.length === 0).length;
+                    return unmappedCount > 0;
+                });
+
+                if (hasUnmapped) {
+                    foundIndex = caseIndex;
+                    break;
+                }
+            }
+        }
+
+        if (foundIndex !== -1) {
+            setCurrentCaseIndex(foundIndex);
+            console.log(`⏭️ Skipped to case ${freshCases[foundIndex].bdsaId} with unmapped region protocols`);
+        } else {
+            console.log('🎉 No more cases with unmapped region protocols found!');
+            alert('🎉 Great job! No more cases with unmapped region protocols found.');
+        }
+    };
+
     // Toggle group expansion
     const toggleGroupExpansion = (regionType) => {
         const newExpanded = new Set(expandedGroups);
@@ -135,6 +172,86 @@ const RegionProtocolMapping = () => {
         console.log(`✅ Removed protocol ${protocolToRemove} from ${slides.length} slides`);
     };
 
+    // Get suggestion for a specific region type
+    const getSuggestionForRegionType = (regionType) => {
+        return getProtocolSuggestions(regionType, 'region');
+    };
+
+    // Check if a protocol is suggested for a region type
+    const isProtocolSuggested = (protocolName, regionType) => {
+        const suggestion = getSuggestionForRegionType(regionType);
+        return suggestion.suggested === protocolName;
+    };
+
+    // Get suggestion confidence for a protocol
+    const getSuggestionConfidence = (protocolName, regionType) => {
+        const suggestion = getSuggestionForRegionType(regionType);
+        return suggestion.suggested === protocolName ? suggestion.confidence : 0;
+    };
+
+    // Auto-apply suggestions for the current case
+    const handleAutoApplySuggestions = () => {
+        const currentCase = cases[currentCaseIndex];
+        if (!currentCase) return;
+
+        const allRegionSlides = getAllRegionSlides(currentCase);
+        const regionGroups = groupSlidesByRegionType(allRegionSlides);
+
+        let appliedCount = 0;
+        let skippedCount = 0;
+        const skippedTypes = [];
+
+        console.log('🚀 Starting auto-apply suggestions for case:', currentCase.bdsaId);
+
+        Object.entries(regionGroups).forEach(([regionType, slides]) => {
+            const suggestion = getSuggestionForRegionType(regionType);
+            console.log(`🔍 Processing region type "${regionType}":`, suggestion);
+
+            // Only apply if we have high confidence (>= 80%) and it's an exact match
+            if (suggestion.suggested && suggestion.confidence >= 0.8 && suggestion.isExactMatch) {
+                // Check if this protocol is already fully applied to all slides
+                const alreadyApplied = slides.every(slide =>
+                    slide.regionProtocols && slide.regionProtocols.includes(suggestion.suggested)
+                );
+
+                if (!alreadyApplied) {
+                    console.log(`✅ Applying suggestion: ${regionType} → ${suggestion.suggested}`);
+                    handleApplyRegionProtocol(slides, suggestion.suggested);
+                    appliedCount++;
+                } else {
+                    console.log(`ℹ️ Suggestion already applied: ${regionType} → ${suggestion.suggested}`);
+                }
+            } else {
+                skippedCount++;
+                skippedTypes.push({
+                    type: regionType,
+                    reason: suggestion.suggested
+                        ? `Low confidence (${Math.round(suggestion.confidence * 100)}%)`
+                        : 'No suggestion available'
+                });
+                console.log(`⚠️ Skipping ${regionType}:`, suggestion.suggested ? `Low confidence (${Math.round(suggestion.confidence * 100)}%)` : 'No suggestion');
+            }
+        });
+
+        // Show results with better feedback
+        console.log(`🎯 Auto-apply complete: ${appliedCount} applied, ${skippedCount} skipped`);
+
+        // Log results to console instead of showing alert
+        if (appliedCount > 0) {
+            const message = `✅ Auto-applied ${appliedCount} region protocol suggestion(s)!` +
+                (skippedCount > 0
+                    ? ` ⚠️ Skipped ${skippedCount} region type(s) due to ambiguity: ${skippedTypes.map(t => `${t.type} (${t.reason})`).join(', ')}`
+                    : ' 🎉 All suggestions applied successfully!'
+                );
+            console.log(message);
+        } else {
+            const message = skippedCount > 0
+                ? `⚠️ No suggestions applied. Skipped ${skippedCount} region type(s) due to ambiguity: ${skippedTypes.map(t => `${t.type} (${t.reason})`).join(', ')}`
+                : 'ℹ️ No region types found in this case.';
+            console.log(message);
+        }
+    };
+
     if (cases.length === 0) {
         return (
             <div className="stain-protocol-mapping">
@@ -178,6 +295,22 @@ const RegionProtocolMapping = () => {
                         disabled={cases.length <= 1}
                     >
                         →
+                    </button>
+                </div>
+                <div className="auto-apply-section">
+                    <button
+                        className="auto-apply-btn"
+                        onClick={handleAutoApplySuggestions}
+                        title="Automatically apply high-confidence region protocol suggestions to this case"
+                    >
+                        ⚡ Auto-Apply Suggestions
+                    </button>
+                    <button
+                        className="skip-unmapped-btn"
+                        onClick={handleSkipToNextUnmapped}
+                        title="Skip to the next case that has unmapped region protocols"
+                    >
+                        ⏭️ Skip to Next Unmapped
                     </button>
                 </div>
             </div>
@@ -261,16 +394,22 @@ const RegionProtocolMapping = () => {
                                                 .map(protocol => {
                                                     const isPartiallyApplied = allGroupProtocols.includes(protocol.name);
                                                     const currentCount = protocolCounts[protocol.name] || 0;
+                                                    const isSuggested = isProtocolSuggested(protocol.name, regionType);
+                                                    const confidence = getSuggestionConfidence(protocol.name, regionType);
+
                                                     return (
                                                         <button
                                                             key={protocol.id}
-                                                            className={`add-protocol-btn ${isPartiallyApplied ? 'partially-applied' : ''}`}
+                                                            className={`add-protocol-btn ${isPartiallyApplied ? 'partially-applied' : ''} ${isSuggested ? 'suggested' : ''}`}
                                                             onClick={() => handleApplyRegionProtocol(slides, protocol.name)}
-                                                            title={isPartiallyApplied
-                                                                ? `Apply ${protocol.name} to remaining ${slides.length - currentCount} slides`
-                                                                : `Add ${protocol.name} to all slides`
+                                                            title={isSuggested
+                                                                ? `⭐ SUGGESTED: ${protocol.name} (${Math.round(confidence * 100)}% confidence) - ${getSuggestionForRegionType(regionType).reason}`
+                                                                : isPartiallyApplied
+                                                                    ? `Apply ${protocol.name} to remaining ${slides.length - currentCount} slides`
+                                                                    : `Add ${protocol.name} to all slides`
                                                             }
                                                         >
+                                                            {isSuggested && '⭐ '}
                                                             + {protocol.name}
                                                             {isPartiallyApplied && ` (${currentCount}/${slides.length})`}
                                                         </button>

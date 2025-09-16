@@ -137,35 +137,63 @@ const CaseIdMappingSection = ({
                             <h4>BDSA Case ID Conflicts ({stats.bdsaConflictCount})</h4>
                             <p>Same BDSA Case ID mapped to multiple local case IDs:</p>
                             <div className="conflict-list">
-                                {Object.entries(stats.bdsaCaseIdConflicts).map(([bdsaCaseId, localCaseIds]) => (
-                                    <div key={bdsaCaseId} className="conflict-item">
-                                        <div className="conflict-header">
-                                            <strong>{bdsaCaseId}</strong>
-                                            <span className="conflict-count">→ {localCaseIds.length} Local IDs</span>
+                                {Object.entries(stats.bdsaCaseIdConflicts).map(([bdsaCaseId, localCaseIds]) => {
+                                    // Check if this conflict is resolved or cleared
+                                    const isResolved = localCaseIds.includes('RESOLVED');
+                                    const isCleared = localCaseIds.includes('CLEARED');
+                                    const isActive = !isResolved && !isCleared;
+
+                                    // Filter out the status markers for display
+                                    const displayLocalIds = localCaseIds.filter(id => id !== 'RESOLVED' && id !== 'CLEARED');
+
+                                    return (
+                                        <div key={bdsaCaseId} className={`conflict-item ${isResolved ? 'resolved' : isCleared ? 'cleared' : 'active'}`}>
+                                            <div className="conflict-header">
+                                                <strong>{bdsaCaseId}</strong>
+                                                <span className="conflict-count">
+                                                    {isResolved ? '✅ Resolved' : isCleared ? '🗑️ Cleared' : `→ ${displayLocalIds.length} Local IDs`}
+                                                </span>
+                                            </div>
+                                            {isActive && (
+                                                <div className="conflict-options">
+                                                    {displayLocalIds.map((localCaseId) => (
+                                                        <button
+                                                            key={localCaseId}
+                                                            className="resolve-conflict-btn"
+                                                            onClick={() => {
+                                                                dataStore.resolveBdsaCaseIdConflict(bdsaCaseId, localCaseId);
+                                                            }}
+                                                        >
+                                                            Keep: {localCaseId}
+                                                        </button>
+                                                    ))}
+                                                    <button
+                                                        className="clear-conflict-btn"
+                                                        onClick={() => {
+                                                            dataStore.clearBdsaCaseIdConflict(bdsaCaseId);
+                                                        }}
+                                                    >
+                                                        Clear All
+                                                    </button>
+                                                </div>
+                                            )}
+                                            {(isResolved || isCleared) && (
+                                                <div className="conflict-status">
+                                                    {isResolved && (
+                                                        <span className="status-message">
+                                                            ✅ Resolved: Kept mapping for {displayLocalIds[0]}
+                                                        </span>
+                                                    )}
+                                                    {isCleared && (
+                                                        <span className="status-message">
+                                                            🗑️ Cleared: Removed BDSA Case ID from all items
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
-                                        <div className="conflict-options">
-                                            {localCaseIds.map((localCaseId) => (
-                                                <button
-                                                    key={localCaseId}
-                                                    className="resolve-conflict-btn"
-                                                    onClick={() => {
-                                                        dataStore.resolveBdsaCaseIdConflict(bdsaCaseId, localCaseId);
-                                                    }}
-                                                >
-                                                    Keep: {localCaseId}
-                                                </button>
-                                            ))}
-                                            <button
-                                                className="clear-conflict-btn"
-                                                onClick={() => {
-                                                    dataStore.clearBdsaCaseIdConflict(bdsaCaseId);
-                                                }}
-                                            >
-                                                Clear All
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     )}

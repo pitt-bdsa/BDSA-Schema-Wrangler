@@ -371,17 +371,46 @@
     background-color: #c82333;
 }
 
+/* Conflict status styles */
+.conflict-item.resolved {
+    background-color: #d4edda;
+    border-left: 4px solid #28a745;
+}
+
+.conflict-item.cleared {
+    background-color: #f8d7da;
+    border-left: 4px solid #dc3545;
+}
+
+.conflict-item.active {
+    background-color: #fff3cd;
+    border-left: 4px solid #ffc107;
+}
+
+.conflict-status {
+    margin-top: 8px;
+    padding: 8px;
+    background-color: rgba(255, 255, 255, 0.7);
+    border-radius: 4px;
+}
+
+.status-message {
+    font-size: 14px;
+    font-weight: 500;
+    color: #495057;
+}
+
 .conflict-stat {
     background-color: #fff3cd !important;
     border: 1px solid #ffeaa7 !important;
 }
 
 .conflict-stat .stat-number.conflict {
-    color: #856404 !important;
+    color: #ffc107 !important;
 }
 
 .conflict-stat .stat-label {
-    color: #856404 !important;
+    color: #ffc107 !important;
 }
 
 /* Case ID Mapping Table */
