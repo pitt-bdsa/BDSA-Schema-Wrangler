@@ -7,8 +7,7 @@ const ProtocolFormFields = ({
     errors,
     onFieldChange,
     onStainTypeChange,
-    onRegionTypeChange,
-    onDamageChange
+    onRegionTypeChange
 }) => {
     const renderStainFields = () => {
         return (
@@ -181,19 +180,17 @@ const ProtocolFormFields = ({
                         </div>
 
                         <div className="form-group">
-                            <label>Damage</label>
-                            <div className="checkbox-group">
-                                {schemaValidator.getDamageOptions().map(option => (
-                                    <label key={option.value} className="checkbox-label">
-                                        <input
-                                            type="checkbox"
-                                            checked={formData.damage.includes(option.value)}
-                                            onChange={(e) => onDamageChange(option.value, e.target.checked)}
-                                        />
-                                        {option.label}
-                                    </label>
-                                ))}
-                            </div>
+                            <label htmlFor="sliceThickness">Slice Thickness (μm)</label>
+                            <input
+                                type="number"
+                                id="sliceThickness"
+                                value={formData.sliceThickness || ''}
+                                onChange={(e) => onFieldChange('sliceThickness', parseFloat(e.target.value) || '')}
+                                placeholder="Enter thickness in microns"
+                                min="0.1"
+                                max="1000"
+                                step="0.1"
+                            />
                         </div>
                     </>
                 )}

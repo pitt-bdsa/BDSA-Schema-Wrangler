@@ -17,7 +17,7 @@ const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
         subRegion: '',
         hemisphere: '',
         sliceOrientation: '',
-        damage: []
+        sliceThickness: ''
     });
     const [errors, setErrors] = useState({});
     const [isLoading, setIsLoading] = useState(false);
@@ -47,7 +47,7 @@ const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
                 subRegion: protocol.subRegion || '',
                 hemisphere: protocol.hemisphere || '',
                 sliceOrientation: protocol.sliceOrientation || '',
-                damage: protocol.damage || []
+                sliceThickness: protocol.sliceThickness || ''
             });
         }
     }, [protocol]);

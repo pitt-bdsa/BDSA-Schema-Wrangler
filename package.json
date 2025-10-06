@@ -8,7 +8,7 @@
     "apps/*"
   ],
   "scripts": {
-    "dev:react-again": "cd apps/reactAgain && npm run dev",
+    "dev:wrangler": "cd apps/wrangler && npm run dev",
     "dev:sync-app": "cd apps/react-sync-app && npm run dev",
     "build:all": "npm run build --workspaces",
     "install:all": "npm install",

@@ -346,6 +346,14 @@
                             "TBI"
                         ]
                     }
+                },
+                "sliceThickness": {
+                    "type": "number",
+                    "title": "Slice Thickness",
+                    "description": "Thickness of the tissue slice in microns (μm). This represents the physical thickness of the tissue section.",
+                    "minimum": 0.1,
+                    "maximum": 1000,
+                    "multipleOf": 0.1
                 }
             }
         }

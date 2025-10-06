@@ -24,7 +24,7 @@ if ! docker info > /dev/null 2>&1; then
 fi
 
 # Check if schema files exist in the source location
-SCHEMA_SOURCE_DIR="../../apps/reactAgain/public"
+SCHEMA_SOURCE_DIR="../../apps/wrangler/public"
 if [ ! -d "$SCHEMA_SOURCE_DIR" ]; then
     echo -e "${RED}❌ Error: Schema source directory not found at $SCHEMA_SOURCE_DIR${NC}"
     exit 1
