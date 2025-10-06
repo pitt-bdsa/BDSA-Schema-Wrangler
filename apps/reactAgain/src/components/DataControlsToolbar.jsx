@@ -8,6 +8,9 @@ const DataControlsToolbar = ({
     csvFile,
     handleCsvFileChange,
     handleLoadCsv,
+    excelFile,
+    handleExcelFileChange,
+    handleLoadExcel,
     isLoading,
     authStatus,
     handleLoadDsa,
@@ -29,6 +32,7 @@ const DataControlsToolbar = ({
                     className="data-source-dropdown"
                 >
                     <option value={DATA_SOURCE_TYPES.CSV}>CSV File</option>
+                    <option value={DATA_SOURCE_TYPES.EXCEL}>Excel File</option>
                     <option value={DATA_SOURCE_TYPES.DSA}>Digital Slide Archive</option>
                 </select>
             </div>
@@ -53,6 +57,30 @@ const DataControlsToolbar = ({
                         disabled={!csvFile || isLoading}
                     >
                         Load CSV Data
+                    </button>
+                </>
+            )}
+
+            {dataSource === DATA_SOURCE_TYPES.EXCEL && (
+                <>
+                    <div className="file-input-container">
+                        <input
+                            type="file"
+                            id="excel-file"
+                            accept=".xlsx,.xls"
+                            onChange={handleExcelFileChange}
+                            className="file-input"
+                        />
+                        <label htmlFor="excel-file" className="file-input-label">
+                            {excelFile ? excelFile.name : 'Choose Excel File'}
+                        </label>
+                    </div>
+                    <button
+                        className="load-excel-btn"
+                        onClick={handleLoadExcel}
+                        disabled={!excelFile || isLoading}
+                    >
+                        Load Excel Data
                     </button>
                 </>
             )}

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import dsaAuthStore from '../utils/dsaAuthStore';
+import DSAClient from '../utils/dsaClient';
+import DSAFolderBrowserModal from './DSAFolderBrowserModal';
 import './DsaConfigModal.css';
 
 const DsaConfigModal = ({ onSave, onClose }) => {
@@ -8,6 +10,10 @@ const DsaConfigModal = ({ onSave, onClose }) => {
     const [testResult, setTestResult] = useState(null);
     const [errors, setErrors] = useState({});
     const [urlNormalized, setUrlNormalized] = useState(false);
+
+    // Folder browser state
+    const [showFolderBrowser, setShowFolderBrowser] = useState(false);
+    const [dsaClient, setDsaClient] = useState(null);
 
     useEffect(() => {
         setConfig(dsaAuthStore.config);
@@ -124,144 +130,194 @@ const DsaConfigModal = ({ onSave, onClose }) => {
         onSave(config);
     };
 
+    // Folder browser handlers
+    const openFolderBrowser = () => {
+        if (!config.baseUrl.trim()) {
+            setErrors(prev => ({ ...prev, baseUrl: 'Please enter a DSA server URL first' }));
+            return;
+        }
+
+        // Create DSA client
+        const client = new DSAClient(config.baseUrl, dsaAuthStore.token);
+        setDsaClient(client);
+        setShowFolderBrowser(true);
+    };
+
+    const closeFolderBrowser = () => {
+        setShowFolderBrowser(false);
+        setDsaClient(null);
+    };
+
+    const handleResourceSelect = (resource) => {
+        console.log('Selected resource:', resource);
+        setConfig(prev => ({
+            ...prev,
+            resourceId: resource._id,
+            resourceType: resource.type
+        }));
+        closeFolderBrowser();
+    };
+
     const isFormValid = config.baseUrl.trim() && config.resourceId.trim() && Object.keys(errors).length === 0;
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content config-modal" onClick={(e) => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2>DSA Server Configuration</h2>
-                    <button className="close-button" onClick={onClose}>×</button>
-                </div>
+        <>
+            <div className="modal-overlay" onClick={onClose}>
+                <div className="modal-content config-modal" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal-header">
+                        <h2>DSA Server Configuration</h2>
+                        <button className="close-button" onClick={onClose}>×</button>
+                    </div>
 
-                <div className="config-form">
-                    <div className="form-group">
-                        <label htmlFor="baseUrl">DSA Server URL *</label>
-                        <input
-                            type="url"
-                            id="baseUrl"
-                            value={config.baseUrl}
-                            onChange={(e) => handleFieldChange('baseUrl', e.target.value)}
-                            placeholder="https://your-dsa-server.com"
-                            className={errors.baseUrl ? 'error' : ''}
-                        />
-                        {errors.baseUrl && <div className="error-message">{errors.baseUrl}</div>}
-                        {urlNormalized && (
-                            <div className="normalization-indicator">
-                                ✨ URL automatically cleaned up
+                    <div className="config-form">
+                        <div className="form-group">
+                            <label htmlFor="baseUrl">DSA Server URL *</label>
+                            <input
+                                type="url"
+                                id="baseUrl"
+                                value={config.baseUrl}
+                                onChange={(e) => handleFieldChange('baseUrl', e.target.value)}
+                                placeholder="https://your-dsa-server.com"
+                                className={errors.baseUrl ? 'error' : ''}
+                            />
+                            {errors.baseUrl && <div className="error-message">{errors.baseUrl}</div>}
+                            {urlNormalized && (
+                                <div className="normalization-indicator">
+                                    ✨ URL automatically cleaned up
+                                </div>
+                            )}
+                            <div className="field-help">
+                                The base URL of your Digital Slide Archive server (e.g., http://multiplex.pathology.emory.edu:8080)
+                                <br />
+                                <small>💡 Tip: Don't include /api/v1 - it will be added automatically</small>
+                            </div>
+                        </div>
+
+                        <div className="form-group">
+                            <label htmlFor="resourceId">Resource ID *</label>
+                            <div className="input-with-button">
+                                <input
+                                    type="text"
+                                    id="resourceId"
+                                    value={config.resourceId}
+                                    onChange={(e) => handleFieldChange('resourceId', e.target.value)}
+                                    placeholder="e.g., 507f1f77bcf86cd799439011"
+                                    className={errors.resourceId ? 'error' : ''}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={openFolderBrowser}
+                                    className="browse-button"
+                                    disabled={!config.baseUrl.trim()}
+                                    title={!config.baseUrl.trim() ? 'Enter DSA server URL first' : 'Browse DSA folders and collections'}
+                                >
+                                    Browse
+                                </button>
+                            </div>
+                            {errors.resourceId && <div className="error-message">{errors.resourceId}</div>}
+                            <div className="field-help">
+                                The ID of the DSA resource (folder or collection) you want to access
+                            </div>
+                        </div>
+
+                        <div className="form-group">
+                            <label htmlFor="resourceType">Resource Type</label>
+                            <select
+                                id="resourceType"
+                                value={config.resourceType}
+                                onChange={(e) => handleFieldChange('resourceType', e.target.value)}
+                            >
+                                <option value="folder">Folder</option>
+                                <option value="collection">Collection</option>
+                            </select>
+                            <div className="field-help">
+                                The type of DSA resource (usually 'folder')
+                            </div>
+                        </div>
+
+                        <div className="form-group">
+                            <label htmlFor="fetchStrategy">Fetch Strategy</label>
+                            <select
+                                id="fetchStrategy"
+                                value={config.fetchStrategy}
+                                onChange={(e) => handleFieldChange('fetchStrategy', e.target.value)}
+                            >
+                                <option value="unlimited">Unlimited (recommended)</option>
+                                <option value="paginate">Paginated</option>
+                            </select>
+                            <div className="field-help">
+                                How to fetch data from the server (unlimited is faster for most cases)
+                            </div>
+                        </div>
+
+                        {config.fetchStrategy === 'paginate' && (
+                            <div className="form-group">
+                                <label htmlFor="pageSize">Page Size</label>
+                                <input
+                                    type="number"
+                                    id="pageSize"
+                                    value={config.pageSize}
+                                    onChange={(e) => handleFieldChange('pageSize', parseInt(e.target.value) || 100)}
+                                    min="1"
+                                    max="1000"
+                                    className={errors.pageSize ? 'error' : ''}
+                                />
+                                {errors.pageSize && <div className="error-message">{errors.pageSize}</div>}
+                                <div className="field-help">
+                                    Number of items to fetch per page (1-1000)
+                                </div>
                             </div>
                         )}
-                        <div className="field-help">
-                            The base URL of your Digital Slide Archive server (e.g., http://multiplex.pathology.emory.edu:8080)
-                            <br />
-                            <small>💡 Tip: Don't include /api/v1 - it will be added automatically</small>
-                        </div>
-                    </div>
 
-                    <div className="form-group">
-                        <label htmlFor="resourceId">Resource ID *</label>
-                        <input
-                            type="text"
-                            id="resourceId"
-                            value={config.resourceId}
-                            onChange={(e) => handleFieldChange('resourceId', e.target.value)}
-                            placeholder="e.g., 507f1f77bcf86cd799439011"
-                            className={errors.resourceId ? 'error' : ''}
-                        />
-                        {errors.resourceId && <div className="error-message">{errors.resourceId}</div>}
-                        <div className="field-help">
-                            The ID of the DSA resource (folder or collection) you want to access
-                        </div>
-                    </div>
-
-                    <div className="form-group">
-                        <label htmlFor="resourceType">Resource Type</label>
-                        <select
-                            id="resourceType"
-                            value={config.resourceType}
-                            onChange={(e) => handleFieldChange('resourceType', e.target.value)}
-                        >
-                            <option value="folder">Folder</option>
-                            <option value="collection">Collection</option>
-                        </select>
-                        <div className="field-help">
-                            The type of DSA resource (usually 'folder')
-                        </div>
-                    </div>
-
-                    <div className="form-group">
-                        <label htmlFor="fetchStrategy">Fetch Strategy</label>
-                        <select
-                            id="fetchStrategy"
-                            value={config.fetchStrategy}
-                            onChange={(e) => handleFieldChange('fetchStrategy', e.target.value)}
-                        >
-                            <option value="unlimited">Unlimited (recommended)</option>
-                            <option value="paginate">Paginated</option>
-                        </select>
-                        <div className="field-help">
-                            How to fetch data from the server (unlimited is faster for most cases)
-                        </div>
-                    </div>
-
-                    {config.fetchStrategy === 'paginate' && (
-                        <div className="form-group">
-                            <label htmlFor="pageSize">Page Size</label>
-                            <input
-                                type="number"
-                                id="pageSize"
-                                value={config.pageSize}
-                                onChange={(e) => handleFieldChange('pageSize', parseInt(e.target.value) || 100)}
-                                min="1"
-                                max="1000"
-                                className={errors.pageSize ? 'error' : ''}
-                            />
-                            {errors.pageSize && <div className="error-message">{errors.pageSize}</div>}
-                            <div className="field-help">
-                                Number of items to fetch per page (1-1000)
+                        {testResult && (
+                            <div className={`test-result ${testResult.type}`}>
+                                <div className="test-result-icon">
+                                    {testResult.type === 'success' ? '✅' : '❌'}
+                                </div>
+                                <div className="test-result-message">
+                                    {testResult.message}
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
 
-                    {testResult && (
-                        <div className={`test-result ${testResult.type}`}>
-                            <div className="test-result-icon">
-                                {testResult.type === 'success' ? '✅' : '❌'}
-                            </div>
-                            <div className="test-result-message">
-                                {testResult.message}
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                <div className="modal-actions">
-                    <button
-                        className="test-button"
-                        onClick={handleTestConnection}
-                        disabled={!config.baseUrl.trim() || isTesting}
-                    >
-                        {isTesting ? 'Testing...' : 'Test Connection'}
-                    </button>
-
-                    <div className="action-buttons">
+                    <div className="modal-actions">
                         <button
-                            className="cancel-button"
-                            onClick={onClose}
+                            className="test-button"
+                            onClick={handleTestConnection}
+                            disabled={!config.baseUrl.trim() || isTesting}
                         >
-                            Cancel
+                            {isTesting ? 'Testing...' : 'Test Connection'}
                         </button>
-                        <button
-                            className="save-button"
-                            onClick={handleSave}
-                            disabled={!isFormValid}
-                        >
-                            Save Configuration
-                        </button>
+
+                        <div className="action-buttons">
+                            <button
+                                className="cancel-button"
+                                onClick={onClose}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="save-button"
+                                onClick={handleSave}
+                                disabled={!isFormValid}
+                            >
+                                Save Configuration
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+
+            {/* DSA Folder Browser Modal */}
+            <DSAFolderBrowserModal
+                isOpen={showFolderBrowser}
+                onClose={closeFolderBrowser}
+                dsaClient={dsaClient}
+                onSelectResource={handleResourceSelect}
+                title="Select DSA Resource"
+            />
+        </>
     );
 };
 

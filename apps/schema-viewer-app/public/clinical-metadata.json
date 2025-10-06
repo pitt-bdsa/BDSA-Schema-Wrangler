@@ -1,0 +1,113 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://example.com/product.schema.json",
+    "title": "BDSA Clinical Metadata Schema",
+    "type": "object",
+    "description": "The metadata fields that each case must have to include in the BDSA database, based on NACC fields.",
+    "required": [
+        "NPSEX",
+        "NACCDAGE",
+        "EDUC",
+        "HISPANIC",
+        "NACCUDSD",
+        "RACE",
+        "NPPMIH",
+        "NPADNC"
+    ],
+    "properties": {
+        "NACCID": {
+            "type": "string",
+            "title": "NACC ID",
+            "description": "NACCID is a unique identifier for each case in the NACC database."
+        },
+        "NPSEX": {
+            "type": "integer",
+            "title": "Sex",
+            "enum": [
+                1,
+                2
+            ],
+            "description": "1=male, 2=female. NACC variable.\nCDE: `sex`",
+            "cde": "sex"
+        },
+        "NACCDAGE": {
+            "type": "integer",
+            "title": "Age at Death",
+            "description": "Age at death in years. NACC variable.\nCDE: `age_at_death`",
+            "cde": "age_at_death"
+        },
+        "EDUC": {
+            "type": "integer",
+            "title": "Years of Education",
+            "description": "Number of years of formal education. NACC variable.\nCDE: `years_of_education`",
+            "cde": "years_of_education"
+        },
+        "HISPANIC": {
+            "type": "integer",
+            "title": "Hispanic Ethnicity",
+            "enum": [
+                0,
+                1,
+                9
+            ],
+            "description": "Hispanic ethnicity, 0=No, 1=Yes, 9=Unknown. NACC variable.\nCDE: `ethnicity`",
+            "cde": "ethnicity"
+        },
+        "RACE": {
+            "type": "integer",
+            "title": "Race",
+            "enum": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                50,
+                99
+            ],
+            "description": "Ethnoracial group, 1=White; 2= Black or African American; 3=American Indian or Alaska Native; 4=Native Hawaiian or Other Pacific Islander; 5=Asian; 50=Other; 99=Unknown. NACC variable.\nCDE: `race`",
+            "cde": "race"
+        },
+        "NACCUDSD": {
+            "type": "integer",
+            "title": "Final Cognitive Status",
+            "enum": [
+                1,
+                2,
+                3,
+                4
+            ],
+            "description": "Final cognitive status, 1 = Normal cognition; 2 = Impaired-not-MCI; 3 = MCI; 4 = Dementia. NACC variable.\nCDE: `cog_status`",
+            "cde": "cog_status"
+        },
+        "NPPMIH": {
+            "type": "number",
+            "title": "Postmortem Interval (PMI) Hours",
+            "description": "Number of hours between death and brain removal, 0.0–98.9 99.9 = Unknown- 4 = Not available. NACC variable.\nCDE: `path_PMI_hours`",
+            "cde": "path_PMI_hours"
+        },
+        "NPADNC": {
+            "type": "integer",
+            "enum": [
+                0,
+                1,
+                2,
+                3,
+                8,
+                9
+            ],
+            "title": "ADNC Severity Score",
+            "description": "NIA RI Criteria. 0 = Not AD; 1 = Low ADNC; 2 = Intermediate ADNC; 3 = High ADNC; 8 = Not assessed; 9 = Missing/unknown. NACC variable.\nCDE: `path_nia_ri`",
+            "cde": "path_nia_ri"
+        },
+        "NPWBRWT": {
+            "type": "integer",
+            "title": "Whole Brain Weight",
+            "description": "Fresh brain weight in grams. NACC variable.\nCDE: `brain_weight`",
+            "cde": "brain_weight"
+        }
+    },
+    "additionalProperties": {
+        "show_additional_properties": true
+    }
+}

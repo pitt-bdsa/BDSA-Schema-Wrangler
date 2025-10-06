@@ -413,6 +413,36 @@ export class DSAApiClient {
     }
   }
 
+  // Get all collections
+  async getCollections(): Promise<DSAItem[]> {
+    try {
+      const response = await this.client.get('/api/v1/collection', {
+        params: { limit: 0 }
+      });
+      return response.data || [];
+    } catch (error: any) {
+      console.error('Failed to get collections:', error);
+      throw new Error(`Failed to get collections: ${error.message}`);
+    }
+  }
+
+  // Get folders in a collection or folder
+  async getFolders(parentId: string, parentType: 'folder' | 'collection' = 'collection'): Promise<DSAItem[]> {
+    try {
+      const response = await this.client.get('/api/v1/folder', {
+        params: {
+          parentType,
+          parentId,
+          limit: 0
+        }
+      });
+      return response.data || [];
+    } catch (error: any) {
+      console.error('Failed to get folders:', error);
+      throw new Error(`Failed to get folders: ${error.message}`);
+    }
+  }
+
   // File upload operations
   async uploadFile(parentId: string, file: File, parentType: 'folder' | 'collection' = 'collection', replaceExisting: boolean = true): Promise<{ success: boolean; item?: DSAItem; error?: string }> {
     try {

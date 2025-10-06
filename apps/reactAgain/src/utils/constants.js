@@ -103,6 +103,7 @@ export const DEFAULT_REGEX_RULES = {
 // Data source types
 export const DATA_SOURCE_TYPES = {
     CSV: 'csv',
+    EXCEL: 'excel',
     DSA: 'dsa'
 };
 

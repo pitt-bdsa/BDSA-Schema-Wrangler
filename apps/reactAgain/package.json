@@ -10,13 +10,14 @@
         "preview": "vite preview"
     },
     "dependencies": {
-        "react": "^18.2.0",
-        "react-dom": "^18.2.0",
+        "@bdsa/shared-components": "file:../../packages/shared-components",
+        "@bdsa/shared-types": "file:../../packages/shared-types",
+        "@bdsa/shared-utils": "file:../../packages/shared-utils",
         "ag-grid-community": "^31.0.0",
         "ag-grid-react": "^31.0.0",
-        "@bdsa/shared-components": "file:../../packages/shared-components",
-        "@bdsa/shared-utils": "file:../../packages/shared-utils",
-        "@bdsa/shared-types": "file:../../packages/shared-types"
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0",
+        "xlsx": "^0.18.5"
     },
     "devDependencies": {
         "@types/react": "^18.2.66",

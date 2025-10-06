@@ -1,5 +1,7 @@
-// Data Store - Manages loaded data from CSV files and DSA servers
+// Data Store - Manages loaded data from CSV files, Excel files and DSA servers
 // with localStorage persistence and data transformation
+
+import * as XLSX from 'xlsx';
 
 class DataStore {
     constructor() {
@@ -299,6 +301,87 @@ class DataStore {
         }
 
         return data;
+    }
+
+    // Excel Data Loading - Get sheet names first
+    async getExcelSheetNames(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+                try {
+                    const data = e.target.result;
+                    const workbook = XLSX.read(data, { type: 'binary' });
+                    resolve(workbook.SheetNames);
+                } catch (error) {
+                    reject(new Error(`Failed to read Excel file: ${error.message}`));
+                }
+            };
+
+            reader.onerror = () => {
+                reject(new Error('Failed to read Excel file'));
+            };
+
+            reader.readAsBinaryString(file);
+        });
+    }
+
+    // Excel Data Loading - Load specific sheet
+    async loadExcelData(file, sheetName = null) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+                try {
+                    const data = e.target.result;
+                    const workbook = XLSX.read(data, { type: 'binary' });
+
+                    // Use provided sheet name or first sheet
+                    const targetSheetName = sheetName || workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[targetSheetName];
+
+                    if (!worksheet) {
+                        throw new Error(`Sheet "${targetSheetName}" not found`);
+                    }
+
+                    // Convert to JSON
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+                    this.processedData = this.initializeBdsaStructure(jsonData);
+                    this.dataSource = 'excel';
+                    this.dataSourceInfo = {
+                        fileName: file.name,
+                        fileSize: file.size,
+                        lastModified: file.lastModified,
+                        sheetName: targetSheetName
+                    };
+                    this.dataLoadTimestamp = new Date().toISOString();
+                    this.modifiedItems.clear();
+
+                    // Clear case ID mappings when loading new data (they're specific to the previous dataset)
+                    this.caseIdMappings.clear();
+                    this.caseIdConflicts.clear();
+                    this.bdsaCaseIdConflicts.clear();
+
+                    this.saveToStorage();
+                    this.notify();
+
+                    resolve({
+                        success: true,
+                        itemCount: jsonData.length,
+                        message: `Successfully loaded ${jsonData.length} items from Excel sheet "${targetSheetName}"`
+                    });
+                } catch (error) {
+                    reject(new Error(`Failed to parse Excel file: ${error.message}`));
+                }
+            };
+
+            reader.onerror = () => {
+                reject(new Error('Failed to read Excel file'));
+            };
+
+            reader.readAsBinaryString(file);
+        });
     }
 
     parseCsvLine(line) {

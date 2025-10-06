@@ -6,6 +6,7 @@ import SyncControlsSection from './components/SyncControlsSection';
 import SyncResultsSection from './components/SyncResultsSection';
 import LargeImageConfigSection from './components/LargeImageConfigSection';
 import DebugModal from './components/DebugModal';
+import DSAFolderBrowserModal from './components/DSAFolderBrowserModal';
 import { generateNormalizedName } from './utils/naming';
 import './App.css';
 
@@ -70,6 +71,10 @@ const App = () => {
   const [error, setError] = useState('');
   const [connectionStatus, setConnectionStatus] = useState('');
   const [debugInfo, setDebugInfo] = useState(null);
+
+  // Folder browser modal state
+  const [showFolderBrowser, setShowFolderBrowser] = useState(false);
+  const [folderBrowserType, setFolderBrowserType] = useState('source'); // 'source' or 'target'
 
   // Initialize DSA client when config changes
   useEffect(() => {
@@ -543,6 +548,31 @@ const App = () => {
     window.location.reload();
   };
 
+  // Folder browser handlers
+  const openFolderBrowser = (type) => {
+    setFolderBrowserType(type);
+    setShowFolderBrowser(true);
+  };
+
+  const closeFolderBrowser = () => {
+    setShowFolderBrowser(false);
+  };
+
+  const handleResourceSelect = (resource) => {
+    console.log('Selected resource:', resource);
+
+    if (folderBrowserType === 'source') {
+      handleConfigChange('sourceResourceId', resource._id);
+    } else if (folderBrowserType === 'target') {
+      handleConfigChange('targetResourceId', resource._id);
+    }
+
+    // Also update resource type based on the selected resource
+    handleConfigChange('resourceType', resource.type);
+
+    closeFolderBrowser();
+  };
+
 
   const startSync = async () => {
     console.log('🚀 Start Sync button clicked!');
@@ -781,24 +811,46 @@ const App = () => {
 
             <label>
               Source Folder ID:
-              <input
-                type="text"
-                value={config.sourceResourceId}
-                onChange={(e) => handleConfigChange('sourceResourceId', e.target.value)}
-                placeholder="Source folder or collection ID"
-                disabled={isLoading}
-              />
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  value={config.sourceResourceId}
+                  onChange={(e) => handleConfigChange('sourceResourceId', e.target.value)}
+                  placeholder="Source folder or collection ID"
+                  disabled={isLoading}
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  onClick={() => openFolderBrowser('source')}
+                  disabled={isLoading || !authStatus.isAuthenticated}
+                  style={{ padding: '8px 12px', fontSize: '12px' }}
+                >
+                  Browse
+                </button>
+              </div>
             </label>
 
             <label>
               Target Folder ID:
-              <input
-                type="text"
-                value={config.targetResourceId}
-                onChange={(e) => handleConfigChange('targetResourceId', e.target.value)}
-                placeholder="Target folder or collection ID"
-                disabled={isLoading}
-              />
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  value={config.targetResourceId}
+                  onChange={(e) => handleConfigChange('targetResourceId', e.target.value)}
+                  placeholder="Target folder or collection ID"
+                  disabled={isLoading}
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  onClick={() => openFolderBrowser('target')}
+                  disabled={isLoading || !authStatus.isAuthenticated}
+                  style={{ padding: '8px 12px', fontSize: '12px' }}
+                >
+                  Browse
+                </button>
+              </div>
             </label>
 
             <label>
@@ -1040,6 +1092,15 @@ const App = () => {
           </div>
         </div>
       )}
+
+      {/* DSA Folder Browser Modal */}
+      <DSAFolderBrowserModal
+        isOpen={showFolderBrowser}
+        onClose={closeFolderBrowser}
+        dsaClient={dsaClient}
+        onSelectResource={handleResourceSelect}
+        title={`Select ${folderBrowserType === 'source' ? 'Source' : 'Target'} Resource`}
+      />
     </div>
   );
 };

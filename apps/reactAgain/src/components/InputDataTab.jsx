@@ -6,6 +6,7 @@ import dsaAuthStore from '../utils/dsaAuthStore';
 import RegexRulesModal from './RegexRulesModal';
 import BdsaMappingModal from './BdsaMappingModal';
 import DsaSyncModal from './DsaSyncModal';
+import ExcelSheetSelectionModal from './ExcelSheetSelectionModal';
 import DataControlsToolbar from './DataControlsToolbar';
 import DataGrid from './DataGrid';
 import ColumnVisibilityModal from './ColumnVisibilityModal';
@@ -27,6 +28,9 @@ const InputDataTab = () => {
     const [loadingMessage, setLoadingMessage] = useState('');
     const [error, setError] = useState(null);
     const [csvFile, setCsvFile] = useState(null);
+    const [excelFile, setExcelFile] = useState(null);
+    const [showExcelSheetModal, setShowExcelSheetModal] = useState(false);
+    const [excelSheetNames, setExcelSheetNames] = useState([]);
     // Column visibility management
     const {
         showColumnPanel,
@@ -209,6 +213,73 @@ const InputDataTab = () => {
             }
         } catch (error) {
             console.error('Error loading CSV:', error);
+            setError(error.message);
+        } finally {
+            setIsLoading(false);
+            setLoadingMessage('');
+        }
+    };
+
+    const handleExcelFileChange = (event) => {
+        const file = event.target.files[0];
+        if (file && (file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+            file.type === 'application/vnd.ms-excel' ||
+            file.name.endsWith('.xlsx') ||
+            file.name.endsWith('.xls'))) {
+            setExcelFile(file);
+            setError(null);
+        } else {
+            setError('Please select a valid Excel file (.xlsx or .xls)');
+            setExcelFile(null);
+        }
+    };
+
+    const handleLoadExcel = async () => {
+        if (!excelFile) {
+            setError('Please select an Excel file first');
+            return;
+        }
+
+        setIsLoading(true);
+        setLoadingMessage('Reading Excel file...');
+        setError(null);
+
+        try {
+            // First, get the sheet names
+            const sheetNames = await dataStore.getExcelSheetNames(excelFile);
+
+            if (sheetNames.length === 1) {
+                // Only one sheet, load it directly
+                const result = await dataStore.loadExcelData(excelFile, sheetNames[0]);
+                if (result.success) {
+                    console.log(`✅ Successfully loaded ${result.itemCount} items from Excel`);
+                }
+            } else {
+                // Multiple sheets, show selection modal
+                setExcelSheetNames(sheetNames);
+                setShowExcelSheetModal(true);
+            }
+        } catch (error) {
+            console.error('Error loading Excel:', error);
+            setError(error.message);
+        } finally {
+            setIsLoading(false);
+            setLoadingMessage('');
+        }
+    };
+
+    const handleSheetSelect = async (sheetName) => {
+        setIsLoading(true);
+        setLoadingMessage(`Loading sheet "${sheetName}"...`);
+        setError(null);
+
+        try {
+            const result = await dataStore.loadExcelData(excelFile, sheetName);
+            if (result.success) {
+                console.log(`✅ Successfully loaded ${result.itemCount} items from Excel sheet "${sheetName}"`);
+            }
+        } catch (error) {
+            console.error('Error loading Excel sheet:', error);
             setError(error.message);
         } finally {
             setIsLoading(false);
@@ -521,6 +592,9 @@ const InputDataTab = () => {
                 csvFile={csvFile}
                 handleCsvFileChange={handleCsvFileChange}
                 handleLoadCsv={handleLoadCsv}
+                excelFile={excelFile}
+                handleExcelFileChange={handleExcelFileChange}
+                handleLoadExcel={handleLoadExcel}
                 isLoading={isLoading}
                 authStatus={authStatus}
                 handleLoadDsa={handleLoadDsa}
@@ -608,6 +682,15 @@ const InputDataTab = () => {
             <DsaSyncModal
                 isOpen={showDsaSync}
                 onClose={() => setShowDsaSync(false)}
+            />
+
+            {/* Excel Sheet Selection Modal */}
+            <ExcelSheetSelectionModal
+                isOpen={showExcelSheetModal}
+                onClose={() => setShowExcelSheetModal(false)}
+                sheetNames={excelSheetNames}
+                onSheetSelect={handleSheetSelect}
+                fileName={excelFile?.name || ''}
             />
         </div>
     );

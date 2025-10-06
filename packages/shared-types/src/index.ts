@@ -106,6 +106,7 @@ export interface BDSARegionProtocol extends Protocol {
   hemisphere?: 'left' | 'right';
   sliceOrientation?: 'axial' | 'coronal' | 'sagittal';
   damage?: string[];
+  sliceThickness?: number; // Thickness in microns (μm)
 }
 
 export interface SchemaValidationResult {
