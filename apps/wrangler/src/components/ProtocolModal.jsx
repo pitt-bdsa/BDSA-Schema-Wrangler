@@ -321,6 +321,24 @@ const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
                             {errors.sliceOrientation && <span className="error-message">{errors.sliceOrientation}</span>}
                         </div>
 
+                        {/* Slice Thickness field */}
+                        <div className="form-group">
+                            <label htmlFor="sliceThickness">Slice Thickness (μm)</label>
+                            <input
+                                type="number"
+                                id="sliceThickness"
+                                value={formData.sliceThickness || ''}
+                                onChange={(e) => handleFieldChange('sliceThickness', parseFloat(e.target.value) || '')}
+                                placeholder="Enter thickness in microns"
+                                min="0.1"
+                                max="1000"
+                                step="0.1"
+                                className={errors.sliceThickness ? 'error' : ''}
+                            />
+                            {errors.sliceThickness && <span className="error-message">{errors.sliceThickness}</span>}
+                            <small className="field-hint">Thickness of the tissue slice in microns (μm)</small>
+                        </div>
+
                         {/* Damage field - Hidden for now as it's slide-specific, not protocol-level */}
                         {/* 
                         <div className="form-group">

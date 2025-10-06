@@ -107,6 +107,7 @@ const ProtocolFormFields = ({
     };
 
     const renderRegionFields = () => {
+        console.log('🔍 RENDER REGION FIELDS CALLED', { formData, type });
         return (
             <>
                 <div className="form-group">
@@ -127,6 +128,7 @@ const ProtocolFormFields = ({
                     {errors.regionType && <span className="error-message">{errors.regionType}</span>}
                 </div>
 
+                {/* DEBUG: regionType = ${formData.regionType}, condition = ${formData.regionType && formData.regionType !== 'ignore'} */}
                 {formData.regionType && formData.regionType !== 'ignore' && (
                     <>
                         <div className="form-group">
@@ -179,8 +181,8 @@ const ProtocolFormFields = ({
                             </select>
                         </div>
 
-                        <div className="form-group">
-                            <label htmlFor="sliceThickness">Slice Thickness (μm)</label>
+                        <div className="form-group" style={{ border: '2px solid red', padding: '10px', margin: '10px 0' }}>
+                            <label htmlFor="sliceThickness" style={{ fontWeight: 'bold', color: 'red' }}>🔴 SLICE THICKNESS (μm) - TEST FIELD 🔴</label>
                             <input
                                 type="number"
                                 id="sliceThickness"
@@ -190,10 +192,29 @@ const ProtocolFormFields = ({
                                 min="0.1"
                                 max="1000"
                                 step="0.1"
+                                style={{ width: '100%', padding: '8px', border: '2px solid blue' }}
                             />
+                            <small style={{ color: 'red', fontSize: '12px', fontWeight: 'bold' }}>This field should be visible!</small>
                         </div>
                     </>
                 )}
+
+                {/* TEST FIELD - OUTSIDE CONDITIONAL */}
+                <div className="form-group" style={{ border: '3px solid green', padding: '15px', margin: '15px 0', backgroundColor: 'yellow' }}>
+                    <label htmlFor="sliceThickness" style={{ fontWeight: 'bold', color: 'green', fontSize: '16px' }}>🟢 SLICE THICKNESS TEST - ALWAYS VISIBLE 🟢</label>
+                    <input
+                        type="number"
+                        id="sliceThickness"
+                        value={formData.sliceThickness || ''}
+                        onChange={(e) => onFieldChange('sliceThickness', parseFloat(e.target.value) || '')}
+                        placeholder="Enter thickness in microns"
+                        min="0.1"
+                        max="1000"
+                        step="0.1"
+                        style={{ width: '100%', padding: '10px', border: '3px solid green', fontSize: '14px' }}
+                    />
+                    <small style={{ color: 'green', fontSize: '14px', fontWeight: 'bold' }}>This field should ALWAYS be visible!</small>
+                </div>
             </>
         );
     };
