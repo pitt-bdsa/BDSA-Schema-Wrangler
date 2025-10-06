@@ -15,6 +15,7 @@ export const HIDDEN_DSA_FIELDS = [
     'meta.BDSA.bdsaLocal.localCaseId',
     'meta.BDSA.bdsaLocal.localStainID',
     'meta.BDSA.bdsaLocal.localRegionId',
+    'meta.BDSA.bdsaLocal.localImageType',
     'meta.BDSA.bdsaLocal.bdsaCaseId',
     'meta.BDSA.bdsaLocal.lastUpdated',
     'meta.BDSA.bdsaLocal.source',
@@ -74,6 +75,7 @@ export const PRIORITY_BDSA_FIELDS = [
     'BDSA.bdsaLocal.localCaseId',
     'BDSA.bdsaLocal.localRegionId',
     'BDSA.bdsaLocal.localStainID',
+    'BDSA.bdsaLocal.localImageType',
     'dsa_name',
     'dsa_created',
     'dsa_updated',
@@ -97,6 +99,57 @@ export const DEFAULT_REGEX_RULES = {
         pattern: '-(\\w+)_',
         description: 'Extract region ID from filename',
         example: '05-662-Temporal_AT8.czi → Temporal'
+    }
+};
+
+// Predefined regex rule sets for different dataset patterns
+export const REGEX_RULE_SETS = {
+    'legacy-dash-format': {
+        name: 'Legacy Dash Format',
+        description: 'Format: 05-662-Temporal_AT8.czi',
+        rules: {
+            localCaseId: {
+                pattern: '^(\\d+-\\d+)',
+                description: 'Extract case ID from filename',
+                example: '05-662-Temporal_AT8.czi → 05-662'
+            },
+            localStainID: {
+                pattern: '_(\\w+)\\.',
+                description: 'Extract stain ID from filename',
+                example: '05-662-Temporal_AT8.czi → AT8'
+            },
+            localRegionId: {
+                pattern: '-(\\w+)_',
+                description: 'Extract region ID from filename',
+                example: '05-662-Temporal_AT8.czi → Temporal'
+            }
+        }
+    },
+    'numeric-space-format': {
+        name: 'Numeric Space Format',
+        description: 'Format: ######## # Stain (e.g., 20232817 B HE)',
+        rules: {
+            localCaseId: {
+                pattern: '^(\\d{8})',
+                description: 'Extract 8-digit case ID from filename',
+                example: '20232817 B HE_Default_Extended.tif → 20232817'
+            },
+            localStainID: {
+                pattern: '\\d{8}\\s+\\w+\\s+([^_]+)(?=_)',
+                description: 'Extract stain ID after case ID and region, stopping at underscore',
+                example: '20232817 B HE_Default_Extended.tif → HE'
+            },
+            localRegionId: {
+                pattern: '\\d{8}\\s+(\\w+)',
+                description: 'Extract region ID after case ID',
+                example: '20232817 B HE_Default_Extended.tif → B'
+            },
+            localImageType: {
+                pattern: '\\d{8}\\s+\\w+\\s+\\w+_(\\w+(?:_\\w+)*)',
+                description: 'Extract image type after stain (e.g., Default_Extended, Preview_Image)',
+                example: '20232817 B HE_Default_Extended.tif → Default_Extended'
+            }
+        }
     }
 };
 

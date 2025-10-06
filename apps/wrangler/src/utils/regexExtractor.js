@@ -42,7 +42,8 @@ export const applyRegexRules = (data, regexRules, columnMapping = {}) => {
         const fieldMappings = [
             { field: 'localCaseId', sourceColumn: columnMapping.localCaseId },
             { field: 'localStainID', sourceColumn: columnMapping.localStainID },
-            { field: 'localRegionId', sourceColumn: columnMapping.localRegionId }
+            { field: 'localRegionId', sourceColumn: columnMapping.localRegionId },
+            { field: 'localImageType', sourceColumn: columnMapping.localImageType }
         ];
 
         fieldMappings.forEach(({ field, sourceColumn }) => {

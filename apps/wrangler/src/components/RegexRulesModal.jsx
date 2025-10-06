@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import './RegexRulesModal.css';
+import { REGEX_RULE_SETS } from '../utils/constants.js';
 
-const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, sampleData }) => {
+const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSet: initialSelectedRuleSet, sampleData }) => {
     const [rules, setRules] = useState({
         localCaseId: {
             pattern: '',
@@ -17,17 +18,30 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, sampleData }) 
             pattern: '',
             description: 'Extract region ID from filename',
             example: '05-662-Temporal_AT8.czi → Temporal'
+        },
+        localImageType: {
+            pattern: '',
+            description: 'Extract image type from filename',
+            example: '20232817 B HE_Default_Extended.tif → Default_Extended'
         }
     });
 
     const [testResults, setTestResults] = useState({});
     const [activeTab, setActiveTab] = useState('localCaseId');
+    const [selectedRuleSet, setSelectedRuleSet] = useState(initialSelectedRuleSet || '');
+    const [showRuleSetSelector, setShowRuleSetSelector] = useState(false);
 
     useEffect(() => {
         if (currentRules) {
             setRules(currentRules);
         }
     }, [currentRules]);
+
+    useEffect(() => {
+        if (initialSelectedRuleSet) {
+            setSelectedRuleSet(initialSelectedRuleSet);
+        }
+    }, [initialSelectedRuleSet]);
 
     const handleRuleChange = (field, property, value) => {
         setRules(prev => ({
@@ -84,8 +98,22 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, sampleData }) 
     };
 
     const handleSave = () => {
-        onSave(rules);
+        onSave(rules, selectedRuleSet);
         onClose();
+    };
+
+    const handleRuleSetSelect = (ruleSetKey) => {
+        const ruleSet = REGEX_RULE_SETS[ruleSetKey];
+        if (ruleSet) {
+            setRules(ruleSet.rules);
+            setSelectedRuleSet(ruleSetKey);
+            setShowRuleSetSelector(false);
+        }
+    };
+
+    const handleCustomRules = () => {
+        setShowRuleSetSelector(false);
+        setSelectedRuleSet('');
     };
 
     const getSuggestedPatterns = (field) => {
@@ -104,6 +132,11 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, sampleData }) 
                 { pattern: '-(\\w+)_', description: 'Match word between dash and underscore' },
                 { pattern: '-(Temporal|Parietal|MFG)', description: 'Match specific region names' },
                 { pattern: '-(\\w+)_\\w+\\.', description: 'Match word between dash and underscore before extension' }
+            ],
+            localImageType: [
+                { pattern: '_(\\w+(?:_\\w+)*)\\.', description: 'Match image type after underscore before extension' },
+                { pattern: '_(Default_Extended|Preview_Image|LabelArea_Image)', description: 'Match specific image types' },
+                { pattern: '_(\\w+_\\w+)\\.', description: 'Match underscore-separated image type' }
             ]
         };
         return suggestions[field] || [];
@@ -116,8 +149,44 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, sampleData }) 
             <div className="regex-modal-content">
                 <div className="regex-modal-header">
                     <h2>Regex Rules for Data Extraction</h2>
-                    <button className="regex-modal-close" onClick={onClose}>×</button>
+                    <div className="regex-header-actions">
+                        <button
+                            className="regex-rule-set-btn"
+                            onClick={() => setShowRuleSetSelector(!showRuleSetSelector)}
+                        >
+                            {selectedRuleSet ? `Using: ${REGEX_RULE_SETS[selectedRuleSet]?.name}` : 'Choose Rule Set'}
+                        </button>
+                        <button className="regex-modal-close" onClick={onClose}>×</button>
+                    </div>
                 </div>
+
+                {showRuleSetSelector && (
+                    <div className="regex-rule-set-selector">
+                        <h3>Select a Predefined Rule Set</h3>
+                        <div className="regex-rule-set-options">
+                            {Object.entries(REGEX_RULE_SETS).map(([key, ruleSet]) => (
+                                <div key={key} className="regex-rule-set-option">
+                                    <h4>{ruleSet.name}</h4>
+                                    <p>{ruleSet.description}</p>
+                                    <button
+                                        className="regex-use-rule-set-btn"
+                                        onClick={() => handleRuleSetSelect(key)}
+                                    >
+                                        Use This Rule Set
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="regex-rule-set-actions">
+                            <button
+                                className="regex-custom-rules-btn"
+                                onClick={handleCustomRules}
+                            >
+                                Create Custom Rules
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 <div className="regex-modal-body">
                     <div className="regex-tabs">

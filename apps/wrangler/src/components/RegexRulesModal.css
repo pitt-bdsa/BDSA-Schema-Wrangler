@@ -32,6 +32,12 @@
     background-color: #f8f9fa;
 }
 
+.regex-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
 .regex-modal-header h2 {
     margin: 0;
     color: #333;
@@ -56,6 +62,102 @@
 .regex-modal-close:hover {
     background-color: #e9ecef;
     color: #333;
+}
+
+.regex-rule-set-btn {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s;
+    font-size: 0.9rem;
+}
+
+.regex-rule-set-btn:hover {
+    background-color: #0056b3;
+}
+
+.regex-rule-set-selector {
+    padding: 20px;
+    border-bottom: 1px solid #e0e0e0;
+    background-color: #f8f9fa;
+}
+
+.regex-rule-set-selector h3 {
+    margin: 0 0 16px 0;
+    color: #333;
+    font-size: 1.2rem;
+}
+
+.regex-rule-set-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.regex-rule-set-option {
+    padding: 16px;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    background-color: white;
+    transition: all 0.2s;
+}
+
+.regex-rule-set-option:hover {
+    border-color: #007bff;
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.1);
+}
+
+.regex-rule-set-option h4 {
+    margin: 0 0 8px 0;
+    color: #333;
+    font-size: 1.1rem;
+}
+
+.regex-rule-set-option p {
+    margin: 0 0 12px 0;
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.regex-use-rule-set-btn {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.regex-use-rule-set-btn:hover {
+    background-color: #218838;
+}
+
+.regex-rule-set-actions {
+    display: flex;
+    justify-content: center;
+}
+
+.regex-custom-rules-btn {
+    background-color: #6c757d;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.regex-custom-rules-btn:hover {
+    background-color: #5a6268;
 }
 
 .regex-modal-body {

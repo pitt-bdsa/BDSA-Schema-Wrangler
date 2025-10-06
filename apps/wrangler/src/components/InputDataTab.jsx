@@ -56,6 +56,10 @@ const InputDataTab = () => {
         }
         return getDefaultRegexRules();
     });
+    const [selectedRuleSet, setSelectedRuleSet] = useState(() => {
+        // Load saved rule set from localStorage
+        return localStorage.getItem('selectedRegexRuleSet') || '';
+    });
     const [showBdsaMapping, setShowBdsaMapping] = useState(false);
     const [columnMappings, setColumnMappings] = useState(() => {
         // Load saved column mappings from localStorage
@@ -70,7 +74,8 @@ const InputDataTab = () => {
         return {
             localCaseId: '',
             localStainID: '',
-            localRegionId: ''
+            localRegionId: '',
+            localImageType: ''
         };
     });
     const [showDsaSync, setShowDsaSync] = useState(false);
@@ -328,11 +333,15 @@ const InputDataTab = () => {
     };
 
 
-    const handleSaveRegexRules = (newRules) => {
+    const handleSaveRegexRules = (newRules, ruleSetKey = '') => {
         setRegexRules(newRules);
+        setSelectedRuleSet(ruleSetKey);
+
         // Save to localStorage for persistence
         localStorage.setItem('regexRules', JSON.stringify(newRules));
+        localStorage.setItem('selectedRegexRuleSet', ruleSetKey);
         console.log('💾 Saved regex rules:', newRules);
+        console.log('💾 Saved rule set:', ruleSetKey);
 
         // Apply the regex rules to the current data
         const result = dataStore.applyRegexRules(newRules);
@@ -675,6 +684,7 @@ const InputDataTab = () => {
                 onClose={() => setShowRegexRules(false)}
                 onSave={handleSaveRegexRules}
                 currentRules={regexRules}
+                selectedRuleSet={selectedRuleSet}
                 sampleData={dataStatus.processedData || []}
             />
 

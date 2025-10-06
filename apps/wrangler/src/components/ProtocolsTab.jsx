@@ -129,6 +129,15 @@ const ProtocolsTab = () => {
         }
     };
 
+    const handleClearProtocols = () => {
+        const confirmMessage = `Are you sure you want to clear all protocols?\n\nThis will remove:\n- ${protocols.stain.length} stain protocols\n- ${protocols.region.length} region protocols\n\nThis action cannot be undone.`;
+
+        if (window.confirm(confirmMessage)) {
+            protocolStore.resetToDefaults();
+            console.log('🧹 Cleared all protocols and reset to defaults');
+        }
+    };
+
     const handlePullFromDSA = async () => {
         const authStatus = dsaAuthStore.getStatus();
 
@@ -218,6 +227,14 @@ const ProtocolsTab = () => {
                     >
                         {isSyncing ? '⏳' : '🔄'} Push to DSA
                         {syncStatus.hasLocalChanges && !isSyncing && <span className="change-indicator">●</span>}
+                    </button>
+                    <button
+                        className="sync-button clear-button"
+                        onClick={handleClearProtocols}
+                        disabled={isSyncing}
+                        title="Clear all protocols and reset to defaults"
+                    >
+                        🧹 Clear Protocols
                     </button>
                 </div>
             </div>

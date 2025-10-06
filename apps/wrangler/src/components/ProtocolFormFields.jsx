@@ -199,22 +199,6 @@ const ProtocolFormFields = ({
                     </>
                 )}
 
-                {/* TEST FIELD - OUTSIDE CONDITIONAL */}
-                <div className="form-group" style={{ border: '3px solid green', padding: '15px', margin: '15px 0', backgroundColor: 'yellow' }}>
-                    <label htmlFor="sliceThickness" style={{ fontWeight: 'bold', color: 'green', fontSize: '16px' }}>🟢 SLICE THICKNESS TEST - ALWAYS VISIBLE 🟢</label>
-                    <input
-                        type="number"
-                        id="sliceThickness"
-                        value={formData.sliceThickness || ''}
-                        onChange={(e) => onFieldChange('sliceThickness', parseFloat(e.target.value) || '')}
-                        placeholder="Enter thickness in microns"
-                        min="0.1"
-                        max="1000"
-                        step="0.1"
-                        style={{ width: '100%', padding: '10px', border: '3px solid green', fontSize: '14px' }}
-                    />
-                    <small style={{ color: 'green', fontSize: '14px', fontWeight: 'bold' }}>This field should ALWAYS be visible!</small>
-                </div>
             </>
         );
     };

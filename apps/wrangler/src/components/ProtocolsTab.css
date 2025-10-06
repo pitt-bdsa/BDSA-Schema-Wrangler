@@ -54,6 +54,14 @@
     background: #218838;
 }
 
+.sync-button.clear-button {
+    background: #dc3545;
+}
+
+.sync-button.clear-button:hover:not(:disabled) {
+    background: #c82333;
+}
+
 .sync-button:disabled {
     background: #6c757d;
     cursor: not-allowed;

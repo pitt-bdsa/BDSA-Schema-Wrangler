@@ -1,16 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import './SchemaViewer.css';
 
-const SchemaViewer = ({ schemaFile, schemaType }) => {
+const SchemaViewer = ({ schemaFile, schemaData, schemaType }) => {
     const [schema, setSchema] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        if (schemaFile) {
+        if (schemaData) {
+            // Use provided schema data directly
+            setSchema(schemaData);
+            setLoading(false);
+            setError(null);
+        } else if (schemaFile) {
+            // Fallback to loading from file
             loadSchema();
         }
-    }, [schemaFile]);
+    }, [schemaFile, schemaData]);
 
     const loadSchema = async () => {
         try {
