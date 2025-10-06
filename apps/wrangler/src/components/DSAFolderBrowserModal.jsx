@@ -15,6 +15,7 @@ const DSAFolderBrowserModal = ({
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [selectedResource, setSelectedResource] = useState(null);
+    const [bdsaMetadata, setBdsaMetadata] = useState({});
 
     // Load collections when modal opens
     useEffect(() => {
@@ -55,6 +56,9 @@ const DSAFolderBrowserModal = ({
                 ...prev,
                 [collection._id]: foldersData
             }));
+
+            // Check BDSA metadata for each folder
+            await checkBdsaMetadataForFolders(foldersData);
         } catch (error) {
             console.error('Error loading folders for collection:', collection.name, error);
         }
@@ -70,8 +74,44 @@ const DSAFolderBrowserModal = ({
                 ...prev,
                 [folder._id]: subFolders
             }));
+
+            // Check BDSA metadata for each subfolder
+            await checkBdsaMetadataForFolders(subFolders);
         } catch (error) {
             console.error('Error loading subfolders for folder:', folder.name, error);
+        }
+    };
+
+    // Check BDSA metadata for a list of folders
+    const checkBdsaMetadataForFolders = async (foldersList) => {
+        if (!dsaClient || !foldersList || foldersList.length === 0) return;
+
+        try {
+            // Check metadata for each folder in parallel
+            const metadataPromises = foldersList.map(async (folder) => {
+                try {
+                    const metadata = await dsaClient.hasBdsaMetadata(folder._id);
+                    return { folderId: folder._id, metadata };
+                } catch (error) {
+                    console.warn(`Failed to check BDSA metadata for folder ${folder.name}:`, error);
+                    return { folderId: folder._id, metadata: { hasAnyBdsaMetadata: false } };
+                }
+            });
+
+            const results = await Promise.all(metadataPromises);
+
+            // Update the BDSA metadata state
+            const newMetadata = {};
+            results.forEach(({ folderId, metadata }) => {
+                newMetadata[folderId] = metadata;
+            });
+
+            setBdsaMetadata(prev => ({
+                ...prev,
+                ...newMetadata
+            }));
+        } catch (error) {
+            console.error('Error checking BDSA metadata for folders:', error);
         }
     };
 
@@ -158,6 +198,7 @@ const DSAFolderBrowserModal = ({
     const renderFolder = (folder, depth = 0) => {
         const isExpanded = expandedFolders.has(folder._id);
         const subFolders = folders[folder._id] || [];
+        const metadata = bdsaMetadata[folder._id] || {};
 
         return (
             <div key={folder._id} className="dsa-folder" style={{ marginLeft: `${depth * 20}px` }}>
@@ -168,7 +209,14 @@ const DSAFolderBrowserModal = ({
                     <span className={`dsa-folder-icon ${isExpanded ? 'expanded' : ''}`}>
                         {isExpanded ? '📂' : '📁'}
                     </span>
-                    <span className="dsa-folder-name">{folder.name}</span>
+                    <span className="dsa-folder-name">
+                        {folder.name}
+                        {metadata.hasAnyBdsaMetadata && (
+                            <span className="bdsa-indicator" title={`BDSA metadata found${metadata.lastUpdated ? ` (last updated: ${new Date(metadata.lastUpdated).toLocaleDateString()})` : ''}`}>
+                                🔬
+                            </span>
+                        )}
+                    </span>
                     <span className="dsa-folder-type">Folder</span>
                     <button
                         className="select-folder-btn"

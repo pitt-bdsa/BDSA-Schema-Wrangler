@@ -101,6 +101,44 @@ class DSAClient {
         }
     }
 
+    // Check if a folder has BDSA protocols metadata
+    async hasBdsaMetadata(folderId) {
+        try {
+            const data = await this.makeRequest(`/api/v1/folder/${folderId}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            // Check for BDSA protocols metadata
+            const hasProtocols = data?.meta?.bdsaProtocols &&
+                (data.meta.bdsaProtocols.stainProtocols?.length > 0 ||
+                    data.meta.bdsaProtocols.regionProtocols?.length > 0);
+
+            // Check for BDSA case ID mappings
+            const hasCaseIdMappings = data?.meta?.bdsaCaseIdMappings &&
+                Object.keys(data.meta.bdsaCaseIdMappings).length > 0;
+
+            return {
+                hasProtocols,
+                hasCaseIdMappings,
+                hasAnyBdsaMetadata: hasProtocols || hasCaseIdMappings,
+                lastUpdated: data?.meta?.bdsaProtocols?.lastUpdated || null,
+                source: data?.meta?.bdsaProtocols?.source || null
+            };
+        } catch (error) {
+            console.error('Failed to check BDSA metadata for folder:', folderId, error);
+            return {
+                hasProtocols: false,
+                hasCaseIdMappings: false,
+                hasAnyBdsaMetadata: false,
+                lastUpdated: null,
+                source: null
+            };
+        }
+    }
+
     // Test connection to DSA server
     async testConnection() {
         try {

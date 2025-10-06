@@ -83,6 +83,8 @@ const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
         setIsLoading(true);
         try {
             await onSave(formData);
+        } catch (error) {
+            console.error('Error saving protocol:', error);
         } finally {
             setIsLoading(false);
         }
@@ -168,7 +170,7 @@ const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
                         {/* Phospho-specific field - only show if schema defines it */}
                         {schemaValidator.getPhosphoSpecificOptions(formData.stainType).length > 0 && (
                             <div className="form-group">
-                                <label htmlFor="phosphoSpecific">Phospho-specific</label>
+                                <label htmlFor="phosphoSpecific">Phospho-specific *</label>
                                 <select
                                     id="phosphoSpecific"
                                     value={formData.phosphoSpecific}

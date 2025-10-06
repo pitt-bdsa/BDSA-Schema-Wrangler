@@ -45,11 +45,22 @@ class SchemaValidator {
 
     // Stain Schema Methods
     getStainTypeOptions() {
-        if (!this.stainSchema) return [];
-        return Object.keys(this.stainSchema).map(key => ({
+        if (!this.stainSchema) {
+            // Return fallback options if schema isn't loaded
+            return [
+                { value: 'TDP-43', label: 'TDP-43' },
+                { value: 'aSyn', label: 'Alpha Synuclein' },
+                { value: 'HE', label: 'Hematoxylin and Eosin' },
+                { value: 'Silver', label: 'Silver' },
+                { value: 'Tau', label: 'Tau' },
+                { value: 'ignore', label: 'IGNORE' }
+            ];
+        }
+        const options = Object.keys(this.stainSchema).map(key => ({
             value: key,
             label: this.stainSchema[key].title || key
         }));
+        return options;
     }
 
     getStainTypeDefinition(stainType) {
@@ -149,8 +160,10 @@ class SchemaValidator {
             // Check required fields
             const requiredFields = stainDef.required || [];
             requiredFields.forEach(field => {
-                if (!protocol[field]) {
-                    errors[field] = `${field} is required for ${protocol.stainType}`;
+                // Map schema field names to form field names
+                const formFieldName = field === 'phospho-specific' ? 'phosphoSpecific' : field;
+                if (!protocol[formFieldName]) {
+                    errors[formFieldName] = `${field} is required for ${protocol.stainType}`;
                 }
             });
 

@@ -1862,17 +1862,8 @@ class DataStore {
             return [];
         }
 
-        console.log(`🔍 DEBUG - generate${protocolType.charAt(0).toUpperCase() + protocolType.slice(1)}ProtocolCases called with:`, {
-            protocolType,
-            processedDataLength: this.processedData.length,
-            caseIdMappingsSize: this.caseIdMappings.size,
-            columnMappings: this.columnMappings,
-            sampleDataItem: this.processedData[0] ? {
-                id: this.processedData[0].id,
-                name: this.processedData[0].name,
-                BDSA: this.processedData[0].BDSA
-            } : null
-        });
+        // Minimal debugging - just the essentials
+        console.log(`🔍 generate${protocolType.charAt(0).toUpperCase() + protocolType.slice(1)}ProtocolCases: ${this.processedData.length} rows, ${this.caseIdMappings.size} case mappings`);
 
         // Use default column mappings for BDSA data if not set
         const columnMapping = this.columnMappings.localStainID ? this.columnMappings : {
@@ -1881,7 +1872,14 @@ class DataStore {
             localRegionId: 'BDSA.bdsaLocal.localRegionId'
         };
 
-        console.log('🔍 Using column mapping:', columnMapping);
+        // Removed verbose column mapping logging
+
+        // Check if case ID mappings are empty
+        if (this.caseIdMappings.size === 0) {
+            console.log('🚨 WARNING: No case ID mappings found! This will cause no cases to be generated.');
+            console.log('💡 Make sure to set up case ID mappings first in the Case ID Mapping tab.');
+            return [];
+        }
 
         const caseGroups = {};
         const slideIdsSeen = new Set(); // Track slide IDs to prevent duplicates
@@ -1898,39 +1896,13 @@ class DataStore {
             // Use the actual _id or dsa_id from the data for proper table reference
             const slideId = row._id || row.dsa_id || finalFilename;
 
-            // Debug first few rows
-            if (index < 3) {
-                console.log(`🔍 Row ${index}:`, {
-                    localCaseId,
-                    localStainId,
-                    localRegionId,
-                    filename,
-                    finalFilename,
-                    slideId,
-                    _id: row._id,
-                    dsa_id: row.dsa_id,
-                    hasCaseIdMapping: this.caseIdMappings.has(localCaseId),
-                    bdsaData: row.BDSA?.bdsaLocal,
-                    fullRowKeys: Object.keys(row).slice(0, 10) // Show first 10 keys for debugging
-                });
-            }
+            // Removed verbose row debugging
 
             // Filter based on protocol type - only include slides with the relevant ID type
             const hasRelevantId = protocolType === 'stain' ? localStainId : localRegionId;
 
             // Skip if no relevant ID for this protocol type, or no BDSA case ID mapping
             if (!hasRelevantId || !this.caseIdMappings.has(localCaseId)) {
-                if (index < 5) { // Show more debug info
-                    console.log(`🔍 Skipping row ${index}:`, {
-                        reason: !hasRelevantId ? `No ${protocolType} ID` : 'No case ID mapping',
-                        localStainId,
-                        localRegionId,
-                        localCaseId,
-                        protocolType,
-                        hasCaseIdMapping: this.caseIdMappings.has(localCaseId),
-                        caseIdMappingsKeys: Array.from(this.caseIdMappings.keys()).slice(0, 5) // Show first 5 keys
-                    });
-                }
                 return;
             }
 
