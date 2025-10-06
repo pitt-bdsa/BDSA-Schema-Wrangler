@@ -22,3 +22,4 @@ year_2020_dsametadata.csv
 reactApp/src/test/dataStore.test.js
 reactApp/***
 .gitignore
+toDelete/
