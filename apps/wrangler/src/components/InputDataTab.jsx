@@ -311,6 +311,11 @@ const InputDataTab = () => {
             const result = await dataStore.loadDsaData(dsaAuthStore);
             if (result.success) {
                 console.log(`✅ Successfully loaded ${result.itemCount} items from DSA`);
+
+                // Check for file filtering stats
+                if (window.dsaSkipStats && window.dsaSkipStats.totalSkipped > 0) {
+                    console.log('📁 File filtering applied:', window.dsaSkipStats);
+                }
             }
         } catch (error) {
             console.error('Error loading DSA data:', error);
@@ -591,6 +596,39 @@ const InputDataTab = () => {
                 <div className="error-message">
                     <span className="error-icon">⚠️</span>
                     {error}
+                </div>
+            )}
+
+            {/* File Filtering Alert */}
+            {window.dsaSkipStats && window.dsaSkipStats.totalSkipped > 0 && (
+                <div className="file-filter-alert">
+                    <div className="alert-header">
+                        <span className="alert-icon">📁</span>
+                        <span className="alert-title">File Filtering Applied</span>
+                    </div>
+                    <div className="alert-content">
+                        <p>
+                            <strong>{window.dsaSkipStats.totalSkipped.toLocaleString()}</strong> files were skipped
+                            to improve performance. Only image files (CZI, MRXS, NDPI, TIFF, SVS, PNG, JPG) are shown.
+                        </p>
+                        <div className="skipped-extensions">
+                            <strong>Skipped file types:</strong>
+                            {Object.entries(window.dsaSkipStats.extensions)
+                                .sort(([, a], [, b]) => b - a)
+                                .slice(0, 10)
+                                .map(([ext, count]) => (
+                                    <span key={ext} className="extension-tag">
+                                        .{ext} ({count.toLocaleString()})
+                                    </span>
+                                ))
+                            }
+                            {Object.keys(window.dsaSkipStats.extensions).length > 10 && (
+                                <span className="more-extensions">
+                                    +{Object.keys(window.dsaSkipStats.extensions).length - 10} more types
+                                </span>
+                            )}
+                        </div>
+                    </div>
                 </div>
             )}
 

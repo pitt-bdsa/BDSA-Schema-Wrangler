@@ -57,13 +57,14 @@ class DSAClient {
     }
 
     // Get folders in a collection or folder
-    async getFolders(parentId, parentType = 'collection') {
+    async getFolders(parentId, parentType = 'collection', limit = 20, offset = 0) {
         try {
-            // Use the proper DSA API parameters
+            // Use the proper DSA API parameters with pagination
             const params = new URLSearchParams({
                 parentType: parentType,
                 parentId: parentId,
-                limit: 0
+                limit: limit,
+                offset: offset
             });
 
             const data = await this.makeRequest(`/api/v1/folder?${params}`, {

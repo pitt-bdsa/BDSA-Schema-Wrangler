@@ -16,6 +16,7 @@ const DSAFolderBrowserModal = ({
     const [error, setError] = useState('');
     const [selectedResource, setSelectedResource] = useState(null);
     const [bdsaMetadata, setBdsaMetadata] = useState({});
+    const [folderPagination, setFolderPagination] = useState({});
 
     // Load collections when modal opens
     useEffect(() => {
@@ -50,14 +51,24 @@ const DSAFolderBrowserModal = ({
         if (!dsaClient) return;
 
         try {
-            // Get folders for this collection (parentType: 'collection')
-            const foldersData = await dsaClient.getFolders(collection._id, 'collection');
+            // Get folders for this collection (parentType: 'collection') with limit
+            const foldersData = await dsaClient.getFolders(collection._id, 'collection', 20, 0);
             setFolders(prev => ({
                 ...prev,
                 [collection._id]: foldersData
             }));
 
-            // Check BDSA metadata for each folder
+            // Update pagination state
+            setFolderPagination(prev => ({
+                ...prev,
+                [collection._id]: {
+                    hasMore: foldersData.length === 20, // If we got exactly 20, there might be more
+                    offset: 20,
+                    total: foldersData.length
+                }
+            }));
+
+            // Check BDSA metadata for each folder (limited to 20)
             await checkBdsaMetadataForFolders(foldersData);
         } catch (error) {
             console.error('Error loading folders for collection:', collection.name, error);
@@ -68,17 +79,59 @@ const DSAFolderBrowserModal = ({
         if (!dsaClient) return;
 
         try {
-            // Get subfolders for this folder (parentType: 'folder')
-            const subFolders = await dsaClient.getFolders(folder._id, 'folder');
+            // Get subfolders for this folder (parentType: 'folder') with limit
+            const subFolders = await dsaClient.getFolders(folder._id, 'folder', 20, 0);
             setFolders(prev => ({
                 ...prev,
                 [folder._id]: subFolders
             }));
 
-            // Check BDSA metadata for each subfolder
+            // Update pagination state
+            setFolderPagination(prev => ({
+                ...prev,
+                [folder._id]: {
+                    hasMore: subFolders.length === 20, // If we got exactly 20, there might be more
+                    offset: 20,
+                    total: subFolders.length
+                }
+            }));
+
+            // Check BDSA metadata for each subfolder (limited to 20)
             await checkBdsaMetadataForFolders(subFolders);
         } catch (error) {
             console.error('Error loading subfolders for folder:', folder.name, error);
+        }
+    };
+
+    // Load more folders for pagination
+    const loadMoreFolders = async (parentId, parentType = 'collection') => {
+        if (!dsaClient) return;
+
+        try {
+            const pagination = folderPagination[parentId];
+            if (!pagination || !pagination.hasMore) return;
+
+            const moreFolders = await dsaClient.getFolders(parentId, parentType, 20, pagination.offset);
+
+            setFolders(prev => ({
+                ...prev,
+                [parentId]: [...(prev[parentId] || []), ...moreFolders]
+            }));
+
+            // Update pagination state
+            setFolderPagination(prev => ({
+                ...prev,
+                [parentId]: {
+                    hasMore: moreFolders.length === 20,
+                    offset: pagination.offset + moreFolders.length,
+                    total: pagination.total + moreFolders.length
+                }
+            }));
+
+            // Check BDSA metadata for the new folders
+            await checkBdsaMetadataForFolders(moreFolders);
+        } catch (error) {
+            console.error('Error loading more folders:', error);
         }
     };
 
@@ -189,6 +242,18 @@ const DSAFolderBrowserModal = ({
                     <div className="dsa-folder-contents">
                         {/* Render folders in this collection */}
                         {collectionFolders.map(folder => renderFolder(folder, 1))}
+
+                        {/* Show load more button if there are more folders */}
+                        {folderPagination[collection._id]?.hasMore && (
+                            <div className="dsa-load-more">
+                                <button
+                                    className="load-more-btn"
+                                    onClick={() => loadMoreFolders(collection._id, 'collection')}
+                                >
+                                    Load more folders...
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -234,6 +299,18 @@ const DSAFolderBrowserModal = ({
                     <div className="dsa-folder-contents">
                         {/* Render subfolders */}
                         {subFolders.map(subFolder => renderFolder(subFolder, depth + 1))}
+
+                        {/* Show load more button if there are more subfolders */}
+                        {folderPagination[folder._id]?.hasMore && (
+                            <div className="dsa-load-more">
+                                <button
+                                    className="load-more-btn"
+                                    onClick={() => loadMoreFolders(folder._id, 'folder')}
+                                >
+                                    Load more folders...
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

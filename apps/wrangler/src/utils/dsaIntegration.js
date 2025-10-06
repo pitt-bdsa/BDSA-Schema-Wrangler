@@ -35,6 +35,53 @@ export const flattenObject = (obj, prefix = '') => {
 };
 
 /**
+ * Filters files by extension to skip unwanted file types
+ * @param {Array} dsaData - Raw DSA API response data
+ * @returns {Object} Object with filteredData and skipStats
+ */
+export const filterFilesByExtension = (dsaData) => {
+    // Define allowed file extensions (case-insensitive)
+    const allowedExtensions = [
+        'czi', 'mrxs', 'ndpi', 'tiff', 'svs', 'tif', 'png', 'jpg', 'jpeg'
+    ];
+
+    const skipStats = {
+        totalSkipped: 0,
+        extensions: {},
+        skippedFiles: []
+    };
+
+    const filteredData = dsaData.filter(item => {
+        const fileName = item.name || item._id || '';
+        const extension = fileName.split('.').pop()?.toLowerCase();
+
+        if (!extension || allowedExtensions.includes(extension)) {
+            return true; // Keep the file
+        } else {
+            // Skip the file and track stats
+            skipStats.totalSkipped++;
+            skipStats.extensions[extension] = (skipStats.extensions[extension] || 0) + 1;
+            skipStats.skippedFiles.push(fileName);
+            return false;
+        }
+    });
+
+    // Log filtering results
+    if (skipStats.totalSkipped > 0) {
+        console.log(`📁 File filtering applied: ${skipStats.totalSkipped} files skipped out of ${dsaData.length} total files`);
+        console.log('Skipped file extensions:', skipStats.extensions);
+
+        // Show top 10 skipped files as examples
+        const exampleSkipped = skipStats.skippedFiles.slice(0, 10);
+        if (exampleSkipped.length > 0) {
+            console.log('Example skipped files:', exampleSkipped);
+        }
+    }
+
+    return { filteredData, skipStats };
+};
+
+/**
  * Transforms DSA API response data to match expected format
  * @param {Array} dsaData - Raw DSA API response data
  * @param {Object} regexRules - Regex rules for data extraction
@@ -50,7 +97,10 @@ export const transformDsaData = (dsaData, regexRules = {}) => {
     // First, enhance data with existing server metadata
     const enhancedData = enhanceDataWithExistingMetadata(dsaData);
 
-    const transformedData = enhancedData.map(item => {
+    // Apply file extension filtering
+    const { filteredData, skipStats } = filterFilesByExtension(enhancedData);
+
+    const transformedData = filteredData.map(item => {
         // Flatten the entire item, including nested objects
         const flattenedItem = flattenObject(item);
 
@@ -98,11 +148,19 @@ export const transformDsaData = (dsaData, regexRules = {}) => {
     const result = [...itemsWithServerMetadata, ...regexProcessedItems];
 
     console.log('transformDsaData: Processing complete:', {
-        originalLength: transformedData.length,
+        originalLength: dsaData.length,
+        afterFiltering: filteredData.length,
         resultLength: result.length,
         itemsWithServerMetadata: itemsWithServerMetadata.length,
-        itemsProcessedWithRegex: regexProcessedItems.length
+        itemsProcessedWithRegex: regexProcessedItems.length,
+        filesSkipped: skipStats.totalSkipped,
+        skippedExtensions: skipStats.extensions
     });
+
+    // Store skip stats globally for UI display
+    if (typeof window !== 'undefined') {
+        window.dsaSkipStats = skipStats;
+    }
 
     return result;
 };

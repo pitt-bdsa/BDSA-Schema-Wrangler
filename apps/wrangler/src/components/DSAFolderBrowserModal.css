@@ -299,6 +299,35 @@
     opacity: 0.6;
 }
 
+/* Load More Button */
+.dsa-load-more {
+    padding: 8px 16px;
+    text-align: center;
+    border-top: 1px solid #e0e0e0;
+    background-color: #f8f9fa;
+}
+
+.load-more-btn {
+    background-color: #6c757d;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background-color 0.2s ease;
+}
+
+.load-more-btn:hover {
+    background-color: #5a6268;
+}
+
+.load-more-btn:disabled {
+    background-color: #adb5bd;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .dsa-folder-browser-modal {

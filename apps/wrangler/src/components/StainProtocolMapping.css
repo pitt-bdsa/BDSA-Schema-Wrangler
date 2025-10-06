@@ -44,6 +44,21 @@
     color: #666;
 }
 
+.unmapped-counts {
+    font-size: 10px;
+    color: #dc3545;
+    margin-top: 2px;
+    font-weight: 500;
+}
+
+.unmapped-stain {
+    color: #dc3545;
+}
+
+.unmapped-region {
+    color: #fd7e14;
+}
+
 .nav-btn {
     background: #007bff;
     color: white;

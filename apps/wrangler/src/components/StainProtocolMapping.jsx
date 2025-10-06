@@ -373,6 +373,33 @@ const StainProtocolMapping = () => {
     const allStainSlides = getAllStainSlides(currentCase);
     const stainGroups = groupSlidesByStainType(allStainSlides);
 
+    // Calculate unmapped slides for current case
+    const getUnmappedCounts = (caseData) => {
+        if (!caseData || !caseData.slides) return { stain: 0, region: 0, total: 0 };
+
+        let unmappedStain = 0;
+        let unmappedRegion = 0;
+
+        caseData.slides.forEach(slide => {
+            // Check stain protocol mapping
+            if (slide.stainType && (!slide.stainProtocols || slide.stainProtocols.length === 0)) {
+                unmappedStain++;
+            }
+            // Check region protocol mapping  
+            if (slide.regionType && (!slide.regionProtocols || slide.regionProtocols.length === 0)) {
+                unmappedRegion++;
+            }
+        });
+
+        return {
+            stain: unmappedStain,
+            region: unmappedRegion,
+            total: unmappedStain + unmappedRegion
+        };
+    };
+
+    const unmappedCounts = getUnmappedCounts(currentCase);
+
     // Debug logging (commented out to reduce console noise)
     // console.log('🔍 DEBUG - Current case:', {
     //     bdsaId: currentCase.bdsaId,
@@ -403,6 +430,14 @@ const StainProtocolMapping = () => {
                     <div className="case-pill">
                         <div className="case-id">{currentCase.bdsaId}</div>
                         <div className="case-details">Local: {currentCase.localCaseId} • {currentCaseIndex + 1} of {cases.length}</div>
+                        {unmappedCounts.total > 0 && (
+                            <div className="unmapped-counts">
+                                <span className="unmapped-stain">{unmappedCounts.stain} unmapped stain</span>
+                                {unmappedCounts.region > 0 && (
+                                    <span className="unmapped-region"> • {unmappedCounts.region} unmapped region</span>
+                                )}
+                            </div>
+                        )}
                     </div>
                     <button
                         className="nav-btn next-btn"
