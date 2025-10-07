@@ -1178,9 +1178,10 @@ export const syncItemBdsaMetadata = async (baseUrl, item, girderToken, columnMap
             };
         }
 
-        const itemId = item._id || item.dsa_id;
+        // Use the transformed id field (which matches what's in modifiedItems)
+        const itemId = item.id || item._id || item.dsa_id;
         if (!itemId) {
-            throw new Error('No DSA item ID found in data item');
+            throw new Error('No item ID found in data item');
         }
 
         // Extract BDSA metadata values from the BDSA.bdsaLocal namespace (authoritative source)

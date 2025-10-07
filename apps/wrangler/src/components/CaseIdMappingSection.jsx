@@ -194,6 +194,30 @@ const CaseIdMappingSection = ({
                             </button>
                         )}
                         <button
+                            className="clear-all-btn"
+                            onClick={() => {
+                                if (window.confirm('Clear all BDSA Case ID mappings?\n\nThis will remove all BDSA Case IDs but preserve your local case IDs, stain IDs, and region IDs.')) {
+                                    dataStore.clearCaseIdMappings();
+                                }
+                            }}
+                            disabled={isGeneratingAll || filteredCaseIds.filter(c => c.isMapped).length === 0}
+                            style={{
+                                backgroundColor: '#dc3545',
+                                color: 'white',
+                                border: 'none',
+                                padding: '10px 16px',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '14px',
+                                fontWeight: '500',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                            }}
+                        >
+                            🗑️ Clear All Mappings
+                        </button>
+                        <button
                             className="generate-all-btn"
                             onClick={generateAllCaseIds}
                             disabled={isGeneratingAll || filteredCaseIds.filter(c => !c.isMapped).length === 0}

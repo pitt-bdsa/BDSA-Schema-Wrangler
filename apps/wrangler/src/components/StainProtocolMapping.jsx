@@ -38,7 +38,12 @@ const StainProtocolMapping = () => {
     // Generate cases with stain slides when data changes
     useEffect(() => {
         if (dataStatus.processedData && dataStatus.processedData.length > 0) {
+            console.log('🔄 StainProtocolMapping: Regenerating cases due to data change');
+            console.log('🔍 Current case ID mappings:', dataStatus.caseIdMappings);
+            console.log('🔍 Number of case ID mappings:', Object.keys(dataStatus.caseIdMappings || {}).length);
+
             const stainCases = dataStore.generateStainProtocolCases();
+            console.log(`📊 Generated ${stainCases.length} stain cases`);
 
             // Only reset case index if the number of cases changed significantly
             // (e.g., new cases added or cases removed), not just when data is updated
@@ -58,7 +63,7 @@ const StainProtocolMapping = () => {
             }
             // Otherwise, keep the current case index to maintain user's position
         }
-    }, [dataStatus.processedData]);
+    }, [dataStatus]);
 
     // Get all slides with stain types for the case (regardless of mapping status)
     const getAllStainSlides = (caseData) => {

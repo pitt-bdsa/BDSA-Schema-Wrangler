@@ -293,6 +293,14 @@ class DataStore {
                 }
 
                 this.caseProtocolMappings = new Map(data.caseProtocolMappings || []);
+
+                console.log(`📦 Loaded data from localStorage:`, {
+                    itemCount: this.processedData.length,
+                    dataSource: this.dataSource,
+                    modifiedItems: this.modifiedItems.size,
+                    hasBdsaCaseIds: this.processedData.some(item => item.BDSA?.bdsaLocal?.bdsaCaseId),
+                    sampleBDSA: this.processedData[0]?.BDSA
+                });
             }
         } catch (error) {
             console.error('Error loading data store from storage:', error);
@@ -1692,13 +1700,27 @@ class DataStore {
             // Clear modified items for successfully synced items
             if (results.completed && results.results) {
                 let clearedCount = 0;
+                console.log(`🧹 Before clearing - modifiedItems size: ${this.modifiedItems.size}`);
+                console.log(`🧹 Modified items before sync:`, Array.from(this.modifiedItems));
+
                 results.results.forEach(result => {
+                    console.log(`🧹 Sync result:`, { success: result.success, itemId: result.itemId });
                     if (result.success && result.itemId) {
+                        const wasInSet = this.modifiedItems.has(result.itemId);
                         this.modifiedItems.delete(result.itemId);
-                        clearedCount++;
+                        if (wasInSet) {
+                            clearedCount++;
+                            console.log(`✅ Cleared item ${result.itemId} from modifiedItems`);
+                        } else {
+                            console.log(`⚠️ Item ${result.itemId} was not in modifiedItems set`);
+                        }
                     }
                 });
-                console.log(`Cleared ${clearedCount} items from modified items set after successful sync`);
+                console.log(`🧹 After clearing - modifiedItems size: ${this.modifiedItems.size}`);
+                console.log(`🧹 Cleared ${clearedCount} items from modified items set after successful sync`);
+
+                // Notify UI to update the counter
+                this.notify();
 
                 // Save the updated state
                 // Skip saveToStorage() for large datasets to avoid quota errors
@@ -1798,6 +1820,28 @@ class DataStore {
     }
 
     /**
+     * Clear all case ID mappings (used when switching to a new collection)
+     * Only clears the bdsaCaseId field, preserves localCaseId, localStainID, localRegionId
+     */
+    clearCaseIdMappings() {
+        console.log('🧹 Clearing all case ID mappings');
+        this.caseIdMappings.clear();
+
+        // Only clear BDSA Case IDs from data items, preserve localCaseId/localStainID/localRegionId
+        if (this.processedData && this.processedData.length > 0) {
+            this.processedData.forEach(item => {
+                if (item.BDSA?.bdsaLocal) {
+                    // Only clear the bdsaCaseId, keep localCaseId/localStainID/localRegionId intact
+                    item.BDSA.bdsaLocal.bdsaCaseId = '';
+                }
+            });
+            console.log(`🧹 Cleared BDSA Case IDs from ${this.processedData.length} data items (preserved local IDs)`);
+        }
+
+        this.notify();
+    }
+
+    /**
      * Set a case ID directly in the data items (single source of truth approach)
      * @param {string} localCaseId - The local case ID to update
      * @param {string|null} bdsaCaseId - The BDSA case ID to set, or null to clear
@@ -1844,7 +1888,20 @@ class DataStore {
             console.log(`${action} case ID ${value} for ${updatedCount} items`);
             console.log(`🔍 Added ${updatedCount} items to modifiedItems. Total modified: ${this.modifiedItems.size}`);
 
-            // Note: notify() is now handled automatically by the BDSA tracking proxy
+            // Update the caseIdMappings Map to keep it in sync
+            if (bdsaCaseId) {
+                this.caseIdMappings.set(localCaseId, bdsaCaseId);
+                console.log(`✅ Updated caseIdMappings: ${localCaseId} -> ${bdsaCaseId}`);
+            } else {
+                this.caseIdMappings.delete(localCaseId);
+                console.log(`🗑️ Removed ${localCaseId} from caseIdMappings`);
+            }
+
+            // Re-initialize case ID mappings to update the UI with new mappings
+            this.initializeCaseIdMappingsFromData();
+
+            // Notify UI of changes (proxy is disabled, so we need to call this explicitly)
+            this.notify();
 
             // Skip saveToStorage() for large datasets to avoid quota errors
             // Data will be persisted via export/sync instead
@@ -2259,7 +2316,9 @@ class DataStore {
 
         // Initialize BDSA structure and wrap each item in a tracking proxy
         const initializedData = this.initializeBdsaStructure(data);
-        this.processedData = initializedData.map(item => this.createBdsaTrackingProxy(item));
+        // Temporarily disable proxy to avoid issues with Generate button
+        this.processedData = initializedData;
+        // this.processedData = initializedData.map(item => this.createBdsaTrackingProxy(item));
 
         if (source) {
             this.dataSource = source;
@@ -2559,8 +2618,32 @@ class DataStore {
             return [];
         }
 
-        // Minimal debugging - just the essentials
+        // Debugging for protocol case generation
         console.log(`🔍 generate${protocolType.charAt(0).toUpperCase() + protocolType.slice(1)}ProtocolCases: ${this.processedData.length} rows, ${this.caseIdMappings.size} case mappings`);
+
+        // Sample first few rows to see what data looks like
+        const sampleRows = this.processedData.slice(0, 3).map(row => ({
+            localCaseId: row.BDSA?.bdsaLocal?.localCaseId,
+            localStainID: row.BDSA?.bdsaLocal?.localStainID,
+            localRegionId: row.BDSA?.bdsaLocal?.localRegionId,
+            hasBDSA: !!row.BDSA,
+            hasBdsaLocal: !!row.BDSA?.bdsaLocal,
+            name: row.name
+        }));
+        console.log(`🔍 Sample rows (first 3):`, sampleRows);
+
+        // Show what case IDs are actually in the mappings
+        const mappingKeys = Array.from(this.caseIdMappings.keys()).slice(0, 10);
+        console.log(`🔍 Case ID mappings (first 10 keys):`, mappingKeys);
+
+        // Check if sample row case IDs are in mappings
+        const sampleCaseIds = sampleRows.map(r => r.localCaseId);
+        const mappingChecks = sampleCaseIds.map(id => ({
+            localCaseId: id,
+            hasMapping: this.caseIdMappings.has(id),
+            mappedTo: this.caseIdMappings.get(id)
+        }));
+        console.log(`🔍 Sample case ID mapping checks:`, mappingChecks);
 
         // Use default column mappings for BDSA data if not set
         const columnMapping = this.columnMappings.localStainID ? this.columnMappings : {
@@ -2571,8 +2654,21 @@ class DataStore {
 
         // Removed verbose column mapping logging
 
+        // Build case ID mappings directly from the data (single source of truth)
+        // This matches how the Case ID Mapping tab reads the data
+        const caseIdMappings = new Map();
+        this.processedData.forEach((item) => {
+            const localCaseId = item.BDSA?.bdsaLocal?.localCaseId;
+            const bdsaCaseId = item.BDSA?.bdsaLocal?.bdsaCaseId;
+            if (localCaseId && bdsaCaseId) {
+                caseIdMappings.set(localCaseId, bdsaCaseId);
+            }
+        });
+
+        console.log(`🔍 Built case ID mappings from data: ${caseIdMappings.size} mappings found`);
+
         // Check if case ID mappings are empty
-        if (this.caseIdMappings.size === 0) {
+        if (caseIdMappings.size === 0) {
             console.log('🚨 WARNING: No case ID mappings found! This will cause no cases to be generated.');
             console.log('💡 Make sure to set up case ID mappings first in the Case ID Mapping tab.');
             return [];
@@ -2599,11 +2695,11 @@ class DataStore {
             const hasRelevantId = protocolType === 'stain' ? localStainId : localRegionId;
 
             // Skip if no relevant ID for this protocol type, or no BDSA case ID mapping
-            if (!hasRelevantId || !this.caseIdMappings.has(localCaseId)) {
+            if (!hasRelevantId || !caseIdMappings.has(localCaseId)) {
                 return;
             }
 
-            const bdsaCaseId = this.caseIdMappings.get(localCaseId);
+            const bdsaCaseId = caseIdMappings.get(localCaseId);
 
             if (!caseGroups[bdsaCaseId]) {
                 caseGroups[bdsaCaseId] = {

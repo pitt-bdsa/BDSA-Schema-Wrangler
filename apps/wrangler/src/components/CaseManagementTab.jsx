@@ -259,14 +259,20 @@ const CaseManagementTab = () => {
 
     // Generate sequential BDSA Case ID
     const generateSequentialBdsaCaseId = (localCaseId) => {
+        console.log(`🚀 Generate button clicked for localCaseId: ${localCaseId}`);
+
         if (!localCaseId) {
+            console.log('❌ No localCaseId provided');
             return;
         }
 
         if (!bdsaInstitutionId || bdsaInstitutionId.trim() === '') {
+            console.log('❌ No BDSA Institution ID set');
             alert('Please set the BDSA Institution ID first. You can:\n1. Pull data from DSA to auto-set it\n2. Enter it manually in the Institution ID field');
             return;
         }
+
+        console.log(`✅ BDSA Institution ID: ${bdsaInstitutionId}`);
 
         // Check if this case already has a BDSA Case ID by looking at the data
         const existingCase = dataStatus.processedData?.find(row =>
@@ -275,9 +281,11 @@ const CaseManagementTab = () => {
         );
 
         if (existingCase) {
+            console.log(`⚠️ Case ${localCaseId} already has BDSA Case ID: ${existingCase.BDSA.bdsaLocal.bdsaCaseId}`);
             return;
         }
 
+        console.log(`🔄 Starting generation for case ${localCaseId}...`);
         setIsGenerating(true);
 
         try {
@@ -297,9 +305,14 @@ const CaseManagementTab = () => {
             const nextNumber = maxNumber + 1;
             const bdsaCaseId = `BDSA-${bdsaInstitutionId.padStart(3, '0')}-${nextNumber.toString().padStart(4, '0')}`;
 
+            console.log(`🎯 Generated BDSA Case ID: ${bdsaCaseId} (next number: ${nextNumber})`);
+
             // Set the case ID directly in the data items (single source of truth)
+            console.log(`📝 Calling setCaseIdInData(${localCaseId}, ${bdsaCaseId})`);
             setCaseIdInData(localCaseId, bdsaCaseId);
+            console.log(`🔄 Calling resetTemporaryFilter()`);
             resetTemporaryFilter(); // Show the newly generated item
+            console.log(`✅ Generation complete for case ${localCaseId}`);
 
         } finally {
             setTimeout(() => setIsGenerating(false), 500);
@@ -502,7 +515,10 @@ const CaseManagementTab = () => {
                     const institutionMsg = extractedInstitutionId ? `\n\nInstitution ID auto-set to: ${extractedInstitutionId}` : '';
                     alert(`Case ID mappings pulled successfully!\n\nPulled ${result.pulled.caseIdMappings} case ID mappings from DSA server.${institutionMsg}`);
                 } else {
-                    alert('No case ID mappings found in DSA server.');
+                    // Clear old case ID mappings from previous collection
+                    console.log('⚠️ No case ID mappings found on server - clearing old mappings');
+                    dataStore.clearCaseIdMappings();
+                    alert('No case ID mappings found in DSA server.\n\nOld case ID mappings have been cleared. You can now generate new ones for this collection.');
                 }
             } else {
                 alert(`Pull failed: ${result.error}`);
