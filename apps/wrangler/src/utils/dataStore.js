@@ -406,7 +406,270 @@ class DataStore {
         return values;
     }
 
-    // DSA Data Loading
+    // Accessory File Loading - for CSV/Excel files with additional metadata
+    async loadAccessoryFile(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+                try {
+                    let accessoryData;
+
+                    if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
+                        // Handle CSV file
+                        const csvText = e.target.result;
+                        accessoryData = this.parseCsv(csvText, file.name);
+                    } else {
+                        // Handle Excel file
+                        const data = e.target.result;
+                        const workbook = XLSX.read(data, { type: 'binary' });
+                        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                        accessoryData = XLSX.utils.sheet_to_json(worksheet);
+                    }
+
+                    if (!accessoryData || accessoryData.length === 0) {
+                        throw new Error('Accessory file is empty or could not be parsed');
+                    }
+
+                    // Match accessory data with existing DSA data based on filename
+                    const matchedData = this.matchAccessoryData(accessoryData);
+
+                    resolve({
+                        success: true,
+                        itemCount: accessoryData.length,
+                        matchedCount: matchedData.matchedCount,
+                        data: accessoryData,
+                        matchedData: matchedData.matchedData,
+                        message: `Successfully loaded ${accessoryData.length} accessory items, matched ${matchedData.matchedCount} with DSA data`
+                    });
+                } catch (error) {
+                    reject(new Error(`Failed to parse accessory file: ${error.message}`));
+                }
+            };
+
+            reader.onerror = () => {
+                reject(new Error('Failed to read accessory file'));
+            };
+
+            if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
+                reader.readAsText(file);
+            } else {
+                reader.readAsBinaryString(file);
+            }
+        });
+    }
+
+    // Match accessory data with existing DSA data based on filename
+    matchAccessoryData(accessoryData) {
+        if (!this.processedData || this.processedData.length === 0) {
+            return { matchedData: [], matchedCount: 0 };
+        }
+
+        const matchedData = [];
+        let matchedCount = 0;
+
+        // Create a map of DSA filenames for quick lookup
+        const dsaFilenameMap = new Map();
+        this.processedData.forEach((item, index) => {
+            const filename = item.name || item.dsa_name || '';
+            if (filename) {
+                // Store both exact match and normalized versions
+                dsaFilenameMap.set(filename, { item, index });
+                dsaFilenameMap.set(filename.toLowerCase(), { item, index });
+
+                // Also try without extension
+                const nameWithoutExt = filename.replace(/\.[^/.]+$/, '');
+                dsaFilenameMap.set(nameWithoutExt, { item, index });
+                dsaFilenameMap.set(nameWithoutExt.toLowerCase(), { item, index });
+            }
+        });
+
+        // Try to match each accessory item
+        accessoryData.forEach((accessoryItem, accessoryIndex) => {
+            let matched = false;
+            let dsaItem = null; // Declare dsaItem at the top of the loop scope
+
+            // Look for filename field in accessory data (could be 'new_filename', 'filename', 'name', etc.)
+            const possibleFilenameFields = ['new_filename', 'filename', 'name', 'file_name', 'image_name', 'FileName', 'Filename', 'ImageName'];
+            let accessoryFilename = '';
+
+            for (const field of possibleFilenameFields) {
+                if (accessoryItem[field]) {
+                    accessoryFilename = accessoryItem[field];
+                    console.log(`🔍 Found filename in field "${field}": ${accessoryFilename}`);
+                    break;
+                }
+            }
+
+            // If no match found, try case-insensitive search through all fields
+            if (!accessoryFilename) {
+                const allKeys = Object.keys(accessoryItem);
+                for (const key of allKeys) {
+                    if (key.toLowerCase().includes('filename') || key.toLowerCase().includes('name')) {
+                        accessoryFilename = accessoryItem[key];
+                        console.log(`🔍 Found filename in field "${key}" (case-insensitive): ${accessoryFilename}`);
+                        break;
+                    }
+                }
+            }
+
+            if (accessoryFilename) {
+                // Try exact match first
+                dsaItem = dsaFilenameMap.get(accessoryFilename);
+
+                if (!dsaItem) {
+                    // Try case-insensitive match
+                    dsaItem = dsaFilenameMap.get(accessoryFilename.toLowerCase());
+                }
+
+                if (!dsaItem) {
+                    // Try without extension
+                    const nameWithoutExt = accessoryFilename.replace(/\.[^/.]+$/, '');
+                    dsaItem = dsaFilenameMap.get(nameWithoutExt);
+                    if (!dsaItem) {
+                        dsaItem = dsaFilenameMap.get(nameWithoutExt.toLowerCase());
+                    }
+                }
+
+                if (dsaItem) {
+                    // Add accessory data as temporary fields to the DSA item
+                    if (!dsaItem.item.accessoryData) {
+                        dsaItem.item.accessoryData = {};
+                    }
+
+                    // Add all accessory fields with a prefix to avoid conflicts
+                    // Skip filename fields, BDSA fields, and other internal fields
+                    Object.keys(accessoryItem).forEach(key => {
+                        // Skip filename fields
+                        if (key === 'new_filename' || key === 'filename' || key === 'name') {
+                            return;
+                        }
+
+                        // Skip BDSA fields (these are app-internal, not from the original accessory file)
+                        if (key === 'BDSA' || key.startsWith('BDSA.')) {
+                            console.log(`⚠️ Skipping internal BDSA field from accessory item: ${key}`);
+                            return;
+                        }
+
+                        // Skip internal fields
+                        if (key.startsWith('_')) {
+                            return;
+                        }
+
+                        dsaItem.item.accessoryData[`accessory_${key}`] = accessoryItem[key];
+                    });
+
+                    // Mark the item as modified
+                    this.modifiedItems.add(dsaItem.item.id || dsaItem.index);
+                    matched = true;
+                    matchedCount++;
+                }
+            }
+
+            matchedData.push({
+                accessoryIndex,
+                accessoryItem,
+                matched,
+                dsaItem: matched ? dsaItem : null
+            });
+        });
+
+        // Save changes and notify listeners
+        this.saveToStorage();
+        this.notify();
+
+        console.log(`🔗 Accessory data matching complete: ${matchedCount}/${accessoryData.length} items matched with DSA data`);
+
+        return { matchedData, matchedCount };
+    }
+
+    // Retry accessory matching with a specific filename field
+    retryAccessoryMatching(accessoryData, filenameField) {
+        if (!this.processedData || this.processedData.length === 0) {
+            return { matchedData: [], matchedCount: 0, itemCount: accessoryData.length };
+        }
+
+        const matchedData = [];
+        let matchedCount = 0;
+
+        // Create a map of DSA filenames for quick lookup
+        const dsaFilenameMap = new Map();
+        this.processedData.forEach((item, index) => {
+            const filename = item.name || item.dsa_name || '';
+            if (filename) {
+                // Store both exact match and normalized versions
+                dsaFilenameMap.set(filename, { item, index });
+                dsaFilenameMap.set(filename.toLowerCase(), { item, index });
+
+                // Also try without extension
+                const nameWithoutExt = filename.replace(/\.[^/.]+$/, '');
+                dsaFilenameMap.set(nameWithoutExt, { item, index });
+                dsaFilenameMap.set(nameWithoutExt.toLowerCase(), { item, index });
+            }
+        });
+
+        // Try to match each accessory item using the specified filename field
+        accessoryData.forEach((accessoryItem, accessoryIndex) => {
+            let matched = false;
+
+            const accessoryFilename = accessoryItem[filenameField];
+
+            if (accessoryFilename) {
+                // Try exact match first
+                let dsaItem = dsaFilenameMap.get(accessoryFilename);
+
+                if (!dsaItem) {
+                    // Try case-insensitive match
+                    dsaItem = dsaFilenameMap.get(accessoryFilename.toLowerCase());
+                }
+
+                if (!dsaItem) {
+                    // Try without extension
+                    const nameWithoutExt = accessoryFilename.replace(/\.[^/.]+$/, '');
+                    dsaItem = dsaFilenameMap.get(nameWithoutExt);
+                    if (!dsaItem) {
+                        dsaItem = dsaFilenameMap.get(nameWithoutExt.toLowerCase());
+                    }
+                }
+
+                if (dsaItem) {
+                    // Add accessory data as temporary fields to the DSA item
+                    if (!dsaItem.item.accessoryData) {
+                        dsaItem.item.accessoryData = {};
+                    }
+
+                    // Add all accessory fields with a prefix to avoid conflicts
+                    Object.keys(accessoryItem).forEach(key => {
+                        if (key !== filenameField) {
+                            dsaItem.item.accessoryData[`accessory_${key}`] = accessoryItem[key];
+                        }
+                    });
+
+                    // Mark the item as modified
+                    this.modifiedItems.add(dsaItem.item.id || dsaItem.index);
+                    matched = true;
+                    matchedCount++;
+                }
+            }
+
+            matchedData.push({
+                accessoryIndex,
+                accessoryItem,
+                matched,
+                dsaItem: matched ? dsaItem : null
+            });
+        });
+
+        // Save changes and notify listeners
+        this.saveToStorage();
+        this.notify();
+
+        console.log(`🔗 Retry matching complete: ${matchedCount}/${accessoryData.length} items matched using field "${filenameField}"`);
+
+        return { matchedData, matchedCount, itemCount: accessoryData.length };
+    }
+
+    // DSA Data Loading - Back to working approach with file filtering
     async loadDsaData(dsaAuthStore) {
         console.log('🚀 DEBUG - loadDsaData called');
         try {
@@ -422,12 +685,20 @@ class DataStore {
             const config = dsaAuthStore.config;
             const token = dsaAuthStore.token;
 
-            console.log(' DEBUG - About to fetch items from DSA server');
-            const items = await this.fetchDsaItems(config, token);
-            console.log(' DEBUG - Fetched items, about to transform:', items.length);
-            const transformedData = this.transformDsaData(items);
+            console.log('🔄 Using dsaIntegration.loadDsaData for proper filtering...');
 
-            this.processedData = transformedData;
+            // Import and use the proper loadDsaData from dsaIntegration that includes filtering
+            const { loadDsaData } = await import('./dsaIntegration.js');
+            console.log('🚀 Calling dsaIntegration.loadDsaData with config:', config);
+            const result = await loadDsaData(config, token);
+            console.log('✅ dsaIntegration.loadDsaData returned:', result);
+
+            if (!result.success) {
+                throw new Error(result.error || 'Failed to load DSA data');
+            }
+
+            console.log(`📊 DataStore: Setting processedData to ${result.data.length} items`);
+            this.processedData = result.data;
             this.dataSource = 'dsa';
             this.dataSourceInfo = {
                 baseUrl: config.baseUrl,
@@ -441,18 +712,171 @@ class DataStore {
             this.girderToken = token;
             this.dsaConfig = config;
 
-
-            this.saveToStorage();
+            // Try to save to storage, but don't fail if quota exceeded
+            try {
+                this.saveToStorage();
+            } catch (error) {
+                if (error.name === 'QuotaExceededError') {
+                    console.warn('⚠️ Data too large for localStorage, skipping storage save');
+                    console.warn(`📊 Data size: ${JSON.stringify(this.processedData).length} characters`);
+                    console.warn('💡 Consider using file filtering to reduce data size');
+                } else {
+                    console.error('Error saving to storage:', error);
+                }
+            }
             this.notify();
+
+            console.log(`📊 DataStore: Final processedData length: ${this.processedData.length}`);
+            console.log(`📊 DataStore: Data source: ${this.dataSource}`);
+            console.log(`📊 DataStore: Data type: ${typeof this.processedData}`);
+            console.log(`📊 DataStore: Is array: ${Array.isArray(this.processedData)}`);
+            if (this.processedData.length > 0) {
+                const sampleItem = this.processedData[0];
+                console.log(`📊 DataStore: Sample item:`, sampleItem);
+                console.log(`📊 DataStore: Sample item BDSA structure:`, {
+                    hasBDSA: !!sampleItem.BDSA,
+                    hasBdsaLocal: !!sampleItem.BDSA?.bdsaLocal,
+                    bdsaLocalKeys: sampleItem.BDSA?.bdsaLocal ? Object.keys(sampleItem.BDSA.bdsaLocal) : [],
+                    localCaseId: sampleItem.BDSA?.bdsaLocal?.localCaseId,
+                    localStainID: sampleItem.BDSA?.bdsaLocal?.localStainID,
+                    localRegionId: sampleItem.BDSA?.bdsaLocal?.localRegionId,
+                    bdsaCaseId: sampleItem.BDSA?.bdsaLocal?.bdsaCaseId
+                });
+            }
 
             return {
                 success: true,
-                itemCount: transformedData.length,
-                message: `Successfully loaded ${transformedData.length} items from DSA`
+                itemCount: result.data.length,
+                message: `Successfully loaded ${result.data.length} items from DSA (filtered)`
             };
         } catch (error) {
             throw new Error(`Failed to load DSA data: ${error.message}`);
         }
+    }
+
+    async loadMoreDsaData(dsaAuthStore, progressCallback) {
+        console.log('🚀 Loading more DSA data in background...');
+        try {
+            const authStatus = dsaAuthStore.getStatus();
+            if (!authStatus.isAuthenticated) {
+                throw new Error('Not authenticated with DSA server');
+            }
+
+            const config = dsaAuthStore.config;
+            const token = dsaAuthStore.token;
+
+            // Import the pagination function
+            const { loadMoreDsaDataPaginated } = await import('./dsaIntegration.js');
+
+            // Calculate how many pages we've already loaded (5 pages = 5000 items / 1000 per page)
+            const currentPageCount = Math.ceil(this.processedData.length / 1000);
+
+            // Load more pages (e.g., load 20 more pages)
+            const result = await loadMoreDsaDataPaginated(config, token, currentPageCount, 20, progressCallback);
+
+            if (result.success && result.data.length > 0) {
+                // Append new data to existing data
+                this.processedData = [...this.processedData, ...result.data];
+                console.log(`📊 DataStore: Added ${result.data.length} more items. Total: ${this.processedData.length}`);
+
+                // Notify listeners about the update
+                this.notify();
+            }
+
+            return {
+                success: true,
+                totalItemCount: this.processedData.length,
+                newItemCount: result.data.length,
+                message: `Successfully loaded ${result.data.length} more items. Total: ${this.processedData.length}`
+            };
+        } catch (error) {
+            throw new Error(`Failed to load more DSA data: ${error.message}`);
+        }
+    }
+
+    // Background loading to progressively cache more data
+    async startBackgroundLoading() {
+        if (this.backgroundLoading.isActive) {
+            console.log('🔄 Background loading already active');
+            return;
+        }
+
+        this.backgroundLoading.isActive = true;
+        console.log('🚀 Starting background data loading...');
+
+        try {
+            const config = this.serverSideConfig;
+            const pageSize = 1000; // Load 1000 items at a time in background
+            let page = 0;
+            let hasMore = true;
+            let totalFilteredCount = 0;
+
+            while (hasMore && this.backgroundLoading.isActive) {
+                console.log(`📄 Background loading page ${page}...`);
+
+                const offset = page * pageSize;
+                const apiUrl = `${config.baseUrl}/api/v1/resource/${config.resourceId}/items?type=${config.resourceType || 'folder'}&limit=${pageSize}&offset=${offset}`;
+
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'Girder-Token': config.token
+                };
+
+                const response = await fetch(apiUrl, {
+                    method: 'GET',
+                    headers: headers
+                });
+
+                if (!response.ok) {
+                    console.error(`Background loading failed at page ${page}:`, response.status);
+                    break;
+                }
+
+                const items = await response.json();
+
+                // Apply file filtering to the page data
+                const { transformDsaData } = await import('./dsaIntegration.js');
+                const filteredData = transformDsaData(items);
+
+                // Cache the filtered data
+                this.backgroundLoading.cachedData.set(page, filteredData);
+                this.backgroundLoading.loadedPages.add(page);
+                totalFilteredCount += filteredData.length;
+
+                console.log(`✅ Background loaded page ${page}: ${filteredData.length} items (total so far: ${totalFilteredCount})`);
+
+                // Check if we should continue
+                if (items.length < pageSize) {
+                    hasMore = false;
+                    console.log('🏁 Background loading complete - reached end of data');
+                } else {
+                    page++;
+                }
+
+                // Update total count as we learn more
+                this.backgroundLoading.totalCount = (page + 1) * pageSize;
+                this.backgroundLoading.filteredCount = totalFilteredCount;
+
+                // Notify UI of progress
+                this.notify();
+
+                // Small delay to prevent overwhelming the server
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+
+            console.log(`🎉 Background loading complete! Total filtered items: ${totalFilteredCount}`);
+            this.backgroundLoading.isActive = false;
+
+        } catch (error) {
+            console.error('Background loading error:', error);
+            this.backgroundLoading.isActive = false;
+        }
+    }
+
+    // Stop background loading
+    stopBackgroundLoading() {
+        console.log('🛑 Stopping background loading...');
+        this.backgroundLoading.isActive = false;
     }
 
     async fetchDsaItems(config, token) {
@@ -484,6 +908,90 @@ class DataStore {
         const items = await response.json();
         console.log(`✅ Fetched ${items.length} items from DSA`);
         return items;
+    }
+
+    // Server-side pagination for AG Grid with background cache support
+    async fetchDsaPage({ page, pageSize, sortModel, filterModel }) {
+        console.log('📄 Fetching DSA page:', { page, pageSize, sortModel, filterModel });
+
+        try {
+            if (!this.serverSideConfig) {
+                throw new Error('Server-side pagination not configured');
+            }
+
+            // Check if we have cached data for this page
+            if (this.backgroundLoading && this.backgroundLoading.cachedData.has(page)) {
+                console.log(`📦 Using cached data for page ${page}`);
+                const cachedData = this.backgroundLoading.cachedData.get(page);
+                const totalCount = this.backgroundLoading.filteredCount || cachedData.length * 100;
+
+                return {
+                    data: cachedData,
+                    totalCount: totalCount
+                };
+            }
+
+            // Fallback to live API request
+            const config = this.serverSideConfig;
+            const token = config.token;
+
+            // Calculate offset for pagination
+            const offset = page * pageSize;
+
+            // Build API URL with pagination
+            let apiUrl = `${config.baseUrl}/api/v1/resource/${config.resourceId}/items?type=${config.resourceType || 'folder'}&limit=${pageSize}&offset=${offset}`;
+
+            // Add sorting if specified
+            if (sortModel && sortModel.length > 0) {
+                const sort = sortModel[0];
+                apiUrl += `&sort=${sort.colId}&sortdir=${sort.sort === 'asc' ? 1 : -1}`;
+            }
+
+            const headers = {
+                'Content-Type': 'application/json',
+                'Girder-Token': token
+            };
+
+            console.log('📄 Fetching page from API:', apiUrl);
+
+            const response = await fetch(apiUrl, {
+                method: 'GET',
+                headers: headers
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('DSA API Error:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    url: apiUrl,
+                    response: errorText
+                });
+                throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+            }
+
+            const items = await response.json();
+
+            // Apply file filtering to the page data
+            const { transformDsaData } = await import('./dsaIntegration.js');
+            const filteredData = transformDsaData(items);
+
+            // Use background loading stats if available, otherwise estimate
+            const totalCount = this.backgroundLoading?.filteredCount ||
+                this.backgroundLoading?.totalCount ||
+                Math.max(filteredData.length * 100, 10000);
+
+            console.log(`✅ Fetched page ${page}: ${filteredData.length} items (total: ${totalCount})`);
+
+            return {
+                data: filteredData,
+                totalCount: totalCount
+            };
+
+        } catch (error) {
+            console.error('Error fetching DSA page:', error);
+            throw error;
+        }
     }
 
     transformDsaData(dsaData) {
@@ -556,28 +1064,52 @@ class DataStore {
                 dsa_created: item.created || item.createdAt || '',
                 dsa_updated: item.updated || item.updatedAt || '',
                 dsa_size: item.size || item.fileSize || '',
-                dsa_mimeType: item.mimeType || item.contentType || '',
-
-                BDSA: {
-                    bdsaLocal: {
-                        localCaseId: existingBdsaData.localCaseId || null,
-                        localStainID: existingBdsaData.localStainID || null,
-                        localRegionId: existingBdsaData.localRegionId || null,
-                        bdsaCaseId: existingBdsaData.bdsaCaseId || null, // Read existing bdsaCaseId from server
-                        bdsaStainProtocol: existingBdsaData.bdsaStainProtocol || [],
-                        bdsaRegionProtocol: existingBdsaData.bdsaRegionProtocol || []
-                    },
-                    _dataSource: existingBdsaData.source ? {
-                        localCaseId: 'dsa_server',
-                        localStainID: 'dsa_server',
-                        localRegionId: 'dsa_server',
-                        bdsaCaseId: 'dsa_server',
-                        stainProtocols: 'dsa_server',
-                        regionProtocols: 'dsa_server'
-                    } : {}, // Track where each field came from
-                    _lastModified: new Date().toISOString()
-                }
+                dsa_mimeType: item.mimeType || item.contentType || ''
             };
+
+            // Initialize or merge BDSA structure (don't overwrite if it already exists from accessory data)
+            if (!transformedItem.BDSA) {
+                transformedItem.BDSA = {};
+            }
+            if (!transformedItem.BDSA.bdsaLocal) {
+                transformedItem.BDSA.bdsaLocal = {};
+            }
+            if (!transformedItem.BDSA._dataSource) {
+                transformedItem.BDSA._dataSource = {};
+            }
+
+            // Import server metadata into BDSA structure (only if not already set)
+            if (existingBdsaData.localCaseId && !transformedItem.BDSA.bdsaLocal.localCaseId) {
+                transformedItem.BDSA.bdsaLocal.localCaseId = existingBdsaData.localCaseId;
+                transformedItem.BDSA._dataSource.localCaseId = 'dsa_server';
+            }
+            if (existingBdsaData.localStainID && !transformedItem.BDSA.bdsaLocal.localStainID) {
+                transformedItem.BDSA.bdsaLocal.localStainID = existingBdsaData.localStainID;
+                transformedItem.BDSA._dataSource.localStainID = 'dsa_server';
+            }
+            if (existingBdsaData.localRegionId && !transformedItem.BDSA.bdsaLocal.localRegionId) {
+                transformedItem.BDSA.bdsaLocal.localRegionId = existingBdsaData.localRegionId;
+                transformedItem.BDSA._dataSource.localRegionId = 'dsa_server';
+            }
+            if (existingBdsaData.bdsaCaseId && !transformedItem.BDSA.bdsaLocal.bdsaCaseId) {
+                transformedItem.BDSA.bdsaLocal.bdsaCaseId = existingBdsaData.bdsaCaseId;
+                transformedItem.BDSA._dataSource.bdsaCaseId = 'dsa_server';
+            }
+            if (existingBdsaData.bdsaStainProtocol && existingBdsaData.bdsaStainProtocol.length > 0 &&
+                (!transformedItem.BDSA.bdsaLocal.bdsaStainProtocol || transformedItem.BDSA.bdsaLocal.bdsaStainProtocol.length === 0)) {
+                transformedItem.BDSA.bdsaLocal.bdsaStainProtocol = existingBdsaData.bdsaStainProtocol;
+                transformedItem.BDSA._dataSource.bdsaStainProtocol = 'dsa_server';
+            }
+            if (existingBdsaData.bdsaRegionProtocol && existingBdsaData.bdsaRegionProtocol.length > 0 &&
+                (!transformedItem.BDSA.bdsaLocal.bdsaRegionProtocol || transformedItem.BDSA.bdsaLocal.bdsaRegionProtocol.length === 0)) {
+                transformedItem.BDSA.bdsaLocal.bdsaRegionProtocol = existingBdsaData.bdsaRegionProtocol;
+                transformedItem.BDSA._dataSource.bdsaRegionProtocol = 'dsa_server';
+            }
+
+            // Set last modified timestamp if we imported server data
+            if (Object.keys(existingBdsaData).length > 0) {
+                transformedItem.BDSA._lastModified = new Date().toISOString();
+            }
 
             return transformedItem;
         });
@@ -718,6 +1250,16 @@ class DataStore {
     }
 
     /**
+     * Get nested property value from an object using dot notation
+     * @param {Object} obj - The object to query
+     * @param {string} path - Dot-separated path (e.g., 'accessoryData.accessory_SubNum')
+     * @returns {*} The value at the path, or undefined if not found
+     */
+    getNestedValue(obj, path) {
+        return path.split('.').reduce((current, key) => current?.[key], obj);
+    }
+
+    /**
      * Apply column mappings to populate BDSA fields from source data
      * @param {Object} columnMappings - Object mapping BDSA fields to source columns
      * @returns {Object} - Result with success status and updated count
@@ -736,55 +1278,57 @@ class DataStore {
 
         this.processedData.forEach((item, index) => {
             let itemUpdated = false;
-            const updatedItem = { ...item };
-
-            // Ensure BDSA object exists
-            if (!updatedItem.BDSA) {
-                updatedItem.BDSA = {
-                    bdsaLocal: {},
-                    _dataSource: {},
-                    _lastModified: new Date().toISOString()
-                };
-            }
 
             // Apply mappings for each field
             Object.entries(columnMappings).forEach(([bdsaField, sourceColumn]) => {
                 if (sourceColumn && sourceColumn.trim() !== '') {
-                    const sourceValue = item[sourceColumn];
+                    // Use nested property access for columns like 'accessoryData.accessory_SubNum'
+                    const sourceValue = this.getNestedValue(item, sourceColumn);
+
+                    // Debug first few items
+                    if (index < 3) {
+                        console.log(`🔍 Column mapping [item ${index}]: ${bdsaField} ← ${sourceColumn} = ${sourceValue}`);
+                    }
 
                     // Only update if source value exists and is not empty
                     if (sourceValue !== null && sourceValue !== undefined && sourceValue !== '') {
-                        // Initialize nested structure if needed
-                        if (!updatedItem.BDSA.bdsaLocal) {
-                            updatedItem.BDSA.bdsaLocal = {};
+                        // Initialize nested structure if needed (directly on item, not a copy)
+                        if (!item.BDSA) {
+                            item.BDSA = {
+                                bdsaLocal: {},
+                                _dataSource: {}
+                            };
                         }
-                        if (!updatedItem.BDSA._dataSource) {
-                            updatedItem.BDSA._dataSource = {};
+                        if (!item.BDSA.bdsaLocal) {
+                            item.BDSA.bdsaLocal = {};
+                        }
+                        if (!item.BDSA._dataSource) {
+                            item.BDSA._dataSource = {};
                         }
 
-                        // Set the value and track source
-                        updatedItem.BDSA.bdsaLocal[bdsaField] = sourceValue;
-                        updatedItem.BDSA._dataSource[bdsaField] = 'column_mapping';
-                        updatedItem.BDSA._lastModified = new Date().toISOString();
+                        // Set the value and track source directly on the item
+                        item.BDSA.bdsaLocal[bdsaField] = sourceValue;
+                        item.BDSA._dataSource[bdsaField] = 'column_mapping';
+                        item.BDSA._lastModified = new Date().toISOString();
                         itemUpdated = true;
+
+                        // Debug successful mapping
+                        if (index < 3) {
+                            console.log(`✅ Mapped ${bdsaField} = ${sourceValue} from ${sourceColumn}`);
+                        }
                     }
                 }
             });
 
             if (itemUpdated) {
-                updatedItems.push(updatedItem);
-                this.modifiedItems.add(updatedItem.id);
+                this.modifiedItems.add(item.id);
                 updatedCount++;
             }
         });
 
-        // Update the processed data
-        this.processedData = this.processedData.map(item => {
-            const updated = updatedItems.find(u => u.id === item.id);
-            return updated || item;
-        });
-
-        this.saveToStorage();
+        // Skip saveToStorage() for large datasets to avoid quota errors
+        // Data will be persisted via export/sync instead
+        // this.saveToStorage();
         this.notify();
 
         console.log(`📊 Applied column mappings: ${updatedCount} items updated`);
@@ -886,7 +1430,8 @@ class DataStore {
             return updated || item;
         });
 
-        this.saveToStorage();
+        // Skip saveToStorage() for large datasets to avoid quota errors
+        // this.saveToStorage();
         this.notify();
 
         console.log(`🔍 Applied regex rules: ${extractedCount} items updated`);
@@ -1162,7 +1707,9 @@ class DataStore {
             const action = bdsaCaseId ? `Set` : `Cleared`;
             const value = bdsaCaseId ? `${localCaseId} -> ${bdsaCaseId}` : localCaseId;
             console.log(`${action} case ID ${value} for ${updatedCount} items`);
-            this.saveToStorage();
+            // Skip saveToStorage() for large datasets to avoid quota errors
+            // Data will be persisted via export/sync instead
+            // this.saveToStorage();
             this.notify();
         }
     }

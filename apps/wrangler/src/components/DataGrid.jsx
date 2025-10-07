@@ -1,12 +1,20 @@
-import React from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { DATA_SOURCE_TYPES } from '../utils/constants';
+import dataStore from '../utils/dataStore';
+import dsaAuthStore from '../utils/dsaAuthStore';
 
 const DataGrid = ({
     dataStatus,
     getColumnDefs,
     dataSource
 }) => {
+    // Disable server-side pagination for now to fix AG Grid creation error
+    const isServerSidePagination = false; // Temporarily disabled
+
+    // Data source for server-side pagination
+    const dataSourceConfig = null; // Disabled for now
+
     return (
         <div>
             {(() => {
@@ -14,11 +22,38 @@ const DataGrid = ({
                     hasData: dataStatus.processedData && dataStatus.processedData.length > 0,
                     dataLength: dataStatus.processedData ? dataStatus.processedData.length : 0,
                     dataSource: dataStatus.dataSource,
-                    isLoading: dataStatus.isLoading
+                    isLoading: dataStatus.isLoading,
+                    isServerSidePagination,
+                    dataType: typeof dataStatus.processedData,
+                    isArray: Array.isArray(dataStatus.processedData)
                 });
-                return dataStatus.processedData && dataStatus.processedData.length > 0;
+
+                // Check if we have valid data
+                const hasValidData = dataStatus.processedData &&
+                    Array.isArray(dataStatus.processedData) &&
+                    dataStatus.processedData.length > 0;
+
+                if (!hasValidData) {
+                    console.warn('⚠️ DataGrid: No valid data to render', {
+                        hasProcessedData: !!dataStatus.processedData,
+                        isArray: Array.isArray(dataStatus.processedData),
+                        length: dataStatus.processedData?.length || 0
+                    });
+                }
+
+                return hasValidData;
             })() ? (
                 <div className="ag-theme-alpine" style={{ height: '100%', width: '100%', minHeight: '600px' }}>
+                    {(() => {
+                        console.log('🎯 Rendering AG Grid with:', {
+                            rowModelType: isServerSidePagination ? 'serverSide' : 'clientSide',
+                            hasRowData: !isServerSidePagination && !!dataStatus.processedData,
+                            rowDataLength: dataStatus.processedData?.length || 0,
+                            hasColumnDefs: !!getColumnDefs,
+                            columnDefsCount: getColumnDefs()?.length || 0
+                        });
+                        return null;
+                    })()}
                     <AgGridReact
                         rowData={dataStatus.processedData}
                         columnDefs={getColumnDefs()}
@@ -30,9 +65,7 @@ const DataGrid = ({
                         }}
                         pagination={true}
                         paginationPageSize={50}
-                        suppressHorizontalScroll={false}
-                        suppressColumnVirtualisation={false}
-                        suppressRowVirtualisation={false}
+                        animateRows={true}
                     />
                 </div>
             ) : (

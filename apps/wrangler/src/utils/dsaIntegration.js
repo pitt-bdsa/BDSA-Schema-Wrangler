@@ -55,7 +55,17 @@ export const filterFilesByExtension = (dsaData) => {
         const fileName = item.name || item._id || '';
         const extension = fileName.split('.').pop()?.toLowerCase();
 
-        if (!extension || allowedExtensions.includes(extension)) {
+        // Debug logging for first few items
+        if (skipStats.totalSkipped < 10) {
+            console.log(`🔍 File filtering debug: "${fileName}" -> extension: "${extension}" -> allowed: ${allowedExtensions.includes(extension)}`);
+        }
+
+        // If no extension, keep the file (might be a folder or special item)
+        if (!extension) {
+            return true;
+        }
+
+        if (allowedExtensions.includes(extension)) {
             return true; // Keep the file
         } else {
             // Skip the file and track stats
@@ -67,6 +77,42 @@ export const filterFilesByExtension = (dsaData) => {
     });
 
     // Log filtering results
+    console.log(`📁 File filtering: ${filteredData.length} files kept out of ${dsaData.length} total files`);
+
+    // Show sample of file names for debugging
+    if (dsaData.length > 0) {
+        console.log('📁 Sample file names from DSA:', dsaData.slice(0, 10).map(item => item.name || item._id || 'unnamed'));
+        console.log('📁 Sample file extensions:', dsaData.slice(0, 10).map(item => {
+            const fileName = item.name || item._id || '';
+            return fileName.split('.').pop()?.toLowerCase() || 'no-extension';
+        }));
+    }
+
+    // Check if filtering is working
+    if (filteredData.length === dsaData.length) {
+        console.warn('⚠️ No files were filtered! All files match allowed extensions.');
+        console.warn('💡 This might cause localStorage quota issues with large datasets.');
+
+        // If no filtering happened, limit to first 10,000 items to prevent quota issues
+        if (filteredData.length > 10000) {
+            console.warn('⚠️ Limiting to first 10,000 items to prevent quota issues');
+            filteredData.splice(10000);
+        }
+    } else {
+        console.log(`✅ File filtering working: ${((dsaData.length - filteredData.length) / dsaData.length * 100).toFixed(1)}% of files filtered out`);
+    }
+
+    // Debug: Show what we actually got
+    console.log(`🔍 Final result: ${filteredData.length} items after filtering`);
+    if (filteredData.length > 0) {
+        console.log('🔍 Sample of filtered items:', filteredData.slice(0, 3).map(item => ({
+            name: item.name || item._id || 'unnamed',
+            type: item.type || 'unknown'
+        })));
+    } else {
+        console.warn('⚠️ No items left after filtering! This might be why the table is empty.');
+    }
+
     if (skipStats.totalSkipped > 0) {
         console.log(`📁 File filtering applied: ${skipStats.totalSkipped} files skipped out of ${dsaData.length} total files`);
         console.log('Skipped file extensions:', skipStats.extensions);
@@ -76,6 +122,8 @@ export const filterFilesByExtension = (dsaData) => {
         if (exampleSkipped.length > 0) {
             console.log('Example skipped files:', exampleSkipped);
         }
+    } else {
+        console.log('📁 No files were filtered - all files match allowed extensions');
     }
 
     return { filteredData, skipStats };
@@ -88,6 +136,9 @@ export const filterFilesByExtension = (dsaData) => {
  * @returns {Array} Transformed and flattened data
  */
 export const transformDsaData = (dsaData, regexRules = {}) => {
+    console.log('🚨🚨🚨 TRANSFORM DSA DATA CALLED 🚨🚨🚨');
+    console.log('🚨🚨🚨 TRANSFORM DSA DATA CALLED 🚨🚨🚨');
+    console.log('🚨🚨🚨 TRANSFORM DSA DATA CALLED 🚨🚨🚨');
     // This function will transform DSA API response to match your expected data format
     // and flatten nested JSON dictionaries
     if (!dsaData || !Array.isArray(dsaData)) {
@@ -95,7 +146,9 @@ export const transformDsaData = (dsaData, regexRules = {}) => {
     }
 
     // First, enhance data with existing server metadata
+    console.log('🚀 About to call enhanceDataWithExistingMetadata with', dsaData.length, 'items');
     const enhancedData = enhanceDataWithExistingMetadata(dsaData);
+    console.log('✅ enhanceDataWithExistingMetadata completed, returned', enhancedData.length, 'items');
 
     // Apply file extension filtering
     const { filteredData, skipStats } = filterFilesByExtension(enhancedData);
@@ -115,6 +168,9 @@ export const transformDsaData = (dsaData, regexRules = {}) => {
 
             // Include all flattened fields
             ...flattenedItem,
+
+            // Preserve BDSA structure from enhanceDataWithExistingMetadata (don't flatten it)
+            BDSA: item.BDSA || undefined,
 
             // Preserve server metadata markers
             _hasServerMetadata: item._hasServerMetadata || false,
@@ -408,10 +464,16 @@ export const fetchAllDsaItemsPaginated = async (dsaConfig, girderToken, pageSize
     const allItems = [];
     let offset = 0;
     let hasMore = true;
+    let pageCount = 0;
+    const maxPages = 100; // Reduced safety limit to prevent infinite loops
+    const startTime = Date.now();
+    const maxTime = 5 * 60 * 1000; // 5 minutes timeout
 
     console.log('🔄 Starting paginated fetch of all DSA items...');
 
-    while (hasMore) {
+    while (hasMore && pageCount < maxPages && (Date.now() - startTime) < maxTime) {
+        pageCount++;
+
         // Build the API endpoint URL with pagination parameters
         const apiUrl = `${dsaConfig.baseUrl}/api/v1/resource/${dsaConfig.resourceId}/items?type=${dsaConfig.resourceType || 'folder'}&limit=${pageSize}&offset=${offset}`;
 
@@ -420,7 +482,8 @@ export const fetchAllDsaItemsPaginated = async (dsaConfig, girderToken, pageSize
             'Girder-Token': girderToken
         };
 
-        console.log(`📄 Fetching page: offset=${offset}, limit=${pageSize}`);
+        console.log(`📄 Fetching page ${pageCount}: offset=${offset}, limit=${pageSize}`);
+        console.log(`🔢 Page count: ${pageCount}, Max pages: 20`);
         console.log('Request URL:', apiUrl);
 
         try {
@@ -466,6 +529,20 @@ export const fetchAllDsaItemsPaginated = async (dsaConfig, girderToken, pageSize
             if (pageData.length < pageSize) {
                 hasMore = false;
                 console.log(`🏁 Reached end of data. Total items fetched: ${allItems.length}`);
+            } else if (pageData.length === 0) {
+                hasMore = false;
+                console.log(`🏁 No more data available. Total items fetched: ${allItems.length}`);
+            } else if (pageData.length === pageSize) {
+                // If we got exactly the page size, continue but with a limit
+                offset += pageSize;
+                console.log(`➡️ More data available, continuing with offset ${offset}`);
+
+                // Stop after 5 pages (5,000 items) for initial testing
+                if (pageCount >= 5) {
+                    console.log(`⚠️ Stopping after 5 pages for initial testing. Total items: ${allItems.length}`);
+                    console.log(`📊 This should be enough to test file filtering. You can increase the limit later if needed.`);
+                    hasMore = false;
+                }
             } else {
                 offset += pageSize;
                 console.log(`➡️ More data available, continuing with offset ${offset}`);
@@ -477,8 +554,99 @@ export const fetchAllDsaItemsPaginated = async (dsaConfig, girderToken, pageSize
         }
     }
 
+    if (pageCount >= maxPages) {
+        console.warn(`⚠️ Reached maximum page limit (${maxPages}). Stopping pagination.`);
+    }
+
+    if ((Date.now() - startTime) >= maxTime) {
+        console.warn(`⚠️ Reached time limit (${maxTime / 1000}s). Stopping pagination.`);
+    }
+
     console.log(`🎉 Successfully fetched all ${allItems.length} items from DSA resource`);
     return allItems;
+};
+
+/**
+ * Loads more DSA data in paginated batches with progress callback
+ * @param {Object} dsaConfig - DSA configuration object
+ * @param {string} girderToken - Authentication token
+ * @param {number} startPage - Page number to start from (already loaded pages)
+ * @param {number} pagesToLoad - Number of additional pages to load
+ * @param {Function} progressCallback - Callback to report progress
+ * @returns {Promise<Object>} Result with loaded data
+ */
+export const loadMoreDsaDataPaginated = async (dsaConfig, girderToken, startPage, pagesToLoad, progressCallback) => {
+    const pageSize = 1000;
+    let offset = startPage * pageSize;
+    let pagesLoaded = 0;
+    const allNewItems = [];
+
+    console.log(`🔄 Loading ${pagesToLoad} more pages starting from page ${startPage}...`);
+
+    while (pagesLoaded < pagesToLoad) {
+        try {
+            const params = new URLSearchParams({
+                parentType: dsaConfig.resourceType || 'folder',
+                parentId: dsaConfig.resourceId,
+                limit: pageSize,
+                offset: offset
+            });
+
+            const apiUrl = `${dsaConfig.baseUrl}/api/v1/resource/${dsaConfig.resourceId}/items?type=${dsaConfig.resourceType || 'folder'}&limit=${pageSize}&offset=${offset}`;
+
+            const response = await fetch(apiUrl, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Girder-Token': girderToken
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const pageData = await response.json();
+
+            // Apply file filtering to this batch
+            const { filteredData } = filterFilesByExtension(pageData);
+
+            allNewItems.push(...filteredData);
+            pagesLoaded++;
+            offset += pageSize;
+
+            // Report progress
+            if (progressCallback) {
+                progressCallback({
+                    current: pagesLoaded,
+                    total: pagesToLoad,
+                    itemsLoaded: allNewItems.length
+                });
+            }
+
+            console.log(`✅ Loaded page ${startPage + pagesLoaded}: ${filteredData.length} items (${allNewItems.length} total)`);
+
+            // If we got fewer items than requested, we've reached the end
+            if (pageData.length < pageSize) {
+                console.log(`🏁 Reached end of data after ${pagesLoaded} pages`);
+                break;
+            }
+
+        } catch (error) {
+            console.error(`Error loading page ${startPage + pagesLoaded}:`, error);
+            break;
+        }
+    }
+
+    // Transform the loaded data
+    const transformedData = transformDsaData(allNewItems);
+
+    return {
+        success: true,
+        data: transformedData,
+        pagesLoaded: pagesLoaded,
+        message: `Loaded ${pagesLoaded} more pages (${transformedData.length} items)`
+    };
 };
 
 /**
@@ -502,12 +670,11 @@ export const loadDsaData = async (dsaConfig, girderToken, regexRules = {}) => {
             girderToken: girderToken ? `${girderToken.substring(0, 10)}...` : 'empty'
         });
 
-        // Fetch all items using the configured strategy
-        // Default to unlimited (limit=0) for better performance, fallback to pagination if needed
-        const fetchStrategy = dsaConfig.fetchStrategy || 'unlimited';
-        const pageSize = dsaConfig.pageSize || 100;
+        // Use pagination with aggressive limits to prevent infinite loops
+        const fetchStrategy = 'paginate';
+        const pageSize = 1000;
 
-        console.log(`📊 Using fetch strategy: ${fetchStrategy}${fetchStrategy === 'paginate' ? ` (pageSize: ${pageSize})` : ''}`);
+        console.log(`📊 Using fetch strategy: ${fetchStrategy} with aggressive limits`);
 
         const dsaData = await fetchAllDsaItems(dsaConfig, girderToken, {
             strategy: fetchStrategy,
@@ -515,7 +682,9 @@ export const loadDsaData = async (dsaConfig, girderToken, regexRules = {}) => {
         });
 
         // Transform and flatten DSA data to match expected format
+        console.log(`🔄 Transforming ${dsaData.length} raw DSA items...`);
         const transformedData = transformDsaData(dsaData, regexRules);
+        console.log(`✅ Transformation complete: ${transformedData.length} items after filtering and processing`);
 
         if (transformedData.length > 0) {
             // Filter out BDSA object from column generation to avoid [object Object] display
@@ -1450,17 +1619,19 @@ export const syncAllBdsaMetadata = async (baseUrl, items, girderToken, columnMap
  * @returns {Array} DSA data enhanced with existing bdsaLocal metadata
  */
 export const enhanceDataWithExistingMetadata = (dsaData) => {
-    console.log('Enhancing DSA data with existing bdsaLocal metadata...');
+    console.log('🔍 Enhancing DSA data with existing metadata...');
 
-    return dsaData.map(item => {
+    let itemsWithMetadata = 0;
+    let itemsWithBdsaMetadata = 0;
+
+    const enhanced = dsaData.map((item, index) => {
         const enhancedItem = { ...item };
 
-        // Check if bdsaLocal metadata exists
+        // Check for meta.bdsaLocal (old format)
         if (item.meta && item.meta.bdsaLocal) {
             const bdsaLocal = item.meta.bdsaLocal;
-            // console.log(`Found existing bdsaLocal metadata for item ${item._id}:`, bdsaLocal);
+            console.log(`✅ Found meta.bdsaLocal for item ${item._id}:`, bdsaLocal);
 
-            // Initialize BDSA object if it doesn't exist
             if (!enhancedItem.BDSA) {
                 enhancedItem.BDSA = {};
             }
@@ -1468,8 +1639,6 @@ export const enhanceDataWithExistingMetadata = (dsaData) => {
                 enhancedItem.BDSA.bdsaLocal = {};
             }
 
-            // Use existing metadata values if available, otherwise keep current values
-            // Store in the correct bdsaLocal path that the sync function expects
             enhancedItem.BDSA.bdsaLocal.localCaseId = bdsaLocal.localCaseId || enhancedItem.BDSA.bdsaLocal.localCaseId || '';
             enhancedItem.BDSA.bdsaLocal.localStainID = bdsaLocal.localStainID || enhancedItem.BDSA.bdsaLocal.localStainID || '';
             enhancedItem.BDSA.bdsaLocal.localRegionId = bdsaLocal.localRegionId || enhancedItem.BDSA.bdsaLocal.localRegionId || '';
@@ -1477,12 +1646,53 @@ export const enhanceDataWithExistingMetadata = (dsaData) => {
             enhancedItem.BDSA.bdsaLocal.bdsaStainProtocol = bdsaLocal.bdsaStainProtocol || enhancedItem.BDSA.bdsaLocal.bdsaStainProtocol || [];
             enhancedItem.BDSA.bdsaLocal.bdsaRegionProtocol = bdsaLocal.bdsaRegionProtocol || enhancedItem.BDSA.bdsaLocal.bdsaRegionProtocol || [];
 
-            // Mark that this data came from server metadata
             enhancedItem._hasServerMetadata = true;
-            enhancedItem._serverMetadataSource = 'bdsaLocal';
+            enhancedItem._serverMetadataSource = 'meta.bdsaLocal';
             enhancedItem._serverMetadataLastUpdated = bdsaLocal.lastUpdated;
+            itemsWithMetadata++;
+        }
+        // Check for meta.BDSA.bdsaLocal (new format)
+        else if (item.meta && item.meta.BDSA && item.meta.BDSA.bdsaLocal) {
+            const bdsaLocal = item.meta.BDSA.bdsaLocal;
+            console.log(`✅ Found meta.BDSA.bdsaLocal for item ${item._id}:`, bdsaLocal);
+
+            if (!enhancedItem.BDSA) {
+                enhancedItem.BDSA = {};
+            }
+            if (!enhancedItem.BDSA.bdsaLocal) {
+                enhancedItem.BDSA.bdsaLocal = {};
+            }
+
+            enhancedItem.BDSA.bdsaLocal.localCaseId = bdsaLocal.localCaseId || enhancedItem.BDSA.bdsaLocal.localCaseId || '';
+            enhancedItem.BDSA.bdsaLocal.localStainID = bdsaLocal.localStainID || enhancedItem.BDSA.bdsaLocal.localStainID || '';
+            enhancedItem.BDSA.bdsaLocal.localRegionId = bdsaLocal.localRegionId || enhancedItem.BDSA.bdsaLocal.localRegionId || '';
+            enhancedItem.BDSA.bdsaLocal.bdsaCaseId = bdsaLocal.bdsaCaseId || enhancedItem.BDSA.bdsaLocal.bdsaCaseId || '';
+            enhancedItem.BDSA.bdsaLocal.bdsaStainProtocol = bdsaLocal.bdsaStainProtocol || enhancedItem.BDSA.bdsaLocal.bdsaStainProtocol || [];
+            enhancedItem.BDSA.bdsaLocal.bdsaRegionProtocol = bdsaLocal.bdsaRegionProtocol || enhancedItem.BDSA.bdsaLocal.bdsaRegionProtocol || [];
+
+            enhancedItem._hasServerMetadata = true;
+            enhancedItem._serverMetadataSource = 'meta.BDSA.bdsaLocal';
+            enhancedItem._serverMetadataLastUpdated = bdsaLocal.lastUpdated;
+            itemsWithBdsaMetadata++;
+        }
+
+        // Debug first item structure
+        if (index === 0) {
+            console.log('🔍 First item structure:', {
+                itemId: item._id,
+                hasMeta: !!item.meta,
+                metaKeys: item.meta ? Object.keys(item.meta) : [],
+                hasBdsaLocal: !!(item.meta?.bdsaLocal),
+                hasMetaBDSA: !!(item.meta?.BDSA),
+                metaBDSAKeys: item.meta?.BDSA ? Object.keys(item.meta.BDSA) : [],
+                hasMetaBDSAbdsaLocal: !!(item.meta?.BDSA?.bdsaLocal)
+            });
         }
 
         return enhancedItem;
     });
+
+    console.log(`📊 Metadata import summary: ${itemsWithMetadata} items with meta.bdsaLocal, ${itemsWithBdsaMetadata} items with meta.BDSA.bdsaLocal`);
+
+    return enhanced;
 };

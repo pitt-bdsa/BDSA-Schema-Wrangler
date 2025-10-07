@@ -33,6 +33,12 @@ export const applyRegexRules = (data, regexRules, columnMapping = {}) => {
         if (!updatedItem.BDSA) {
             updatedItem.BDSA = {};
         }
+        if (!updatedItem.BDSA.bdsaLocal) {
+            updatedItem.BDSA.bdsaLocal = {};
+        }
+        if (!updatedItem.BDSA._dataSource) {
+            updatedItem.BDSA._dataSource = {};
+        }
 
         // Track which fields were extracted by regex vs pre-populated from source
         const regexExtracted = {};
@@ -49,28 +55,27 @@ export const applyRegexRules = (data, regexRules, columnMapping = {}) => {
         fieldMappings.forEach(({ field, sourceColumn }) => {
             const regexRule = regexRules[field];
 
-            if (!regexRule?.pattern) {
-                // No regex rule defined for this field
-                return;
-            }
-
             // Check if we have a source column for this field
             const hasSourceColumn = sourceColumn && sourceColumn.trim() !== '';
             const sourceValue = hasSourceColumn ? item[sourceColumn] : null;
 
             // Pre-populate BDSA field from source data if available and not empty
             if (hasSourceColumn && sourceValue && sourceValue !== '' && sourceValue !== '0') {
-                updatedItem.BDSA[field] = sourceValue;
-                dataSource[field] = 'source';
-                console.log(`Pre-populated ${field} from source column ${sourceColumn}: ${sourceValue}`);
+                updatedItem.BDSA.bdsaLocal[field] = sourceValue;
+                updatedItem.BDSA._dataSource[field] = 'column_mapping';
+                dataSource[field] = 'column_mapping';
+                console.log(`✅ Pre-populated ${field} from source column ${sourceColumn}: ${sourceValue}`);
             }
 
-            // Only apply regex if the BDSA field is still empty/null
-            const currentValue = updatedItem.BDSA[field];
-            if (!currentValue || currentValue === '' || currentValue === '0') {
+            // Only apply regex if:
+            // 1. The BDSA field is still empty/null after source column check
+            // 2. A regex rule is defined for this field
+            const currentValue = updatedItem.BDSA.bdsaLocal[field];
+            if ((!currentValue || currentValue === '' || currentValue === '0') && regexRule?.pattern) {
                 const extractedValue = extractWithRegex(fileName, regexRule.pattern);
                 if (extractedValue) {
-                    updatedItem.BDSA[field] = extractedValue;
+                    updatedItem.BDSA.bdsaLocal[field] = extractedValue;
+                    updatedItem.BDSA._dataSource[field] = 'regex';
                     regexExtracted[field] = true;
                     dataSource[field] = 'regex';
                     console.log(`Applied regex to ${field}: ${extractedValue}`);

@@ -168,6 +168,24 @@ export const generateColumnDefinitions = (processedData, columnVisibility, colum
                     columns.push(...generateColumnDefs(value, fullKey));
                 } else {
                     // Add column for primitive values
+
+                    // Check if field should be hidden
+                    const isMetaBDSAPattern = fullKey.startsWith('meta.BDSA.') || fullKey.startsWith('meta.bdsaLocal.');
+                    const shouldHide = (columnVisibility[fullKey] === false) ||
+                        (HIDDEN_DSA_FIELDS.includes(fullKey) && columnVisibility[fullKey] !== true) ||
+                        // Hide all meta.BDSA.* and meta.bdsaLocal.* fields (unless explicitly shown)
+                        (isMetaBDSAPattern && columnVisibility[fullKey] !== true);
+
+                    // Debug logging for meta.BDSA fields
+                    if (isMetaBDSAPattern) {
+                        console.log(`🔍 Column hiding check for ${fullKey}:`, {
+                            isMetaBDSAPattern,
+                            columnVisibilityValue: columnVisibility[fullKey],
+                            shouldHide,
+                            willBeHidden: shouldHide
+                        });
+                    }
+
                     const columnDef = {
                         field: fullKey,
                         headerName: getColumnDisplayName(fullKey),
@@ -175,10 +193,18 @@ export const generateColumnDefinitions = (processedData, columnVisibility, colum
                         filter: true,
                         resizable: true,
                         minWidth: 150,
-                        // Hide if explicitly set to false in columnVisibility OR if it's in HIDDEN_DSA_FIELDS (unless explicitly overridden)
-                        hide: (columnVisibility[fullKey] === false) || (HIDDEN_DSA_FIELDS.includes(fullKey) && columnVisibility[fullKey] !== true),
+                        hide: shouldHide,
                         cellStyle: (params) => getCellStyle(params, fullKey)
                     };
+
+                    // Debug BDSA columns
+                    if (fullKey.startsWith('BDSA.bdsaLocal.')) {
+                        console.log(`🔍 BDSA Column definition:`, {
+                            field: fullKey,
+                            headerName: columnDef.headerName,
+                            hide: columnDef.hide
+                        });
+                    }
 
                     // Make BDSA local fields editable
                     if (fullKey.startsWith('BDSA.bdsaLocal.')) {

@@ -11,6 +11,11 @@ const DataControlsToolbar = ({
     excelFile,
     handleExcelFileChange,
     handleLoadExcel,
+    accessoryFile,
+    handleAccessoryFileChange,
+    handleLoadAccessoryFile,
+    accessoryData,
+    accessoryMatchInfo,
     isLoading,
     authStatus,
     handleLoadDsa,
@@ -93,6 +98,44 @@ const DataControlsToolbar = ({
                 >
                     Refresh Data
                 </button>
+            )}
+
+            {/* Accessory File Controls - Only show when DSA data is loaded */}
+            {dataStatus.processedData && dataStatus.processedData.length > 0 && dataStatus.dataSource === 'dsa' && (
+                <>
+                    <div className="accessory-file-section">
+                        <div className="file-input-container">
+                            <input
+                                type="file"
+                                id="accessory-file"
+                                accept=".csv,.xlsx,.xls"
+                                onChange={handleAccessoryFileChange}
+                                className="file-input"
+                            />
+                            <label htmlFor="accessory-file" className="file-input-label">
+                                {accessoryFile ? accessoryFile.name : 'Choose Accessory File'}
+                            </label>
+                        </div>
+                        <button
+                            className="load-accessory-btn"
+                            onClick={handleLoadAccessoryFile}
+                            disabled={!accessoryFile || isLoading}
+                            title="Upload CSV/Excel file with additional metadata to match with DSA items"
+                        >
+                            Load Accessory Data
+                        </button>
+                        {accessoryData && (
+                            <span className="accessory-status">
+                                ✓ {accessoryData.length} accessory items loaded
+                                {accessoryMatchInfo && (
+                                    <span className="match-info">
+                                        ({accessoryMatchInfo.matched} matched, {accessoryMatchInfo.unmatched} unmatched)
+                                    </span>
+                                )}
+                            </span>
+                        )}
+                    </div>
+                </>
             )}
 
             {dataStatus.processedData && dataStatus.processedData.length > 0 && (

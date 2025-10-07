@@ -321,6 +321,8 @@ class DsaAuthStore {
             hasConfig: !!this.config.baseUrl,
             user: this.userInfo,
             serverUrl: this.config.baseUrl,
+            resourceId: this.config.resourceId,
+            resourceType: this.config.resourceType,
             lastLogin: this.lastLogin,
             tokenExpiry: this.tokenExpiry
         };

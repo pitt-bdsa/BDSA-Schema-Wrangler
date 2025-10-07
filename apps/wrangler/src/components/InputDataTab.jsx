@@ -7,6 +7,7 @@ import RegexRulesModal from './RegexRulesModal';
 import BdsaMappingModal from './BdsaMappingModal';
 import DsaSyncModal from './DsaSyncModal';
 import ExcelSheetSelectionModal from './ExcelSheetSelectionModal';
+import AccessoryFieldMappingModal from './AccessoryFieldMappingModal';
 import DataControlsToolbar from './DataControlsToolbar';
 import DataGrid from './DataGrid';
 import ColumnVisibilityModal from './ColumnVisibilityModal';
@@ -29,8 +30,13 @@ const InputDataTab = () => {
     const [error, setError] = useState(null);
     const [csvFile, setCsvFile] = useState(null);
     const [excelFile, setExcelFile] = useState(null);
+    const [accessoryFile, setAccessoryFile] = useState(null);
     const [showExcelSheetModal, setShowExcelSheetModal] = useState(false);
     const [excelSheetNames, setExcelSheetNames] = useState([]);
+    const [accessoryData, setAccessoryData] = useState(null);
+    const [accessoryMatchInfo, setAccessoryMatchInfo] = useState(null);
+    const [showAccessoryFieldMapping, setShowAccessoryFieldMapping] = useState(false);
+    const [accessoryFilenameField, setAccessoryFilenameField] = useState('');
     // Column visibility management
     const {
         showColumnPanel,
@@ -81,6 +87,8 @@ const InputDataTab = () => {
     const [showDsaSync, setShowDsaSync] = useState(false);
     const [isDataRefresh, setIsDataRefresh] = useState(false);
     const [hasAppliedInitialRegex, setHasAppliedInitialRegex] = useState(false);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
+    const [loadMoreProgress, setLoadMoreProgress] = useState({ current: 0, total: 0 });
 
     // Generate nested keys from an object (excluding meta.bdsaLocal fields)
 
@@ -93,7 +101,9 @@ const InputDataTab = () => {
             const newStatus = dataStore.getStatus();
             console.log('🔄 InputDataTab received data update:', {
                 processedDataLength: newStatus.processedData?.length || 0,
-                dataSource: newStatus.dataSource
+                dataSource: newStatus.dataSource,
+                hasData: !!newStatus.processedData,
+                dataType: typeof newStatus.processedData
             });
             setDataStatus(newStatus);
 
@@ -163,6 +173,15 @@ const InputDataTab = () => {
                 console.log('🔄 All items already have BDSA field values, skipping auto-apply of regex rules');
             }
 
+            // Also auto-apply column mappings if they exist
+            if (columnMappings && (columnMappings.localCaseId || columnMappings.localStainID || columnMappings.localRegionId)) {
+                console.log(`🔄 Auto-applying column mappings:`, columnMappings);
+                const mappingResult = dataStore.applyColumnMappings(columnMappings);
+                if (mappingResult.success) {
+                    console.log(`✅ Auto-applied column mappings: ${mappingResult.updatedCount} items updated`);
+                }
+            }
+
             // Mark that we've applied initial regex to prevent infinite loop
             setHasAppliedInitialRegex(true);
         }
@@ -178,6 +197,24 @@ const InputDataTab = () => {
             handleLoadDsa();
         }
     }, [authStatus.isAuthenticated, dataSource, dataStatus.processedData, isLoading]);
+
+    // Auto-refresh DSA data when resource ID changes
+    useEffect(() => {
+        if (authStatus.isAuthenticated &&
+            dataSource === DATA_SOURCE_TYPES.DSA &&
+            authStatus.resourceId &&
+            dataStatus.processedData &&
+            dataStatus.processedData.length > 0 &&
+            !isLoading) {
+            // Check if the resource ID has changed by comparing with stored data source info
+            const currentResourceId = dataStatus.dataSourceInfo?.resourceId;
+            if (currentResourceId && currentResourceId !== authStatus.resourceId) {
+                console.log('🔄 DSA resource changed, auto-refreshing data...');
+                console.log(`Previous resource: ${currentResourceId}, New resource: ${authStatus.resourceId}`);
+                handleLoadDsa();
+            }
+        }
+    }, [authStatus.resourceId, authStatus.isAuthenticated, dataSource, dataStatus.processedData, dataStatus.dataSourceInfo, isLoading]);
 
     const handleDataSourceChange = (newDataSource) => {
         setDataSource(newDataSource);
@@ -328,10 +365,144 @@ const InputDataTab = () => {
         }
     };
 
+    const handleLoadMoreData = async () => {
+        if (!authStatus.isAuthenticated) {
+            setError('Please login to DSA server first');
+            return;
+        }
+
+        if (!dataStatus.processedData || dataStatus.processedData.length === 0) {
+            setError('Please load initial data first');
+            return;
+        }
+
+        setIsLoadingMore(true);
+        setError(null);
+
+        try {
+            // Load data in the background
+            const result = await dataStore.loadMoreDsaData(dsaAuthStore, (progress) => {
+                setLoadMoreProgress(progress);
+            });
+
+            if (result.success) {
+                console.log(`✅ Successfully loaded ${result.totalItemCount} total items from DSA`);
+            }
+        } catch (error) {
+            console.error('Error loading more DSA data:', error);
+            setError(error.message);
+        } finally {
+            setIsLoadingMore(false);
+            setLoadMoreProgress({ current: 0, total: 0 });
+        }
+    };
+
+    const handleAccessoryFileChange = (event) => {
+        const file = event.target.files[0];
+        if (file && (file.type === 'text/csv' ||
+            file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+            file.type === 'application/vnd.ms-excel' ||
+            file.name.endsWith('.csv') ||
+            file.name.endsWith('.xlsx') ||
+            file.name.endsWith('.xls'))) {
+            setAccessoryFile(file);
+            setError(null);
+        } else {
+            setError('Please select a valid CSV or Excel file');
+            setAccessoryFile(null);
+        }
+    };
+
+    const handleLoadAccessoryFile = async () => {
+        if (!accessoryFile) {
+            setError('Please select an accessory file first');
+            return;
+        }
+
+        if (!dataStatus.processedData || dataStatus.processedData.length === 0) {
+            setError('Please load DSA data first before uploading accessory file');
+            return;
+        }
+
+        setIsLoading(true);
+        setLoadingMessage('Loading accessory file...');
+        setError(null);
+
+        try {
+            const result = await dataStore.loadAccessoryFile(accessoryFile);
+            if (result.success) {
+                console.log(`✅ Successfully loaded accessory data: ${result.itemCount} items`);
+                console.log(`🔗 Matched ${result.matchedCount} items with DSA data`);
+                console.log('📊 Matching details:', result.matchedData);
+                setAccessoryData(result.data);
+
+                // Show detailed matching info to user
+                if (result.matchedCount > 0) {
+                    console.log(`🎯 Found ${result.matchedCount} matches out of ${result.itemCount} accessory items`);
+                    console.log('💡 Accessory fields added with "accessory_" prefix - check the data grid columns');
+                    setAccessoryMatchInfo({
+                        matched: result.matchedCount,
+                        total: result.itemCount,
+                        unmatched: result.itemCount - result.matchedCount
+                    });
+                } else {
+                    console.warn('⚠️ No matches found - check if filenames in accessory file match DSA item names');
+                    setAccessoryMatchInfo({
+                        matched: 0,
+                        total: result.itemCount,
+                        unmatched: result.itemCount
+                    });
+                    // Show field mapping dialog if no matches found
+                    setShowAccessoryFieldMapping(true);
+                }
+            }
+        } catch (error) {
+            console.error('Error loading accessory file:', error);
+            setError(error.message);
+        } finally {
+            setIsLoading(false);
+            setLoadingMessage('');
+        }
+    };
+
+    const handleAccessoryFieldMapping = (filenameField) => {
+        setAccessoryFilenameField(filenameField);
+        setShowAccessoryFieldMapping(false);
+
+        // Retry matching with the specified filename field
+        if (accessoryData && filenameField) {
+            setIsLoading(true);
+            setLoadingMessage('Retrying accessory data matching...');
+
+            try {
+                const result = dataStore.retryAccessoryMatching(accessoryData, filenameField);
+                setAccessoryMatchInfo({
+                    matched: result.matchedCount,
+                    total: result.itemCount,
+                    unmatched: result.itemCount - result.matchedCount
+                });
+
+                if (result.matchedCount > 0) {
+                    console.log(`🎯 Retry successful: ${result.matchedCount} matches found using field "${filenameField}"`);
+                } else {
+                    console.warn(`⚠️ Still no matches found using field "${filenameField}"`);
+                }
+            } catch (error) {
+                console.error('Error retrying accessory matching:', error);
+                setError(error.message);
+            } finally {
+                setIsLoading(false);
+                setLoadingMessage('');
+            }
+        }
+    };
+
     const handleClearData = () => {
         if (window.confirm('Are you sure you want to clear all loaded data?')) {
             dataStore.clearData();
             setCsvFile(null);
+            setAccessoryFile(null);
+            setAccessoryData(null);
             setError(null);
             setHasAppliedInitialRegex(false); // Reset regex flag when clearing data
         }
@@ -632,6 +803,47 @@ const InputDataTab = () => {
                 </div>
             )}
 
+            {/* Load More Data Button */}
+            {dataStatus.processedData && dataStatus.processedData.length > 0 && dataStatus.dataSource === 'dsa' && !isLoadingMore && (
+                <div className="load-more-alert">
+                    <div className="alert-header">
+                        <span className="alert-icon">⬇️</span>
+                        <span className="alert-title">Load More Data</span>
+                    </div>
+                    <div className="alert-content">
+                        <p>
+                            Currently showing <strong>{dataStatus.processedData.length.toLocaleString()}</strong> items.
+                            Click below to continue loading more data in the background.
+                        </p>
+                        <button className="load-more-data-btn" onClick={handleLoadMoreData}>
+                            Load More Data in Background
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Loading More Progress */}
+            {isLoadingMore && (
+                <div className="loading-more-alert">
+                    <div className="alert-header">
+                        <span className="alert-icon">⏳</span>
+                        <span className="alert-title">Loading More Data...</span>
+                    </div>
+                    <div className="alert-content">
+                        <p>
+                            Loading page {loadMoreProgress.current} of {loadMoreProgress.total}...
+                            You can continue working while data loads in the background.
+                        </p>
+                        <div className="progress-bar">
+                            <div
+                                className="progress-fill"
+                                style={{ width: `${(loadMoreProgress.current / loadMoreProgress.total) * 100}%` }}
+                            ></div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Toolbar */}
             <DataControlsToolbar
                 dataSource={dataSource}
@@ -642,6 +854,11 @@ const InputDataTab = () => {
                 excelFile={excelFile}
                 handleExcelFileChange={handleExcelFileChange}
                 handleLoadExcel={handleLoadExcel}
+                accessoryFile={accessoryFile}
+                handleAccessoryFileChange={handleAccessoryFileChange}
+                handleLoadAccessoryFile={handleLoadAccessoryFile}
+                accessoryData={accessoryData}
+                accessoryMatchInfo={accessoryMatchInfo}
                 isLoading={isLoading}
                 authStatus={authStatus}
                 handleLoadDsa={handleLoadDsa}
@@ -659,6 +876,31 @@ const InputDataTab = () => {
                     <span className="update-status-text">
                         {dataStore.modifiedItems.size} of {dataStatus.processedData.length} items updated
                     </span>
+                </div>
+            )}
+
+            {/* Accessory Data Help Message */}
+            {accessoryData && accessoryMatchInfo && (
+                <div className="accessory-help-message">
+                    <div className="help-header">
+                        <span className="help-icon">💡</span>
+                        <span className="help-title">Accessory Data Loaded</span>
+                    </div>
+                    <div className="help-content">
+                        <p>
+                            <strong>{accessoryMatchInfo.matched}</strong> out of <strong>{accessoryMatchInfo.total}</strong> accessory items were matched with DSA data.
+                        </p>
+                        <p>
+                            <strong>To see the accessory fields:</strong> Click the "Show Columns" button above to view all available columns.
+                            Look for fields starting with <code>accessory_</code> (e.g., <code>accessory_R#</code>, <code>accessory_SB Stain/IHC</code>).
+                        </p>
+                        {accessoryMatchInfo.unmatched > 0 && (
+                            <p className="unmatched-warning">
+                                <strong>Note:</strong> {accessoryMatchInfo.unmatched} items couldn't be matched.
+                                Check that filenames in your accessory file exactly match the DSA item names.
+                            </p>
+                        )}
+                    </div>
                 </div>
             )}
 
@@ -700,6 +942,15 @@ const InputDataTab = () => {
 
             {/* Data Grid */}
             <div className="data-grid-container">
+                {(() => {
+                    console.log('📊 About to render DataGrid with:', {
+                        hasDataStatus: !!dataStatus,
+                        processedDataLength: dataStatus.processedData?.length || 0,
+                        dataSource: dataSource,
+                        hasGetColumnDefs: typeof getColumnDefs === 'function'
+                    });
+                    return null;
+                })()}
                 <DataGrid
                     dataStatus={dataStatus}
                     getColumnDefs={getColumnDefs}
@@ -739,6 +990,15 @@ const InputDataTab = () => {
                 sheetNames={excelSheetNames}
                 onSheetSelect={handleSheetSelect}
                 fileName={excelFile?.name || ''}
+            />
+
+            {/* Accessory Field Mapping Modal */}
+            <AccessoryFieldMappingModal
+                isOpen={showAccessoryFieldMapping}
+                onClose={() => setShowAccessoryFieldMapping(false)}
+                onSave={handleAccessoryFieldMapping}
+                accessoryData={accessoryData}
+                dsaData={dataStatus.processedData || []}
             />
         </div>
     );
