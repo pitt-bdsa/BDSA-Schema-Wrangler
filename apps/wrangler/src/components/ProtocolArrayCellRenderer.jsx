@@ -58,12 +58,20 @@ const ProtocolArrayCellRenderer = ({ value, data, colDef, api }) => {
         data.BDSA.bdsaLocal[fieldName] = newProtocols;
         data.BDSA._lastModified = new Date().toISOString();
 
-        // Mark as modified
-        dataStore.modifiedItems.add(data.id);
-        dataStore.saveToStorage();
+        // Mark as modified (with fallback ID fields for safety)
+        const itemId = data.id || data._id || data.dsa_id;
+        if (itemId) {
+            dataStore.modifiedItems.add(itemId);
+            console.log(`🔍 Protocol updated for item ${itemId}. Total modified: ${dataStore.modifiedItems.size}`);
+        } else {
+            console.error(`❌ Cannot mark item as modified - no valid ID found:`, data);
+        }
 
-        // Don't notify while modal is open - this causes re-renders that close the modal
-        // The notification will happen when the modal closes
+        // Skip saveToStorage() for large datasets to avoid quota errors
+        // dataStore.saveToStorage();
+
+        // Notify listeners to update UI
+        dataStore.notify();
     };
 
     const handleClose = () => {

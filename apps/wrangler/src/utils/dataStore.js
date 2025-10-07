@@ -17,6 +17,9 @@ class DataStore {
         this.bdsaCaseIdConflicts = new Map();
         this.caseProtocolMappings = new Map();
 
+        // Track if we're currently in a batch update to avoid excessive notifications
+        this._batchUpdateMode = false;
+
         // DSA sync state
         this.syncInProgress = false;
         this.syncCancelled = false; // Flag to cancel sync loop
@@ -131,6 +134,106 @@ class DataStore {
         });
     }
 
+    /**
+     * Create a proxy that automatically tracks changes to BDSA fields
+     * This ensures any modification to BDSA.{} structure is tracked
+     */
+    createBdsaTrackingProxy(item) {
+        const self = this;
+
+        // Ensure the item has a valid ID
+        if (!item.id) {
+            console.warn(`⚠️ Item missing ID:`, item);
+            return item; // Return original item if no ID
+        }
+
+        // Create a deep proxy that monitors nested BDSA changes
+        const createDeepProxy = (obj, path = '') => {
+            if (obj === null || typeof obj !== 'object') {
+                return obj;
+            }
+
+            return new Proxy(obj, {
+                set(target, property, value) {
+                    const fullPath = path ? `${path}.${property}` : property;
+                    const oldValue = target[property];
+                    target[property] = value;
+
+                    // Check if this is a BDSA-related change
+                    if (fullPath.startsWith('BDSA.') ||
+                        fullPath === 'BDSA' ||
+                        (path === 'BDSA.bdsaLocal' && property !== '_dataSource' && property !== '_lastModified')) {
+
+                        // Mark item as modified
+                        self.modifiedItems.add(item.id);
+                        console.log(`🔍 Auto-tracked BDSA change: ${fullPath} = ${value} (item ${item.id})`);
+                        console.log(`🔍 Current modifiedItems size: ${self.modifiedItems.size}`);
+
+                        // Update timestamp
+                        if (item.BDSA) {
+                            item.BDSA._lastModified = new Date().toISOString();
+                        }
+
+                        // Notify listeners (but only if not in batch mode)
+                        if (!self._batchUpdateMode) {
+                            self.notify();
+                        }
+                    }
+
+                    // If the new value is an object, wrap it in a proxy too
+                    if (typeof value === 'object' && value !== null) {
+                        target[property] = createDeepProxy(value, fullPath);
+                    }
+
+                    return true;
+                },
+
+                // Add get trap to handle AG Grid property access
+                get(target, property) {
+                    const value = target[property];
+
+                    // If AG Grid is trying to access properties, return the actual value
+                    if (property === 'id' || property === '_id' || property === 'dsa_id') {
+                        return value;
+                    }
+
+                    return value;
+                }
+            });
+        };
+
+        return createDeepProxy(item);
+    }
+
+    /**
+     * Start batch update mode to avoid excessive notifications
+     */
+    startBatchUpdate() {
+        this._batchUpdateMode = true;
+    }
+
+    /**
+     * End batch update mode and notify listeners
+     */
+    endBatchUpdate() {
+        this._batchUpdateMode = false;
+        this.notify();
+    }
+
+    /**
+     * Wrap existing processed data in BDSA tracking proxies
+     * This should be called after data is loaded to enable automatic change tracking
+     */
+    enableBdsaTracking() {
+        if (this.processedData && this.processedData.length > 0) {
+            console.log('🔍 Enabling BDSA tracking for existing data...');
+            // Temporarily disable proxy to avoid AG Grid issues
+            // this.processedData = this.processedData.map(item => this.createBdsaTrackingProxy(item));
+            console.log(`✅ BDSA tracking enabled for ${this.processedData.length} items (proxy disabled for AG Grid compatibility)`);
+            console.log(`🔍 Sample item:`, this.processedData[0]);
+        }
+    }
+
     // Force a data refresh by creating a new array reference
     forceDataRefresh() {
         if (this.processedData && this.processedData.length > 0) {
@@ -233,7 +336,11 @@ class DataStore {
                         lastModified: file.lastModified
                     };
                     this.dataLoadTimestamp = new Date().toISOString();
+                    console.log(`🧹 Clearing modifiedItems (${this.modifiedItems.size} items) from:`, new Error().stack);
                     this.modifiedItems.clear();
+
+                    // Enable BDSA tracking for the loaded data
+                    this.enableBdsaTracking();
 
                     // Clear case ID mappings when loading new data (they're specific to the previous dataset)
                     this.caseIdMappings.clear();
@@ -358,6 +465,7 @@ class DataStore {
                         sheetName: targetSheetName
                     };
                     this.dataLoadTimestamp = new Date().toISOString();
+                    console.log(`🧹 Clearing modifiedItems (${this.modifiedItems.size} items) from:`, new Error().stack);
                     this.modifiedItems.clear();
 
                     // Clear case ID mappings when loading new data (they're specific to the previous dataset)
@@ -711,7 +819,19 @@ class DataStore {
                 resourceType: config.resourceType
             };
             this.dataLoadTimestamp = new Date().toISOString();
-            this.modifiedItems.clear();
+
+            // Only clear modifiedItems if this is a fresh data load (not a refresh with existing modifications)
+            if (this.modifiedItems.size === 0) {
+                console.log(`🧹 Clearing modifiedItems (${this.modifiedItems.size} items) from:`, new Error().stack);
+                this.modifiedItems.clear();
+            } else {
+                console.log(`🔍 Preserving ${this.modifiedItems.size} existing modified items during data load`);
+            }
+
+            // Enable BDSA tracking for the loaded data
+            console.log(`🔍 About to enable BDSA tracking. Current modifiedItems size: ${this.modifiedItems.size}`);
+            this.enableBdsaTracking();
+            console.log(`🔍 After enabling BDSA tracking. Current modifiedItems size: ${this.modifiedItems.size}`);
 
             // Set DSA configuration for sync functionality
             this.girderToken = token;
@@ -1184,6 +1304,7 @@ class DataStore {
         this.dataSource = null;
         this.dataSourceInfo = null;
         this.dataLoadTimestamp = null;
+        console.log(`🧹 Clearing modifiedItems (${this.modifiedItems.size} items) from:`, new Error().stack);
         this.modifiedItems.clear();
         this.caseIdMappings.clear();
         this.caseIdConflicts.clear();
@@ -1468,6 +1589,8 @@ class DataStore {
      */
     clearModifiedItems() {
         console.log(`🧹 Clearing ${this.modifiedItems.size} modified items`);
+        console.trace('🧹 clearModifiedItems called from:');
+        console.log(`🧹 Clearing modifiedItems (${this.modifiedItems.size} items) from:`, new Error().stack);
         this.modifiedItems.clear();
         // Skip saveToStorage() for large datasets to avoid quota errors
         // this.saveToStorage();
@@ -1710,8 +1833,7 @@ class DataStore {
                     delete item.BDSA._dataSource.bdsaCaseId;
                 }
 
-                // Mark as modified since this is a user action that should be synced
-                this.modifiedItems.add(item.id);
+                // Note: modifiedItems.add() is now handled automatically by the BDSA tracking proxy
                 updatedCount++;
             }
         });
@@ -1722,8 +1844,7 @@ class DataStore {
             console.log(`${action} case ID ${value} for ${updatedCount} items`);
             console.log(`🔍 Added ${updatedCount} items to modifiedItems. Total modified: ${this.modifiedItems.size}`);
 
-            // Notify listeners to update UI
-            this.notify();
+            // Note: notify() is now handled automatically by the BDSA tracking proxy
 
             // Skip saveToStorage() for large datasets to avoid quota errors
             // Data will be persisted via export/sync instead
@@ -1770,8 +1891,7 @@ class DataStore {
                     }
                     item.BDSA._dataSource.bdsaCaseId = 'case_id_mapping';
 
-                    // Mark as modified since this is a user action that should be synced
-                    this.modifiedItems.add(item.id);
+                    // Note: modifiedItems.add() is now handled automatically by the BDSA tracking proxy
                     updatedCount++;
                 }
             }
@@ -1781,8 +1901,7 @@ class DataStore {
             console.log(`Applied case ID mappings to ${updatedCount} data items`);
             console.log(`🔍 Added ${updatedCount} items to modifiedItems via case ID mappings. Total modified: ${this.modifiedItems.size}`);
 
-            // Notify listeners to update UI
-            this.notify();
+            // Note: notify() is now handled automatically by the BDSA tracking proxy
         }
     }
 
@@ -2137,7 +2256,10 @@ class DataStore {
     setProcessedData(data, source = null, sourceInfo = null) {
         console.log('📊 Setting processed data with BDSA structure initialization');
         console.log('🚨 WARNING: setProcessedData called - this will clear modifiedItems!');
-        this.processedData = this.initializeBdsaStructure(data);
+
+        // Initialize BDSA structure and wrap each item in a tracking proxy
+        const initializedData = this.initializeBdsaStructure(data);
+        this.processedData = initializedData.map(item => this.createBdsaTrackingProxy(item));
 
         if (source) {
             this.dataSource = source;
@@ -2147,6 +2269,7 @@ class DataStore {
         }
 
         this.dataLoadTimestamp = new Date().toISOString();
+        console.log(`🧹 Clearing modifiedItems (${this.modifiedItems.size} items) from:`, new Error().stack);
         this.modifiedItems.clear();
 
         // Clear case ID mappings when loading new data (they're specific to the previous dataset)

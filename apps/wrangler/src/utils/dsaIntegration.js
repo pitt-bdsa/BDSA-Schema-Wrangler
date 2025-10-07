@@ -169,6 +169,9 @@ export const transformDsaData = (dsaData, regexRules = {}) => {
             // Include all flattened fields
             ...flattenedItem,
 
+            // Create a consistent row identifier (must be set AFTER spreading flattenedItem to override any existing id)
+            id: flattenedItem._id || flattenedItem.id || `dsa_item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+
             // Preserve BDSA structure from enhanceDataWithExistingMetadata (don't flatten it)
             BDSA: item.BDSA || undefined,
 
