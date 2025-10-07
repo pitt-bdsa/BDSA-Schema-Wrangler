@@ -89,6 +89,7 @@ const InputDataTab = () => {
     const [hasAppliedInitialRegex, setHasAppliedInitialRegex] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [loadMoreProgress, setLoadMoreProgress] = useState({ current: 0, total: 0 });
+    const [modifiedItemsCount, setModifiedItemsCount] = useState(0);
 
     // Generate nested keys from an object (excluding meta.bdsaLocal fields)
 
@@ -106,6 +107,12 @@ const InputDataTab = () => {
                 dataType: typeof newStatus.processedData
             });
             setDataStatus(newStatus);
+
+            // Update modified items count separately
+            const newModifiedCount = dataStore.modifiedItems.size;
+            console.log(`🔍 Updating modified items count: ${modifiedItemsCount} → ${newModifiedCount}`);
+            console.log(`🔍 Current modifiedItems Set:`, Array.from(dataStore.modifiedItems));
+            setModifiedItemsCount(newModifiedCount);
 
             // Column loading is now handled in a separate useEffect
         });
@@ -168,6 +175,7 @@ const InputDataTab = () => {
                 const result = dataStore.applyRegexRules(regexRules, true);
                 if (result.success) {
                     console.log(`✅ Auto-applied regex rules: ${result.extractedCount} items updated (marked as modified for sync)`);
+                    console.log(`📊 Modified items count after regex: ${dataStore.modifiedItems.size}`);
                 }
             } else {
                 console.log('🔄 All items already have BDSA field values, skipping auto-apply of regex rules');
@@ -179,11 +187,17 @@ const InputDataTab = () => {
                 const mappingResult = dataStore.applyColumnMappings(columnMappings);
                 if (mappingResult.success) {
                     console.log(`✅ Auto-applied column mappings: ${mappingResult.updatedCount} items updated`);
+                    console.log(`📊 Modified items count after column mappings: ${dataStore.modifiedItems.size}`);
                 }
+            } else {
+                console.log(`🔄 No column mappings to auto-apply:`, columnMappings);
             }
 
             // Mark that we've applied initial regex to prevent infinite loop
             setHasAppliedInitialRegex(true);
+
+            // Debug: Check final modified items count
+            console.log(`📊 Final modified items count after auto-apply: ${dataStore.modifiedItems.size}`);
         }
     }, [dataStatus.processedData, dataStatus.dataSource, isDataRefresh, hasAppliedInitialRegex]); // Removed regexRules from dependencies
 
@@ -770,55 +784,33 @@ const InputDataTab = () => {
                 </div>
             )}
 
-            {/* File Filtering Alert */}
+            {/* File Filtering Alert - Compact */}
             {window.dsaSkipStats && window.dsaSkipStats.totalSkipped > 0 && (
-                <div className="file-filter-alert">
-                    <div className="alert-header">
-                        <span className="alert-icon">📁</span>
-                        <span className="alert-title">File Filtering Applied</span>
-                    </div>
-                    <div className="alert-content">
-                        <p>
-                            <strong>{window.dsaSkipStats.totalSkipped.toLocaleString()}</strong> files were skipped
-                            to improve performance. Only image files (CZI, MRXS, NDPI, TIFF, SVS, PNG, JPG) are shown.
-                        </p>
-                        <div className="skipped-extensions">
-                            <strong>Skipped file types:</strong>
-                            {Object.entries(window.dsaSkipStats.extensions)
-                                .sort(([, a], [, b]) => b - a)
-                                .slice(0, 10)
-                                .map(([ext, count]) => (
-                                    <span key={ext} className="extension-tag">
-                                        .{ext} ({count.toLocaleString()})
-                                    </span>
-                                ))
-                            }
-                            {Object.keys(window.dsaSkipStats.extensions).length > 10 && (
-                                <span className="more-extensions">
-                                    +{Object.keys(window.dsaSkipStats.extensions).length - 10} more types
-                                </span>
-                            )}
-                        </div>
-                    </div>
+                <div className="compact-notification file-filter-notification">
+                    <span className="notification-icon">📁</span>
+                    <span className="notification-text">
+                        {window.dsaSkipStats.totalSkipped.toLocaleString()} files filtered (image files only)
+                    </span>
+                    <button
+                        className="notification-close"
+                        onClick={() => window.dsaSkipStats = null}
+                        title="Dismiss"
+                    >
+                        ×
+                    </button>
                 </div>
             )}
 
-            {/* Load More Data Button */}
+            {/* Load More Data Button - Compact */}
             {dataStatus.processedData && dataStatus.processedData.length > 0 && dataStatus.dataSource === 'dsa' && !isLoadingMore && (
-                <div className="load-more-alert">
-                    <div className="alert-header">
-                        <span className="alert-icon">⬇️</span>
-                        <span className="alert-title">Load More Data</span>
-                    </div>
-                    <div className="alert-content">
-                        <p>
-                            Currently showing <strong>{dataStatus.processedData.length.toLocaleString()}</strong> items.
-                            Click below to continue loading more data in the background.
-                        </p>
-                        <button className="load-more-data-btn" onClick={handleLoadMoreData}>
-                            Load More Data in Background
-                        </button>
-                    </div>
+                <div className="compact-notification load-more-notification">
+                    <span className="notification-icon">⬇️</span>
+                    <span className="notification-text">
+                        Showing {dataStatus.processedData.length.toLocaleString()} items
+                    </span>
+                    <button className="notification-btn" onClick={handleLoadMoreData}>
+                        Load More
+                    </button>
                 </div>
             )}
 
@@ -871,10 +863,10 @@ const InputDataTab = () => {
             />
 
             {/* Update Status Indicator */}
-            {dataStatus.processedData && dataStatus.processedData.length > 0 && dataStore.modifiedItems.size > 0 && (
+            {dataStatus.processedData && dataStatus.processedData.length > 0 && modifiedItemsCount > 0 && (
                 <div className="update-status-indicator">
                     <span className="update-status-text">
-                        {dataStore.modifiedItems.size} of {dataStatus.processedData.length} items updated
+                        {modifiedItemsCount} of {dataStatus.processedData.length} items updated
                     </span>
                 </div>
             )}

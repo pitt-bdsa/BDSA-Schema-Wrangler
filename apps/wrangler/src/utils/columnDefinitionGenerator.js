@@ -123,6 +123,7 @@ const getCellStyle = (params, fullKey) => {
 };
 
 const onCellValueChanged = (params) => {
+    console.log('🔍 onCellValueChanged called:', params);
     const { data, newValue, oldValue, colDef } = params;
     if (newValue !== oldValue) {
         // Update the BDSA field
@@ -141,6 +142,10 @@ const onCellValueChanged = (params) => {
 
         // Mark item as modified
         dataStore.modifiedItems.add(data.id);
+        console.log(`🔍 Added item ${data.id} to modifiedItems. Total modified: ${dataStore.modifiedItems.size}`);
+
+        // Notify listeners to update UI
+        dataStore.notify();
 
         console.log(`📝 Manual edit: ${colDef.field} = "${newValue}" (was "${oldValue}")`);
     }
@@ -210,6 +215,7 @@ export const generateColumnDefinitions = (processedData, columnVisibility, colum
                     if (fullKey.startsWith('BDSA.bdsaLocal.')) {
                         columnDef.editable = true;
                         columnDef.onCellValueChanged = onCellValueChanged;
+                        console.log(`🔍 BDSA Column created: ${fullKey} (editable: ${columnDef.editable})`);
                     }
 
                     columns.push(columnDef);

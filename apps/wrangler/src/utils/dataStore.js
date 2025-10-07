@@ -90,7 +90,8 @@ class DataStore {
         });
 
         if (migrated) {
-            this.saveToStorage();
+            // Skip saveToStorage() for large datasets to avoid quota errors
+            // this.saveToStorage();
             console.log('🔄 Migrated protocol IDs in processed data to use protocol names instead of timestamps');
         }
     }
@@ -239,7 +240,8 @@ class DataStore {
                     this.caseIdConflicts.clear();
                     this.bdsaCaseIdConflicts.clear();
 
-                    this.saveToStorage();
+                    // Skip saveToStorage() for large datasets to avoid quota errors
+                    // this.saveToStorage();
                     this.notify();
 
                     resolve({
@@ -363,7 +365,8 @@ class DataStore {
                     this.caseIdConflicts.clear();
                     this.bdsaCaseIdConflicts.clear();
 
-                    this.saveToStorage();
+                    // Skip saveToStorage() for large datasets to avoid quota errors
+                    // this.saveToStorage();
                     this.notify();
 
                     resolve({
@@ -575,7 +578,8 @@ class DataStore {
         });
 
         // Save changes and notify listeners
-        this.saveToStorage();
+        // Skip saveToStorage() for large datasets to avoid quota errors
+        // this.saveToStorage();
         this.notify();
 
         console.log(`🔗 Accessory data matching complete: ${matchedCount}/${accessoryData.length} items matched with DSA data`);
@@ -661,7 +665,8 @@ class DataStore {
         });
 
         // Save changes and notify listeners
-        this.saveToStorage();
+        // Skip saveToStorage() for large datasets to avoid quota errors
+        // this.saveToStorage();
         this.notify();
 
         console.log(`🔗 Retry matching complete: ${matchedCount}/${accessoryData.length} items matched using field "${filenameField}"`);
@@ -714,7 +719,8 @@ class DataStore {
 
             // Try to save to storage, but don't fail if quota exceeded
             try {
-                this.saveToStorage();
+                // Skip saveToStorage() for large datasets to avoid quota errors
+                // this.saveToStorage();
             } catch (error) {
                 if (error.name === 'QuotaExceededError') {
                     console.warn('⚠️ Data too large for localStorage, skipping storage save');
@@ -1184,7 +1190,8 @@ class DataStore {
         this.bdsaCaseIdConflicts.clear();
         this.caseProtocolMappings.clear();
 
-        this.saveToStorage();
+        // Skip saveToStorage() for large datasets to avoid quota errors
+        // this.saveToStorage();
         this.notify();
     }
 
@@ -1323,6 +1330,7 @@ class DataStore {
             if (itemUpdated) {
                 this.modifiedItems.add(item.id);
                 updatedCount++;
+                console.log(`🔍 Added item ${item.id} to modifiedItems. Total modified: ${this.modifiedItems.size}`);
             }
         });
 
@@ -1419,6 +1427,7 @@ class DataStore {
                 // Only mark as modified if this is user-initiated processing, not initial data loading
                 if (markAsModified) {
                     this.modifiedItems.add(updatedItem.id);
+                    console.log(`🔍 Added item ${updatedItem.id} to modifiedItems via regex. Total modified: ${this.modifiedItems.size}`);
                 }
                 extractedCount++;
             }
@@ -1460,7 +1469,8 @@ class DataStore {
     clearModifiedItems() {
         console.log(`🧹 Clearing ${this.modifiedItems.size} modified items`);
         this.modifiedItems.clear();
-        this.saveToStorage();
+        // Skip saveToStorage() for large datasets to avoid quota errors
+        // this.saveToStorage();
         this.notify();
     }
 
@@ -1568,7 +1578,8 @@ class DataStore {
                 console.log(`Cleared ${clearedCount} items from modified items set after successful sync`);
 
                 // Save the updated state
-                this.saveToStorage();
+                // Skip saveToStorage() for large datasets to avoid quota errors
+                // this.saveToStorage();
             }
 
             console.log('DSA metadata sync completed:', results);
@@ -1637,7 +1648,8 @@ class DataStore {
 
     setColumnMappings(mappings) {
         this.columnMappings = { ...this.columnMappings, ...mappings };
-        this.saveToStorage();
+        // Skip saveToStorage() for large datasets to avoid quota errors
+        // this.saveToStorage();
         this.notify();
     }
 
@@ -1657,7 +1669,8 @@ class DataStore {
         // Apply the mappings to the actual data items
         this.applyCaseIdMappingsToData();
 
-        this.saveToStorage();
+        // Skip saveToStorage() for large datasets to avoid quota errors
+        // this.saveToStorage();
         // Don't call notify() to avoid triggering any logic that might mark items as modified
     }
 
@@ -1707,10 +1720,14 @@ class DataStore {
             const action = bdsaCaseId ? `Set` : `Cleared`;
             const value = bdsaCaseId ? `${localCaseId} -> ${bdsaCaseId}` : localCaseId;
             console.log(`${action} case ID ${value} for ${updatedCount} items`);
+            console.log(`🔍 Added ${updatedCount} items to modifiedItems. Total modified: ${this.modifiedItems.size}`);
+
+            // Notify listeners to update UI
+            this.notify();
+
             // Skip saveToStorage() for large datasets to avoid quota errors
             // Data will be persisted via export/sync instead
             // this.saveToStorage();
-            this.notify();
         }
     }
 
@@ -1762,6 +1779,10 @@ class DataStore {
 
         if (updatedCount > 0) {
             console.log(`Applied case ID mappings to ${updatedCount} data items`);
+            console.log(`🔍 Added ${updatedCount} items to modifiedItems via case ID mappings. Total modified: ${this.modifiedItems.size}`);
+
+            // Notify listeners to update UI
+            this.notify();
         }
     }
 
@@ -1891,7 +1912,8 @@ class DataStore {
         // Remove the conflict
         this.caseIdConflicts.delete(localCaseId);
 
-        this.saveToStorage();
+        // Skip saveToStorage() for large datasets to avoid quota errors
+        // this.saveToStorage();
         console.log(`Resolved conflict for localCaseId "${localCaseId}": updated ${updatedCount} items to use BDSA Case ID "${chosenBdsaCaseId}"`);
     }
 
@@ -1924,7 +1946,8 @@ class DataStore {
         // Remove the conflict
         this.caseIdConflicts.delete(localCaseId);
 
-        this.saveToStorage();
+        // Skip saveToStorage() for large datasets to avoid quota errors
+        // this.saveToStorage();
         console.log(`Cleared conflict for localCaseId "${localCaseId}": removed BDSA Case ID from ${updatedCount} items`);
     }
 
@@ -1983,7 +2006,8 @@ class DataStore {
         // This allows the UI to show it as resolved rather than disappearing
         this.bdsaCaseIdConflicts.set(bdsaCaseId, new Set([chosenLocalCaseId, 'RESOLVED']));
 
-        this.saveToStorage();
+        // Skip saveToStorage() for large datasets to avoid quota errors
+        // this.saveToStorage();
         // Don't immediately notify to allow user to track fixes
         // this.notify();
         console.log(`Resolved BDSA Case ID conflict for "${bdsaCaseId}": kept mapping for "${chosenLocalCaseId}", removed from ${updatedCount} other items`);
@@ -2025,7 +2049,8 @@ class DataStore {
         // This allows the UI to show it as resolved rather than disappearing
         this.bdsaCaseIdConflicts.set(bdsaCaseId, new Set(['CLEARED']));
 
-        this.saveToStorage();
+        // Skip saveToStorage() for large datasets to avoid quota errors
+        // this.saveToStorage();
         // Don't immediately notify to allow user to track fixes
         // this.notify();
         console.log(`Cleared BDSA Case ID conflict for "${bdsaCaseId}": removed BDSA Case ID from ${updatedCount} items`);
@@ -2111,6 +2136,7 @@ class DataStore {
      */
     setProcessedData(data, source = null, sourceInfo = null) {
         console.log('📊 Setting processed data with BDSA structure initialization');
+        console.log('🚨 WARNING: setProcessedData called - this will clear modifiedItems!');
         this.processedData = this.initializeBdsaStructure(data);
 
         if (source) {
@@ -2131,7 +2157,8 @@ class DataStore {
         // Clear sync results when loading new data (they're specific to the previous dataset)
         this.lastSyncResults = null;
 
-        this.saveToStorage();
+        // Skip saveToStorage() for large datasets to avoid quota errors
+        // this.saveToStorage();
         this.notify();
 
         console.log('✅ Processed data set with BDSA structure:', {
@@ -2599,7 +2626,8 @@ class DataStore {
 
             // Only save to storage and notify if not in batch mode
             if (!batchMode) {
-                this.saveToStorage();
+                // Skip saveToStorage() for large datasets to avoid quota errors
+                // this.saveToStorage();
                 this.notify();
             }
             console.log(`✅ Added protocol ${protocolId} to slide ${slideId}. New protocols:`, protocolArray);
@@ -2670,7 +2698,8 @@ class DataStore {
             dataRow.BDSA._lastModified = new Date().toISOString();
             this.modifiedItems.add(dataRow.id);
 
-            this.saveToStorage();
+            // Skip saveToStorage() for large datasets to avoid quota errors
+            // this.saveToStorage();
             this.notify();
             console.log(`✅ Protocol ${protocolId} removed from slide ${slideId} (marked as modified)`);
         } else {

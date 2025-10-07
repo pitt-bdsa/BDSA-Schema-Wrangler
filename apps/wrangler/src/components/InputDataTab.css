@@ -1125,3 +1125,75 @@
     color: #f57c00;
     font-weight: 500;
 }
+
+/* Compact Notifications */
+.compact-notification {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    margin: 8px 20px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+
+.file-filter-notification {
+    background: #e3f2fd;
+    border: 1px solid #bbdefb;
+    color: #1565c0;
+}
+
+.load-more-notification {
+    background: #fff3e0;
+    border: 1px solid #ffcc02;
+    color: #e65100;
+}
+
+.notification-icon {
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.notification-text {
+    flex: 1;
+    font-weight: 500;
+}
+
+.notification-close {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    color: #666;
+    cursor: pointer;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.notification-close:hover {
+    background: rgba(0, 0, 0, 0.1);
+    color: #333;
+}
+
+.notification-btn {
+    background: #1976d2;
+    color: white;
+    border: none;
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background-color 0.2s;
+}
+
+.notification-btn:hover {
+    background: #1565c0;
+}
