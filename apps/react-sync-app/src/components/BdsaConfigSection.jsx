@@ -1,9 +1,9 @@
 import React from 'react';
 
-const BdsaConfigSection = ({ 
-  metadataConfig, 
-  onConfigChange, 
-  isLoading 
+const BdsaConfigSection = ({
+  metadataConfig,
+  onConfigChange,
+  isLoading
 }) => {
   return (
     <div className="metadata-config">
@@ -30,8 +30,12 @@ const BdsaConfigSection = ({
             onChange={(e) => onConfigChange('syncAllItems', e.target.checked)}
             disabled={isLoading}
           />
-          Sync All Items (not just modified ones)
+          Sync All Items
         </label>
+        <small className="help-text">
+          <strong>Checked:</strong> Sync all items (recommended for first-time sync)<br />
+          <strong>Unchecked:</strong> Only sync items that have been modified since last sync
+        </small>
       </div>
     </div>
   );

@@ -828,6 +828,10 @@ class DataStore {
             };
             this.dataLoadTimestamp = new Date().toISOString();
 
+            // Clean up orphaned IDs from modifiedItems Set
+            // (items that were modified but no longer exist after data refresh)
+            this.cleanupModifiedItems();
+
             // Only clear modifiedItems if this is a fresh data load (not a refresh with existing modifications)
             if (this.modifiedItems.size === 0) {
                 console.log(`🧹 Clearing modifiedItems (${this.modifiedItems.size} items) from:`, new Error().stack);
@@ -1398,9 +1402,10 @@ class DataStore {
     /**
      * Apply column mappings to populate BDSA fields from source data
      * @param {Object} columnMappings - Object mapping BDSA fields to source columns
+     * @param {boolean} markAsModified - Whether to mark items as modified (default: true)
      * @returns {Object} - Result with success status and updated count
      */
-    applyColumnMappings(columnMappings) {
+    applyColumnMappings(columnMappings, markAsModified = true) {
         if (!this.processedData || this.processedData.length === 0) {
             return { success: false, error: 'No data available' };
         }
@@ -1457,9 +1462,14 @@ class DataStore {
             });
 
             if (itemUpdated) {
-                this.modifiedItems.add(item.id);
+                // Only mark as modified if requested
+                if (markAsModified) {
+                    this.modifiedItems.add(item.id);
+                    console.log(`🔍 Added item ${item.id} to modifiedItems. Total modified: ${this.modifiedItems.size}`);
+                } else {
+                    console.log(`🔍 Updated item ${item.id} but did not mark as modified (data refresh)`);
+                }
                 updatedCount++;
-                console.log(`🔍 Added item ${item.id} to modifiedItems. Total modified: ${this.modifiedItems.size}`);
             }
         });
 
@@ -1585,10 +1595,28 @@ class DataStore {
      * @returns {Array} - Array of modified items
      */
     getModifiedItems() {
-        const modifiedItems = this.processedData.filter(item =>
-            this.modifiedItems.has(item.id)
-        );
-        console.log(`📊 Found ${modifiedItems.length} modified items out of ${this.processedData.length} total items`);
+        // Use a Map to deduplicate by item.id (in case of duplicates in processedData)
+        const itemsMap = new Map();
+
+        this.processedData.forEach(item => {
+            if (this.modifiedItems.has(item.id)) {
+                // Only add if not already in map (prevents duplicates)
+                if (!itemsMap.has(item.id)) {
+                    itemsMap.set(item.id, item);
+                }
+            }
+        });
+
+        const modifiedItems = Array.from(itemsMap.values());
+        console.log(`📊 Found ${modifiedItems.length} unique modified items out of ${this.processedData.length} total items`);
+        console.log(`📊 modifiedItems Set size: ${this.modifiedItems.size}`);
+
+        // If there's a mismatch, log a warning
+        if (modifiedItems.length !== this.modifiedItems.size) {
+            console.warn(`⚠️ Mismatch: ${modifiedItems.length} items found but ${this.modifiedItems.size} IDs in Set`);
+            console.warn(`⚠️ This might indicate duplicate items or orphaned IDs in modifiedItems Set`);
+        }
+
         return modifiedItems;
     }
 
@@ -1603,6 +1631,44 @@ class DataStore {
         // Skip saveToStorage() for large datasets to avoid quota errors
         // this.saveToStorage();
         this.notify();
+    }
+
+    /**
+     * Clean up orphaned IDs from modifiedItems Set
+     * (IDs that don't correspond to any items in processedData)
+     */
+    cleanupModifiedItems() {
+        const validIds = new Set(this.processedData.map(item => item.id));
+        const orphanedIds = [];
+
+        this.modifiedItems.forEach(id => {
+            if (!validIds.has(id)) {
+                orphanedIds.push(id);
+            }
+        });
+
+        if (orphanedIds.length > 0) {
+            console.warn(`🧹 Found ${orphanedIds.length} orphaned IDs in modifiedItems Set`);
+            orphanedIds.forEach(id => {
+                this.modifiedItems.delete(id);
+                console.log(`🧹 Removed orphaned ID: ${id}`);
+            });
+            console.log(`✅ Cleaned up modifiedItems Set: ${orphanedIds.length} orphaned IDs removed`);
+            this.notify();
+        }
+    }
+
+    /**
+     * Get the actual count of modified items (ensures accuracy)
+     * This method validates that all IDs in modifiedItems actually exist in processedData
+     * @returns {number} - Actual count of modified items
+     */
+    getModifiedItemsCount() {
+        // Clean up any orphaned IDs first
+        this.cleanupModifiedItems();
+
+        // Return the size of the Set (should be accurate after cleanup)
+        return this.modifiedItems.size;
     }
 
     // DSA Sync Methods
@@ -1816,7 +1882,9 @@ class DataStore {
 
         // Skip saveToStorage() for large datasets to avoid quota errors
         // this.saveToStorage();
-        // Don't call notify() to avoid triggering any logic that might mark items as modified
+
+        // Notify UI of changes so the table updates
+        this.notify();
     }
 
     /**

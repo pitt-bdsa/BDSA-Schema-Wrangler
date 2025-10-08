@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './BdsaMappingModal.css';
+import dsaAuthStore from '../utils/dsaAuthStore';
+import { syncColumnMappingsToFolder, getColumnMappingsFromFolder } from '../utils/dsaIntegration';
 
 const BdsaMappingModal = ({ isOpen, onClose, onSave, currentMappings, availableColumns }) => {
     const [mappings, setMappings] = useState({
@@ -7,6 +9,7 @@ const BdsaMappingModal = ({ isOpen, onClose, onSave, currentMappings, availableC
         localStainID: '',
         localRegionId: ''
     });
+    const [isSyncing, setIsSyncing] = useState(false);
 
     useEffect(() => {
         if (currentMappings) {
@@ -42,6 +45,88 @@ const BdsaMappingModal = ({ isOpen, onClose, onSave, currentMappings, availableC
             localRegionId: 'Local Region ID'
         };
         return labels[field] || field;
+    };
+
+    const handlePushToDSA = async () => {
+        const authStatus = dsaAuthStore.getStatus();
+
+        if (!authStatus.isAuthenticated) {
+            alert('Please login to DSA server first');
+            return;
+        }
+
+        if (!authStatus.isConfigured) {
+            alert('Please configure DSA server first');
+            return;
+        }
+
+        setIsSyncing(true);
+        try {
+            await dsaAuthStore.testConnection();
+
+            const config = dsaAuthStore.getConfig();
+            const result = await syncColumnMappingsToFolder(
+                config.baseUrl,
+                config.resourceId,
+                dsaAuthStore.getToken(),
+                mappings
+            );
+
+            if (result.success) {
+                alert('Column mappings pushed successfully to DSA server!\n\nThese mappings are now specific to this collection.');
+            } else {
+                alert(`Push failed: ${result.error}`);
+            }
+        } catch (error) {
+            alert(`DSA push failed: ${error.message}`);
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    const handlePullFromDSA = async () => {
+        const authStatus = dsaAuthStore.getStatus();
+
+        if (!authStatus.isAuthenticated) {
+            alert('Please login to DSA server first');
+            return;
+        }
+
+        if (!authStatus.isConfigured) {
+            alert('Please configure DSA server first');
+            return;
+        }
+
+        setIsSyncing(true);
+        try {
+            await dsaAuthStore.testConnection();
+
+            const config = dsaAuthStore.getConfig();
+            const result = await getColumnMappingsFromFolder(
+                config.baseUrl,
+                config.resourceId,
+                dsaAuthStore.getToken()
+            );
+
+            if (result.success && result.columnMappings) {
+                const pulledMappings = result.columnMappings.mappings;
+
+                // Confirm before overwriting
+                if (!window.confirm('This will overwrite your current column mappings with the versions from the DSA server. Continue?')) {
+                    setIsSyncing(false);
+                    return;
+                }
+
+                setMappings(pulledMappings);
+                alert('Column mappings pulled successfully from DSA server!');
+            } else {
+                alert('No column mappings found on DSA server for this collection.');
+            }
+        } catch (error) {
+            alert(`DSA pull failed: ${error.message}`);
+        } finally {
+            setIsSyncing(false);
+        }
     };
 
     if (!isOpen) return null;
@@ -95,8 +180,28 @@ const BdsaMappingModal = ({ isOpen, onClose, onSave, currentMappings, availableC
                 </div>
 
                 <div className="bdsa-mapping-modal-footer">
-                    <button onClick={onClose} className="bdsa-mapping-cancel-btn">Cancel</button>
-                    <button onClick={handleSave} className="bdsa-mapping-save-btn">Save Mappings</button>
+                    <div className="bdsa-mapping-footer-left">
+                        <button
+                            onClick={handlePullFromDSA}
+                            className="bdsa-mapping-dsa-btn"
+                            disabled={isSyncing}
+                            title="Pull column mappings from DSA server for this collection"
+                        >
+                            {isSyncing ? '⏳' : '⬇️'} Pull from DSA
+                        </button>
+                        <button
+                            onClick={handlePushToDSA}
+                            className="bdsa-mapping-dsa-btn bdsa-mapping-push-btn"
+                            disabled={isSyncing}
+                            title="Push column mappings to DSA server for this collection"
+                        >
+                            {isSyncing ? '⏳' : '🔄'} Push to DSA
+                        </button>
+                    </div>
+                    <div className="bdsa-mapping-footer-right">
+                        <button onClick={onClose} className="bdsa-mapping-cancel-btn">Cancel</button>
+                        <button onClick={handleSave} className="bdsa-mapping-save-btn">Save Mappings</button>
+                    </div>
                 </div>
             </div>
         </div>

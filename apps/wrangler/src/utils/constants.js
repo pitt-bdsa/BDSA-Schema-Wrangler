@@ -20,6 +20,11 @@ export const HIDDEN_DSA_FIELDS = [
     'meta.BDSA.bdsaLocal.lastUpdated',
     'meta.BDSA.bdsaLocal.source',
 
+    // Raw duplicate fields from transformDsaData (we use BDSA.bdsaLocal versions instead)
+    'localCaseId',
+    'localStainID',
+    'localRegionId',
+
     // Internal DSA fields that are not useful for users
     '_id',
     '_modelType',

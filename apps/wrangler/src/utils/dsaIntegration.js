@@ -468,7 +468,7 @@ export const fetchAllDsaItemsPaginated = async (dsaConfig, girderToken, pageSize
     let offset = 0;
     let hasMore = true;
     let pageCount = 0;
-    const maxPages = 100; // Reduced safety limit to prevent infinite loops
+    const maxPages = 100; // Safety limit to prevent infinite loops
     const startTime = Date.now();
     const maxTime = 5 * 60 * 1000; // 5 minutes timeout
 
@@ -486,7 +486,6 @@ export const fetchAllDsaItemsPaginated = async (dsaConfig, girderToken, pageSize
         };
 
         console.log(`📄 Fetching page ${pageCount}: offset=${offset}, limit=${pageSize}`);
-        console.log(`🔢 Page count: ${pageCount}, Max pages: 20`);
         console.log('Request URL:', apiUrl);
 
         try {
@@ -523,33 +522,30 @@ export const fetchAllDsaItemsPaginated = async (dsaConfig, girderToken, pageSize
             }
 
             const pageData = await response.json();
-            console.log(`✅ Fetched ${pageData.length} items from page (offset ${offset})`);
+            const currentOffset = offset;  // Store current offset before incrementing
+            console.log(`✅ Fetched ${pageData.length} items from page ${pageCount} (offset ${currentOffset})`);
+
+            // Check if we got no data - we're done
+            if (pageData.length === 0) {
+                hasMore = false;
+                console.log(`🏁 No more data available. Total items fetched: ${allItems.length}`);
+                break;
+            }
 
             // Add items to our collection
             allItems.push(...pageData);
 
-            // Check if we should continue (if we got fewer items than requested, we're done)
+            // Check if we got fewer items than requested - we're done
             if (pageData.length < pageSize) {
                 hasMore = false;
-                console.log(`🏁 Reached end of data. Total items fetched: ${allItems.length}`);
-            } else if (pageData.length === 0) {
-                hasMore = false;
-                console.log(`🏁 No more data available. Total items fetched: ${allItems.length}`);
-            } else if (pageData.length === pageSize) {
-                // If we got exactly the page size, continue but with a limit
-                offset += pageSize;
-                console.log(`➡️ More data available, continuing with offset ${offset}`);
-
-                // Stop after 5 pages (5,000 items) for initial testing
-                if (pageCount >= 5) {
-                    console.log(`⚠️ Stopping after 5 pages for initial testing. Total items: ${allItems.length}`);
-                    console.log(`📊 This should be enough to test file filtering. You can increase the limit later if needed.`);
-                    hasMore = false;
-                }
-            } else {
-                offset += pageSize;
-                console.log(`➡️ More data available, continuing with offset ${offset}`);
+                console.log(`🏁 Reached end of data (partial page). Total items fetched: ${allItems.length}`);
+                break;
             }
+
+            // If we got exactly pageSize items, there might be more
+            // Increment offset for next iteration
+            offset += pageSize;
+            console.log(`➡️ Got full page, continuing with next offset ${offset}`);
 
         } catch (error) {
             console.error('Error fetching page:', error);
@@ -559,13 +555,15 @@ export const fetchAllDsaItemsPaginated = async (dsaConfig, girderToken, pageSize
 
     if (pageCount >= maxPages) {
         console.warn(`⚠️ Reached maximum page limit (${maxPages}). Stopping pagination.`);
+        console.warn(`📊 Total items fetched: ${allItems.length}`);
     }
 
     if ((Date.now() - startTime) >= maxTime) {
         console.warn(`⚠️ Reached time limit (${maxTime / 1000}s). Stopping pagination.`);
+        console.warn(`📊 Total items fetched: ${allItems.length}`);
     }
 
-    console.log(`🎉 Successfully fetched all ${allItems.length} items from DSA resource`);
+    console.log(`🎉 Successfully fetched ${allItems.length} items from DSA resource (${pageCount} pages)`);
     return allItems;
 };
 
@@ -959,6 +957,123 @@ export const syncProtocolsToFolder = async (baseUrl, folderId, girderToken, stai
 };
 
 /**
+ * Syncs approved protocols list to DSA folder metadata
+ * @param {string} baseUrl - DSA base URL
+ * @param {string} folderId - DSA folder ID
+ * @param {string} girderToken - Authentication token
+ * @param {Array} approvedStainProtocols - Array of approved stain protocol IDs
+ * @param {Array} approvedRegionProtocols - Array of approved region protocol IDs
+ * @returns {Promise<Object>} Sync result
+ */
+export const syncApprovedProtocolsToFolder = async (baseUrl, folderId, girderToken, approvedStainProtocols, approvedRegionProtocols) => {
+    try {
+        if (!baseUrl || !folderId || !girderToken) {
+            throw new Error('Missing required parameters: baseUrl, folderId, or girderToken');
+        }
+
+        // Prepare the metadata structure for approved protocols
+        const approvedProtocolsMetadata = {
+            bdsaApprovedProtocols: {
+                stainProtocols: approvedStainProtocols || [],
+                regionProtocols: approvedRegionProtocols || [],
+                lastUpdated: new Date().toISOString(),
+                source: 'BDSA-Schema-Wrangler',
+                version: '1.0'
+            }
+        };
+
+        console.log('Syncing approved protocols to folder metadata:', {
+            folderId,
+            approvedStainCount: approvedStainProtocols?.length || 0,
+            approvedRegionCount: approvedRegionProtocols?.length || 0,
+            metadata: approvedProtocolsMetadata
+        });
+
+        const result = await addFolderMetadata(baseUrl, folderId, girderToken, approvedProtocolsMetadata);
+
+        if (result.success) {
+            console.log('Successfully synced approved protocols to folder:', folderId);
+        }
+
+        return result;
+    } catch (error) {
+        console.error('Error syncing approved protocols to folder:', error);
+        return {
+            success: false,
+            folderId,
+            error: error.message
+        };
+    }
+};
+
+/**
+ * Retrieves approved protocols list from DSA folder metadata
+ * @param {string} baseUrl - DSA base URL
+ * @param {string} folderId - DSA folder ID
+ * @param {string} girderToken - Authentication token
+ * @returns {Promise<Object>} Retrieved approved protocols or null if not found
+ */
+export const getApprovedProtocolsFromFolder = async (baseUrl, folderId, girderToken) => {
+    try {
+        if (!baseUrl || !folderId || !girderToken) {
+            throw new Error('Missing required parameters: baseUrl, folderId, or girderToken');
+        }
+
+        const apiUrl = `${baseUrl}/api/v1/folder/${folderId}`;
+        const headers = {
+            'Girder-Token': girderToken
+        };
+
+        console.log('Retrieving folder metadata for approved protocols:', {
+            folderId,
+            apiUrl,
+            headers: { ...headers, 'Girder-Token': '[REDACTED]' }
+        });
+
+        const response = await fetch(apiUrl, {
+            method: 'GET',
+            headers: headers
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Failed to retrieve folder metadata:', {
+                status: response.status,
+                statusText: response.statusText,
+                folderId,
+                response: errorText
+            });
+            throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+
+        // Extract approved protocols from metadata
+        const approvedProtocols = result.meta?.bdsaApprovedProtocols || null;
+
+        if (approvedProtocols) {
+            console.log('Successfully retrieved approved protocols from folder:', folderId);
+        } else {
+            console.log('No approved protocols found in folder metadata:', folderId);
+        }
+
+        return {
+            success: true,
+            folderId,
+            approvedProtocols
+        };
+    } catch (error) {
+        console.error('Error retrieving approved protocols from folder:', error);
+        return {
+            success: false,
+            folderId,
+            error: error.message,
+            approvedProtocols: null
+        };
+    }
+};
+
+/**
  * Syncs BDSA case ID mappings to DSA folder metadata
  * @param {string} baseUrl - DSA base URL
  * @param {string} folderId - DSA folder ID
@@ -1019,6 +1134,237 @@ export const syncCaseIdMappingsToFolder = async (baseUrl, folderId, girderToken,
             success: false,
             folderId,
             error: error.message
+        };
+    }
+};
+
+/**
+ * Syncs regex rules to DSA folder metadata
+ * @param {string} baseUrl - DSA base URL
+ * @param {string} folderId - DSA folder ID
+ * @param {string} girderToken - Authentication token
+ * @param {Object} regexRules - Regex rules object
+ * @param {string} ruleSetName - Optional name for the rule set
+ * @returns {Promise<Object>} Sync result
+ */
+export const syncRegexRulesToFolder = async (baseUrl, folderId, girderToken, regexRules, ruleSetName = '') => {
+    try {
+        if (!baseUrl || !folderId || !girderToken) {
+            throw new Error('Missing required parameters: baseUrl, folderId, or girderToken');
+        }
+
+        // Prepare the metadata structure for regex rules
+        const regexRulesMetadata = {
+            bdsaRegexRules: {
+                rules: regexRules || {},
+                ruleSetName: ruleSetName || 'custom',
+                lastUpdated: new Date().toISOString(),
+                source: 'BDSA-Schema-Wrangler',
+                version: '1.0'
+            }
+        };
+
+        console.log('Syncing regex rules to folder metadata:', {
+            folderId,
+            ruleSetName,
+            rulesCount: Object.keys(regexRules || {}).length,
+            metadata: regexRulesMetadata
+        });
+
+        const result = await addFolderMetadata(baseUrl, folderId, girderToken, regexRulesMetadata);
+
+        if (result.success) {
+            console.log('Successfully synced regex rules to folder:', folderId);
+        }
+
+        return result;
+    } catch (error) {
+        console.error('Error syncing regex rules to folder:', error);
+        return {
+            success: false,
+            folderId,
+            error: error.message
+        };
+    }
+};
+
+/**
+ * Retrieves regex rules from DSA folder metadata
+ * @param {string} baseUrl - DSA base URL
+ * @param {string} folderId - DSA folder ID
+ * @param {string} girderToken - Authentication token
+ * @returns {Promise<Object>} Retrieved regex rules or null if not found
+ */
+export const getRegexRulesFromFolder = async (baseUrl, folderId, girderToken) => {
+    try {
+        if (!baseUrl || !folderId || !girderToken) {
+            throw new Error('Missing required parameters: baseUrl, folderId, or girderToken');
+        }
+
+        const apiUrl = `${baseUrl}/api/v1/folder/${folderId}`;
+        const headers = {
+            'Girder-Token': girderToken
+        };
+
+        console.log('Retrieving folder metadata for regex rules:', {
+            folderId,
+            apiUrl,
+            headers: { ...headers, 'Girder-Token': '[REDACTED]' }
+        });
+
+        const response = await fetch(apiUrl, {
+            method: 'GET',
+            headers: headers
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Failed to retrieve folder metadata:', {
+                status: response.status,
+                statusText: response.statusText,
+                folderId,
+                response: errorText
+            });
+            throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+
+        // Extract regex rules from metadata
+        const regexRules = result.meta?.bdsaRegexRules || null;
+
+        if (regexRules) {
+            console.log('Successfully retrieved regex rules from folder:', folderId);
+        } else {
+            console.log('No regex rules found in folder metadata:', folderId);
+        }
+
+        return {
+            success: true,
+            folderId,
+            regexRules
+        };
+    } catch (error) {
+        console.error('Error retrieving regex rules from folder:', error);
+        return {
+            success: false,
+            folderId,
+            error: error.message,
+            regexRules: null
+        };
+    }
+};
+
+/**
+ * Syncs column mappings to DSA folder metadata
+ * @param {string} baseUrl - DSA base URL
+ * @param {string} folderId - DSA folder ID
+ * @param {string} girderToken - Authentication token
+ * @param {Object} columnMappings - Column mappings object
+ * @returns {Promise<Object>} Sync result
+ */
+export const syncColumnMappingsToFolder = async (baseUrl, folderId, girderToken, columnMappings) => {
+    try {
+        if (!baseUrl || !folderId || !girderToken) {
+            throw new Error('Missing required parameters: baseUrl, folderId, or girderToken');
+        }
+
+        // Prepare the metadata structure for column mappings
+        const columnMappingsMetadata = {
+            bdsaColumnMappings: {
+                mappings: columnMappings || {},
+                lastUpdated: new Date().toISOString(),
+                source: 'BDSA-Schema-Wrangler',
+                version: '1.0'
+            }
+        };
+
+        console.log('Syncing column mappings to folder metadata:', {
+            folderId,
+            mappingsCount: Object.keys(columnMappings || {}).length,
+            metadata: columnMappingsMetadata
+        });
+
+        const result = await addFolderMetadata(baseUrl, folderId, girderToken, columnMappingsMetadata);
+
+        if (result.success) {
+            console.log('Successfully synced column mappings to folder:', folderId);
+        }
+
+        return result;
+    } catch (error) {
+        console.error('Error syncing column mappings to folder:', error);
+        return {
+            success: false,
+            folderId,
+            error: error.message
+        };
+    }
+};
+
+/**
+ * Retrieves column mappings from DSA folder metadata
+ * @param {string} baseUrl - DSA base URL
+ * @param {string} folderId - DSA folder ID
+ * @param {string} girderToken - Authentication token
+ * @returns {Promise<Object>} Retrieved column mappings or null if not found
+ */
+export const getColumnMappingsFromFolder = async (baseUrl, folderId, girderToken) => {
+    try {
+        if (!baseUrl || !folderId || !girderToken) {
+            throw new Error('Missing required parameters: baseUrl, folderId, or girderToken');
+        }
+
+        const apiUrl = `${baseUrl}/api/v1/folder/${folderId}`;
+        const headers = {
+            'Girder-Token': girderToken
+        };
+
+        console.log('Retrieving folder metadata for column mappings:', {
+            folderId,
+            apiUrl,
+            headers: { ...headers, 'Girder-Token': '[REDACTED]' }
+        });
+
+        const response = await fetch(apiUrl, {
+            method: 'GET',
+            headers: headers
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Failed to retrieve folder metadata:', {
+                status: response.status,
+                statusText: response.statusText,
+                folderId,
+                response: errorText
+            });
+            throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+
+        // Extract column mappings from metadata
+        const columnMappings = result.meta?.bdsaColumnMappings || null;
+
+        if (columnMappings) {
+            console.log('Successfully retrieved column mappings from folder:', folderId);
+        } else {
+            console.log('No column mappings found in folder metadata:', folderId);
+        }
+
+        return {
+            success: true,
+            folderId,
+            columnMappings
+        };
+    } catch (error) {
+        console.error('Error retrieving column mappings from folder:', error);
+        return {
+            success: false,
+            folderId,
+            error: error.message,
+            columnMappings: null
         };
     }
 };

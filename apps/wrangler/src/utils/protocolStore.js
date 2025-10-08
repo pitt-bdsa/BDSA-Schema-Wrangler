@@ -5,7 +5,9 @@ const STORAGE_KEYS = {
     STAIN_PROTOCOLS: 'bdsa_stain_protocols',
     REGION_PROTOCOLS: 'bdsa_region_protocols',
     LAST_SYNC: 'bdsa_protocols_last_sync',
-    CONFLICTS: 'bdsa_protocols_conflicts'
+    CONFLICTS: 'bdsa_protocols_conflicts',
+    APPROVED_STAIN: 'bdsa_approved_stain_protocols',
+    APPROVED_REGION: 'bdsa_approved_region_protocols'
 };
 
 // Default protocols
@@ -40,6 +42,8 @@ class ProtocolStore {
         this.regionProtocols = this.loadRegionProtocols();
         this.conflicts = this.loadConflicts();
         this.lastSync = this.loadLastSync();
+        this.approvedStainProtocols = this.loadApprovedStainProtocols();
+        this.approvedRegionProtocols = this.loadApprovedRegionProtocols();
         this.migrateProtocolIds();
     }
 
@@ -178,6 +182,42 @@ class ProtocolStore {
             localStorage.setItem(STORAGE_KEYS.LAST_SYNC, this.lastSync?.toISOString() || '');
         } catch (error) {
             console.error('Error saving last sync:', error);
+        }
+    }
+
+    loadApprovedStainProtocols() {
+        try {
+            const stored = localStorage.getItem(STORAGE_KEYS.APPROVED_STAIN);
+            return stored ? new Set(JSON.parse(stored)) : new Set();
+        } catch (error) {
+            console.error('Error loading approved stain protocols:', error);
+            return new Set();
+        }
+    }
+
+    loadApprovedRegionProtocols() {
+        try {
+            const stored = localStorage.getItem(STORAGE_KEYS.APPROVED_REGION);
+            return stored ? new Set(JSON.parse(stored)) : new Set();
+        } catch (error) {
+            console.error('Error loading approved region protocols:', error);
+            return new Set();
+        }
+    }
+
+    saveApprovedStainProtocols() {
+        try {
+            localStorage.setItem(STORAGE_KEYS.APPROVED_STAIN, JSON.stringify(Array.from(this.approvedStainProtocols)));
+        } catch (error) {
+            console.error('Error saving approved stain protocols:', error);
+        }
+    }
+
+    saveApprovedRegionProtocols() {
+        try {
+            localStorage.setItem(STORAGE_KEYS.APPROVED_REGION, JSON.stringify(Array.from(this.approvedRegionProtocols)));
+        } catch (error) {
+            console.error('Error saving approved region protocols:', error);
         }
     }
 
@@ -567,6 +607,59 @@ class ProtocolStore {
         this.notify();
     }
 
+    // Approved Protocol Management
+    isStainProtocolApproved(protocolId) {
+        return this.approvedStainProtocols.has(protocolId);
+    }
+
+    isRegionProtocolApproved(protocolId) {
+        return this.approvedRegionProtocols.has(protocolId);
+    }
+
+    associateStainProtocol(protocolId) {
+        this.approvedStainProtocols.add(protocolId);
+        this.saveApprovedStainProtocols();
+        this.notify();
+        console.log(`✅ Associated stain protocol "${protocolId}" with current collection`);
+    }
+
+    disassociateStainProtocol(protocolId) {
+        this.approvedStainProtocols.delete(protocolId);
+        this.saveApprovedStainProtocols();
+        this.notify();
+        console.log(`⚠️ Disassociated stain protocol "${protocolId}" from current collection`);
+    }
+
+    associateRegionProtocol(protocolId) {
+        this.approvedRegionProtocols.add(protocolId);
+        this.saveApprovedRegionProtocols();
+        this.notify();
+        console.log(`✅ Associated region protocol "${protocolId}" with current collection`);
+    }
+
+    disassociateRegionProtocol(protocolId) {
+        this.approvedRegionProtocols.delete(protocolId);
+        this.saveApprovedRegionProtocols();
+        this.notify();
+        console.log(`⚠️ Disassociated region protocol "${protocolId}" from current collection`);
+    }
+
+    updateApprovedProtocolsFromDSA(approvedStainIds, approvedRegionIds) {
+        // Update approved protocols from DSA server
+        this.approvedStainProtocols = new Set(approvedStainIds || []);
+        this.approvedRegionProtocols = new Set(approvedRegionIds || []);
+        this.saveApprovedStainProtocols();
+        this.saveApprovedRegionProtocols();
+        this.notify();
+        console.log(`✅ Updated approved protocols from DSA: ${approvedStainIds.length} stain, ${approvedRegionIds.length} region`);
+    }
+
+    getApprovedProtocols() {
+        return {
+            stain: Array.from(this.approvedStainProtocols),
+            region: Array.from(this.approvedRegionProtocols)
+        };
+    }
 
     exportProtocols() {
         return {

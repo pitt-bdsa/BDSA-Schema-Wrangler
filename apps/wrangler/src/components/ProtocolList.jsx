@@ -1,5 +1,6 @@
 import React from 'react';
 import './ProtocolList.css';
+import protocolStore from '../utils/protocolStore';
 
 const ProtocolList = ({ protocols, type, onEdit, onDelete, onAdd }) => {
     const renderProtocolDetails = (protocol) => {
@@ -61,6 +62,32 @@ const ProtocolList = ({ protocols, type, onEdit, onDelete, onAdd }) => {
         return { status: 'local', label: 'Local', className: 'status-local' };
     };
 
+    const isProtocolApproved = (protocol) => {
+        if (type === 'stain') {
+            return protocolStore.isStainProtocolApproved(protocol.id);
+        } else {
+            return protocolStore.isRegionProtocolApproved(protocol.id);
+        }
+    };
+
+    const handleAssociationToggle = (protocol) => {
+        const isApproved = isProtocolApproved(protocol);
+
+        if (isApproved) {
+            if (type === 'stain') {
+                protocolStore.disassociateStainProtocol(protocol.id);
+            } else {
+                protocolStore.disassociateRegionProtocol(protocol.id);
+            }
+        } else {
+            if (type === 'stain') {
+                protocolStore.associateStainProtocol(protocol.id);
+            } else {
+                protocolStore.associateRegionProtocol(protocol.id);
+            }
+        }
+    };
+
     return (
         <div className="protocol-list">
             <div className="protocol-list-header">
@@ -76,18 +103,33 @@ const ProtocolList = ({ protocols, type, onEdit, onDelete, onAdd }) => {
             <div className="protocols-grid">
                 {protocols.map(protocol => {
                     const status = getProtocolStatus(protocol);
+                    const isApproved = isProtocolApproved(protocol);
                     return (
-                        <div key={protocol.id} className="protocol-card">
+                        <div key={protocol.id} className={`protocol-card ${isApproved ? 'approved' : 'not-approved'}`}>
                             <div className="protocol-header">
                                 <div className="protocol-title">
                                     <h4>{protocol.name}</h4>
-                                    <span className={`status-badge ${status.className}`}>
-                                        {status.label}
-                                    </span>
+                                    <div className="protocol-badges">
+                                        <span className={`status-badge ${status.className}`}>
+                                            {status.label}
+                                        </span>
+                                        {protocol.id !== 'ignore' && (
+                                            <span className={`association-badge ${isApproved ? 'approved' : 'not-approved'}`}>
+                                                {isApproved ? '✅ Approved' : '⚠️ Not associated'}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="protocol-actions">
                                     {protocol.id !== 'ignore' && (
                                         <>
+                                            <button
+                                                className={`association-button ${isApproved ? 'disassociate' : 'associate'}`}
+                                                onClick={() => handleAssociationToggle(protocol)}
+                                                title={isApproved ? 'Remove from this collection' : 'Associate with this collection'}
+                                            >
+                                                {isApproved ? '➖' : '➕'}
+                                            </button>
                                             <button
                                                 className="edit-button"
                                                 onClick={() => onEdit(protocol)}

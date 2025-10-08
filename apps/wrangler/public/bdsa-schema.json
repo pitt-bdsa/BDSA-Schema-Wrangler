@@ -49,8 +49,7 @@
                             },
                             "vendor": {
                                 "type": "string",
-                                "title": "Vendor",
-                                "pattern": "^\\w+$"
+                                "title": "Vendor"
                             }
                         }
                     },
@@ -81,8 +80,7 @@
                             },
                             "vendor": {
                                 "type": "string",
-                                "title": "Vendor",
-                                "pattern": "^\\w+$"
+                                "title": "Vendor"
                             }
                         }
                     },
@@ -102,8 +100,7 @@
                             },
                             "vendor": {
                                 "type": "string",
-                                "title": "Vendor",
-                                "pattern": "^\\w+$"
+                                "title": "Vendor"
                             }
                         }
                     },
@@ -135,8 +132,7 @@
                             },
                             "vendor": {
                                 "type": "string",
-                                "title": "Vendor",
-                                "pattern": "^\\w+$"
+                                "title": "Vendor"
                             }
                         }
                     },
@@ -165,8 +161,7 @@
                             },
                             "vendor": {
                                 "type": "string",
-                                "title": "Vendor",
-                                "pattern": "^\\w+$"
+                                "title": "Vendor"
                             },
                             "dilution": {
                                 "type": "string",
@@ -193,8 +188,7 @@
                             },
                             "vendor": {
                                 "type": "string",
-                                "title": "Vendor",
-                                "pattern": "^\\w+$"
+                                "title": "Vendor"
                             },
                             "dilution": {
                                 "type": "string",
@@ -220,8 +214,67 @@
                             },
                             "vendor": {
                                 "type": "string",
-                                "title": "Vendor",
-                                "pattern": "^\\w+$"
+                                "title": "Vendor"
+                            }
+                        }
+                    },
+                    "GFAP": {
+                        "type": "object",
+                        "title": "GFAP",
+                        "properties": {
+                            "dilution": {
+                                "type": "string",
+                                "title": "Dilution",
+                                "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
+                            },
+                            "vendor": {
+                                "type": "string",
+                                "title": "Vendor"
+                            }
+                        }
+                    },
+                    "IBA1": {
+                        "type": "object",
+                        "title": "IBA1",
+                        "properties": {
+                            "dilution": {
+                                "type": "string",
+                                "title": "Dilution",
+                                "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
+                            },
+                            "vendor": {
+                                "type": "string",
+                                "title": "Vendor"
+                            }
+                        }
+                    },
+                    "NeuN": {
+                        "type": "object",
+                        "title": "NeuN",
+                        "properties": {
+                            "dilution": {
+                                "type": "string",
+                                "title": "Dilution",
+                                "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
+                            },
+                            "vendor": {
+                                "type": "string",
+                                "title": "Vendor"
                             }
                         }
                     }

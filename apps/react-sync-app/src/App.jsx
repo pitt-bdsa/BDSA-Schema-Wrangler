@@ -31,7 +31,7 @@ const App = () => {
     const saved = localStorage.getItem('bdsa-sync-metadata-config');
     return saved ? JSON.parse(saved) : {
       bdsaNamingTemplate: '{bdsaCaseId}-{bdsaRegionProtocol}-{bdsaStainProtocol}',
-      syncAllItems: false,
+      syncAllItems: true, // Default to true for better first-time user experience
     };
   });
 
@@ -367,6 +367,13 @@ const App = () => {
     setModifiedItems(newModifiedItems);
     console.log(`📊 Found ${newModifiedItems.size} modified items out of ${processedItems.length} total items`);
 
+    if (newModifiedItems.size === 0) {
+      console.log(`ℹ️ No modified items found. This could mean:`);
+      console.log(`   • This is the first sync (no items have been processed before)`);
+      console.log(`   • No items have been modified since the last sync`);
+      console.log(`   • Check the "Sync All Items" checkbox to sync all items regardless of modification status`);
+    }
+
     return processedItems;
   };
 
@@ -625,9 +632,37 @@ const App = () => {
 
       console.log(`📋 Case ID to Folder ID mapping:`, caseIdToFolderId);
 
+      // Check if this is a first-time sync by looking for existing items in target folders
+      let isFirstTimeSync = true;
+      try {
+        for (const folderId of Object.values(caseIdToFolderId)) {
+          const existingItems = await dsaClient.getResourceItems(folderId, 0, undefined, config.resourceType);
+          if (existingItems.length > 0) {
+            isFirstTimeSync = false;
+            break;
+          }
+        }
+      } catch (error) {
+        console.warn('Could not check for existing items in target folders:', error);
+        // Assume first-time sync if we can't check
+      }
+
+      // Auto-enable syncAllItems for first-time syncs
+      const shouldSyncAllItems = metadataConfig.syncAllItems || isFirstTimeSync;
+      if (isFirstTimeSync && !metadataConfig.syncAllItems) {
+        console.log('🆕 First-time sync detected - automatically syncing all items');
+      }
+
       // Process all items
-      const itemsToProcess = metadataConfig.syncAllItems ? sourceItems : sourceItems.filter(item => modifiedItems.has(item._id));
-      console.log(`🔄 Processing ${itemsToProcess.length} items (${metadataConfig.syncAllItems ? 'all items' : 'modified items only'})`);
+      const itemsToProcess = shouldSyncAllItems ? sourceItems : sourceItems.filter(item => modifiedItems.has(item._id));
+      console.log(`🔄 Processing ${itemsToProcess.length} items (${shouldSyncAllItems ? 'all items' : 'modified items only'})`);
+
+      if (itemsToProcess.length === 0) {
+        console.log(`⚠️ No items to process! This means:`);
+        console.log(`   • Checkbox is unchecked AND no modified items were found`);
+        console.log(`   • Try checking "Sync All Items" to process all ${sourceItems.length} items`);
+        console.log(`   • Or ensure some items have been modified since last sync`);
+      }
 
       let processedCount = 0;
 

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import './RegexRulesModal.css';
 import { REGEX_RULE_SETS } from '../utils/constants.js';
+import dsaAuthStore from '../utils/dsaAuthStore';
+import { syncRegexRulesToFolder, getRegexRulesFromFolder } from '../utils/dsaIntegration';
 
 const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSet: initialSelectedRuleSet, sampleData }) => {
     const [rules, setRules] = useState({
@@ -30,6 +32,7 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
     const [activeTab, setActiveTab] = useState('localCaseId');
     const [selectedRuleSet, setSelectedRuleSet] = useState(initialSelectedRuleSet || '');
     const [showRuleSetSelector, setShowRuleSetSelector] = useState(false);
+    const [isSyncing, setIsSyncing] = useState(false);
 
     useEffect(() => {
         if (currentRules) {
@@ -140,6 +143,91 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
             ]
         };
         return suggestions[field] || [];
+    };
+
+    const handlePushToDSA = async () => {
+        const authStatus = dsaAuthStore.getStatus();
+
+        if (!authStatus.isAuthenticated) {
+            alert('Please login to DSA server first');
+            return;
+        }
+
+        if (!authStatus.isConfigured) {
+            alert('Please configure DSA server first');
+            return;
+        }
+
+        setIsSyncing(true);
+        try {
+            await dsaAuthStore.testConnection();
+
+            const config = dsaAuthStore.getConfig();
+            const result = await syncRegexRulesToFolder(
+                config.baseUrl,
+                config.resourceId,
+                dsaAuthStore.getToken(),
+                rules,
+                selectedRuleSet
+            );
+
+            if (result.success) {
+                alert('Regex rules pushed successfully to DSA server!');
+            } else {
+                alert(`Push failed: ${result.error}`);
+            }
+        } catch (error) {
+            alert(`DSA push failed: ${error.message}`);
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    const handlePullFromDSA = async () => {
+        const authStatus = dsaAuthStore.getStatus();
+
+        if (!authStatus.isAuthenticated) {
+            alert('Please login to DSA server first');
+            return;
+        }
+
+        if (!authStatus.isConfigured) {
+            alert('Please configure DSA server first');
+            return;
+        }
+
+        setIsSyncing(true);
+        try {
+            await dsaAuthStore.testConnection();
+
+            const config = dsaAuthStore.getConfig();
+            const result = await getRegexRulesFromFolder(
+                config.baseUrl,
+                config.resourceId,
+                dsaAuthStore.getToken()
+            );
+
+            if (result.success && result.regexRules) {
+                const pulledRules = result.regexRules.rules;
+                const pulledRuleSetName = result.regexRules.ruleSetName || '';
+
+                // Confirm before overwriting
+                if (!window.confirm('This will overwrite your current regex rules with the versions from the DSA server. Continue?')) {
+                    setIsSyncing(false);
+                    return;
+                }
+
+                setRules(pulledRules);
+                setSelectedRuleSet(pulledRuleSetName);
+                alert('Regex rules pulled successfully from DSA server!');
+            } else {
+                alert('No regex rules found on DSA server.');
+            }
+        } catch (error) {
+            alert(`DSA pull failed: ${error.message}`);
+        } finally {
+            setIsSyncing(false);
+        }
     };
 
     if (!isOpen) return null;
@@ -269,8 +357,28 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
                 </div>
 
                 <div className="regex-modal-footer">
-                    <button onClick={onClose} className="regex-cancel-btn">Cancel</button>
-                    <button onClick={handleSave} className="regex-save-btn">Save Rules</button>
+                    <div className="regex-footer-left">
+                        <button
+                            onClick={handlePullFromDSA}
+                            className="regex-dsa-btn"
+                            disabled={isSyncing}
+                            title="Pull regex rules from DSA server"
+                        >
+                            {isSyncing ? '⏳' : '⬇️'} Pull from DSA
+                        </button>
+                        <button
+                            onClick={handlePushToDSA}
+                            className="regex-dsa-btn regex-push-btn"
+                            disabled={isSyncing}
+                            title="Push regex rules to DSA server"
+                        >
+                            {isSyncing ? '⏳' : '🔄'} Push to DSA
+                        </button>
+                    </div>
+                    <div className="regex-footer-right">
+                        <button onClick={onClose} className="regex-cancel-btn">Cancel</button>
+                        <button onClick={handleSave} className="regex-save-btn">Save Rules</button>
+                    </div>
                 </div>
             </div>
         </div>

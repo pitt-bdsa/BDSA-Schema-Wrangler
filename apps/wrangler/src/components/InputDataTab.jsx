@@ -108,8 +108,8 @@ const InputDataTab = () => {
             });
             setDataStatus(newStatus);
 
-            // Update modified items count separately
-            const newModifiedCount = dataStore.modifiedItems.size;
+            // Update modified items count separately (using accurate count method)
+            const newModifiedCount = dataStore.getModifiedItemsCount();
             console.log(`🔍 Updating modified items count: ${modifiedItemsCount} → ${newModifiedCount}`);
             console.log(`🔍 Current modifiedItems Set:`, Array.from(dataStore.modifiedItems));
             setModifiedItemsCount(newModifiedCount);
@@ -171,10 +171,12 @@ const InputDataTab = () => {
             if (totalNeedingExtraction > 0) {
                 console.log(`🔄 Found items needing regex extraction:`, fieldsNeedingExtraction);
                 console.log(`🔄 Auto-applying regex rules to extract missing field values...`);
-                // Mark items as modified so they can be synced to DSA
-                const result = dataStore.applyRegexRules(regexRules, true);
+                // Don't mark items as modified during data refresh - only mark as modified for initial load
+                const shouldMarkAsModified = !isDataRefresh;
+                const result = dataStore.applyRegexRules(regexRules, shouldMarkAsModified);
                 if (result.success) {
-                    console.log(`✅ Auto-applied regex rules: ${result.extractedCount} items updated (marked as modified for sync)`);
+                    const action = shouldMarkAsModified ? 'marked as modified for sync' : 'extracted (not marked as modified - data refresh)';
+                    console.log(`✅ Auto-applied regex rules: ${result.extractedCount} items updated (${action})`);
                     console.log(`📊 Modified items count after regex: ${dataStore.modifiedItems.size}`);
                 }
             } else {
@@ -184,9 +186,12 @@ const InputDataTab = () => {
             // Also auto-apply column mappings if they exist
             if (columnMappings && (columnMappings.localCaseId || columnMappings.localStainID || columnMappings.localRegionId)) {
                 console.log(`🔄 Auto-applying column mappings:`, columnMappings);
-                const mappingResult = dataStore.applyColumnMappings(columnMappings);
+                // Don't mark items as modified during data refresh - only mark as modified for initial load
+                const shouldMarkAsModified = !isDataRefresh;
+                const mappingResult = dataStore.applyColumnMappings(columnMappings, shouldMarkAsModified);
                 if (mappingResult.success) {
-                    console.log(`✅ Auto-applied column mappings: ${mappingResult.updatedCount} items updated`);
+                    const action = shouldMarkAsModified ? 'updated' : 'mapped (not marked as modified - data refresh)';
+                    console.log(`✅ Auto-applied column mappings: ${mappingResult.updatedCount} items ${action}`);
                     console.log(`📊 Modified items count after column mappings: ${dataStore.modifiedItems.size}`);
                 }
             } else {
@@ -354,6 +359,12 @@ const InputDataTab = () => {
             dataStatus.dataSource === 'dsa';
         setIsDataRefresh(isRefresh);
 
+        // If this is a refresh, clear modified items since we're reloading fresh data
+        if (isRefresh) {
+            console.log('🔄 Data refresh detected - clearing modified items count');
+            dataStore.clearModifiedItems();
+        }
+
         setIsLoading(true);
         setLoadingMessage('Loading data from DSA server...');
         setError(null);
@@ -366,6 +377,65 @@ const InputDataTab = () => {
                 // Check for file filtering stats
                 if (window.dsaSkipStats && window.dsaSkipStats.totalSkipped > 0) {
                     console.log('📁 File filtering applied:', window.dsaSkipStats);
+                }
+
+                // Auto-pull regex rules from DSA server if available
+                try {
+                    const { getRegexRulesFromFolder } = await import('../utils/dsaIntegration.js');
+                    const config = dsaAuthStore.getConfig();
+                    const regexResult = await getRegexRulesFromFolder(
+                        config.baseUrl,
+                        config.resourceId,
+                        dsaAuthStore.getToken()
+                    );
+
+                    if (regexResult.success && regexResult.regexRules) {
+                        const pulledRules = regexResult.regexRules.rules;
+                        const pulledRuleSetName = regexResult.regexRules.ruleSetName || '';
+
+                        // Auto-apply pulled regex rules
+                        setRegexRules(pulledRules);
+                        setSelectedRuleSet(pulledRuleSetName);
+
+                        // Save to localStorage
+                        localStorage.setItem('regexRules', JSON.stringify(pulledRules));
+                        localStorage.setItem('selectedRegexRuleSet', pulledRuleSetName);
+
+                        console.log('✅ Auto-pulled regex rules from DSA server:', pulledRuleSetName || 'custom');
+                    } else {
+                        console.log('ℹ️ No regex rules found on DSA server, using local rules');
+                    }
+                } catch (regexError) {
+                    console.warn('⚠️ Could not auto-pull regex rules:', regexError.message);
+                    // Non-fatal error - continue with local regex rules
+                }
+
+                // Auto-pull column mappings from DSA server if available
+                try {
+                    const { getColumnMappingsFromFolder } = await import('../utils/dsaIntegration.js');
+                    const config = dsaAuthStore.getConfig();
+                    const mappingsResult = await getColumnMappingsFromFolder(
+                        config.baseUrl,
+                        config.resourceId,
+                        dsaAuthStore.getToken()
+                    );
+
+                    if (mappingsResult.success && mappingsResult.columnMappings) {
+                        const pulledMappings = mappingsResult.columnMappings.mappings;
+
+                        // Auto-apply pulled column mappings
+                        setColumnMappings(pulledMappings);
+
+                        // Save to localStorage
+                        localStorage.setItem('columnMappings', JSON.stringify(pulledMappings));
+
+                        console.log('✅ Auto-pulled column mappings from DSA server for this collection');
+                    } else {
+                        console.log('ℹ️ No column mappings found on DSA server, using local mappings');
+                    }
+                } catch (mappingsError) {
+                    console.warn('⚠️ Could not auto-pull column mappings:', mappingsError.message);
+                    // Non-fatal error - continue with local column mappings
                 }
             }
         } catch (error) {
@@ -866,7 +936,7 @@ const InputDataTab = () => {
             {dataStatus.processedData && dataStatus.processedData.length > 0 && modifiedItemsCount > 0 && (
                 <div className="update-status-indicator">
                     <span className="update-status-text">
-                        {modifiedItemsCount} of {dataStatus.processedData.length} items updated
+                        {Math.min(modifiedItemsCount, dataStatus.processedData.length)} of {dataStatus.processedData.length} items updated
                     </span>
                 </div>
             )}

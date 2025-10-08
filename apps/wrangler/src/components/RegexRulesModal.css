@@ -392,11 +392,51 @@
 
 .regex-modal-footer {
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
+    align-items: center;
     gap: 12px;
     padding: 20px;
     border-top: 1px solid #e0e0e0;
     background-color: #f8f9fa;
+}
+
+.regex-footer-left {
+    display: flex;
+    gap: 12px;
+}
+
+.regex-footer-right {
+    display: flex;
+    gap: 12px;
+}
+
+.regex-dsa-btn {
+    background-color: #4a90e2;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.regex-dsa-btn:hover:not(:disabled) {
+    background-color: #357abd;
+}
+
+.regex-dsa-btn:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.regex-push-btn {
+    background-color: #28a745;
+}
+
+.regex-push-btn:hover:not(:disabled) {
+    background-color: #218838;
 }
 
 .regex-cancel-btn {
