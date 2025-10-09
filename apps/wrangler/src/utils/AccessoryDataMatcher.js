@@ -182,6 +182,92 @@ class AccessoryDataMatcher {
 
         return { matchedData, matchedCount, itemCount: accessoryData.length };
     }
+
+    retryAccessoryMatching(accessoryData, filenameField, dataStoreInstance) {
+        if (!dataStoreInstance.processedData || dataStoreInstance.processedData.length === 0) {
+            return { matchedData: [], matchedCount: 0, itemCount: accessoryData.length };
+        }
+
+        const matchedData = [];
+        let matchedCount = 0;
+
+        // Create a map of DSA filenames for quick lookup
+        const dsaFilenameMap = new Map();
+        dataStoreInstance.processedData.forEach((item, index) => {
+            const filename = item.name || item.dsa_name || '';
+            if (filename) {
+                // Store both exact match and normalized versions
+                dsaFilenameMap.set(filename, { item, index });
+                dsaFilenameMap.set(filename.toLowerCase(), { item, index });
+
+                // Also try without extension
+                const nameWithoutExt = filename.replace(/\.[^/.]+$/, '');
+                dsaFilenameMap.set(nameWithoutExt, { item, index });
+                dsaFilenameMap.set(nameWithoutExt.toLowerCase(), { item, index });
+            }
+        });
+
+        // Try to match each accessory item using the specified filename field
+        accessoryData.forEach((accessoryItem, accessoryIndex) => {
+            let matched = false;
+
+            const accessoryFilename = accessoryItem[filenameField];
+
+            if (accessoryFilename) {
+                // Try exact match first
+                let dsaItem = dsaFilenameMap.get(accessoryFilename);
+
+                if (!dsaItem) {
+                    // Try case-insensitive match
+                    dsaItem = dsaFilenameMap.get(accessoryFilename.toLowerCase());
+                }
+
+                if (!dsaItem) {
+                    // Try without extension
+                    const nameWithoutExt = accessoryFilename.replace(/\.[^/.]+$/, '');
+                    dsaItem = dsaFilenameMap.get(nameWithoutExt);
+                    if (!dsaItem) {
+                        dsaItem = dsaFilenameMap.get(nameWithoutExt.toLowerCase());
+                    }
+                }
+
+                if (dsaItem) {
+                    // Add accessory data as temporary fields to the DSA item
+                    if (!dsaItem.item.accessoryData) {
+                        dsaItem.item.accessoryData = {};
+                    }
+
+                    // Add all accessory fields with a prefix to avoid conflicts
+                    Object.keys(accessoryItem).forEach(key => {
+                        if (key !== filenameField) {
+                            dsaItem.item.accessoryData[`accessory_${key}`] = accessoryItem[key];
+                        }
+                    });
+
+                    // Mark the item as modified
+                    dataStoreInstance.modifiedItems.add(dsaItem.item.id || dsaItem.index);
+                    matched = true;
+                    matchedCount++;
+                }
+            }
+
+            matchedData.push({
+                accessoryIndex,
+                accessoryItem,
+                matched,
+                dsaItem: matched ? dsaItem : null
+            });
+        });
+
+        // Save changes and notify listeners
+        // Skip saveToStorage() for large datasets to avoid quota errors
+        // dataStoreInstance.saveToStorage();
+        dataStoreInstance.notify();
+
+        console.log(`🔗 Retry matching complete: ${matchedCount}/${accessoryData.length} items matched using field "${filenameField}"`);
+
+        return { matchedData, matchedCount, itemCount: accessoryData.length };
+    }
 }
 
 const accessoryDataMatcher = new AccessoryDataMatcher();
