@@ -214,6 +214,7 @@ export const transformDsaData = (dsaData, regexRules = {}) => {
     // Store skip stats globally for UI display
     if (typeof window !== 'undefined') {
         window.dsaSkipStats = skipStats;
+        console.log('🔍 DEBUG: Setting window.dsaSkipStats:', skipStats);
     }
 
     return result;

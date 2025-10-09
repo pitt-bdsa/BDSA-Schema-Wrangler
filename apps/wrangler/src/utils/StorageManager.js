@@ -10,7 +10,9 @@ class StorageManager {
             const stored = localStorage.getItem(this.storageKey);
             if (stored) {
                 const data = JSON.parse(stored);
-                dataStoreInstance.processedData = dataStoreInstance.initializeBdsaStructure(data.processedData || []);
+                // Don't call initializeBdsaStructure on restored data - it already has the structure
+                // and calling it creates new object references that trigger change tracking
+                dataStoreInstance.processedData = data.processedData || [];
                 dataStoreInstance.dataSource = data.dataSource;
                 dataStoreInstance.dataSourceInfo = data.dataSourceInfo;
                 dataStoreInstance.dataLoadTimestamp = data.dataLoadTimestamp;

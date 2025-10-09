@@ -6,11 +6,8 @@ class StatisticsManager {
     }
 
     getStatus(dataStoreInstance) {
-        // Ensure BDSA structure is always initialized when data is accessed
-        if (dataStoreInstance.processedData && dataStoreInstance.processedData.length > 0) {
-            dataStoreInstance.processedData = dataStoreInstance.initializeBdsaStructure(dataStoreInstance.processedData);
-        }
-
+        // Don't re-initialize BDSA structure on status check - it creates new object references
+        // and triggers false change detection. Structure should already be initialized from loading.
         return {
             processedData: dataStoreInstance.processedData,
             dataSource: dataStoreInstance.dataSource,

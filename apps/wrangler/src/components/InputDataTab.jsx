@@ -90,6 +90,9 @@ const InputDataTab = () => {
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [loadMoreProgress, setLoadMoreProgress] = useState({ current: 0, total: 0 });
     const [modifiedItemsCount, setModifiedItemsCount] = useState(0);
+    const [hasMoreData, setHasMoreData] = useState(true); // Track if there's more data to load
+    const [showFileFilterNotification, setShowFileFilterNotification] = useState(false);
+    const [isNotificationFading, setIsNotificationFading] = useState(false);
 
     // Generate nested keys from an object (excluding meta.bdsaLocal fields)
 
@@ -127,19 +130,62 @@ const InputDataTab = () => {
         };
     }, []);
 
+    // Set hasMoreData based on loaded data
+    useEffect(() => {
+        if (dataStatus.processedData && dataStatus.processedData.length > 0 && dataStatus.dataSource === 'dsa') {
+            const itemCount = dataStatus.processedData.length;
+            const shouldHaveMoreData = itemCount < 1000; // Assume more data available if we have less than 1000 items
+            console.log(`🔍 DEBUG: Setting hasMoreData based on loaded data: ${itemCount} items -> hasMoreData: ${shouldHaveMoreData}`);
+            setHasMoreData(shouldHaveMoreData);
+        }
+    }, [dataStatus.processedData, dataStatus.dataSource]);
+
+    // Auto-dismiss file filter notification
+    useEffect(() => {
+        if (window.dsaSkipStats && window.dsaSkipStats.totalSkipped > 0) {
+            setShowFileFilterNotification(true);
+            setIsNotificationFading(false);
+
+            // Start fade-out after 4 seconds, then hide after 5 seconds
+            const fadeTimer = setTimeout(() => {
+                setIsNotificationFading(true);
+            }, 4000);
+
+            const hideTimer = setTimeout(() => {
+                setShowFileFilterNotification(false);
+                setIsNotificationFading(false);
+                // Also clear the global stats to prevent re-showing
+                window.dsaSkipStats = null;
+            }, 5000);
+
+            return () => {
+                clearTimeout(fadeTimer);
+                clearTimeout(hideTimer);
+            };
+        }
+    }, [window.dsaSkipStats?.totalSkipped]);
 
     // Auto-apply regex rules when data is loaded (if no column mappings exist)
     // Only run this once when data is first loaded, not on every data change
     useEffect(() => {
+        // Check if this is data loaded from localStorage (page refresh scenario)
+        // If data exists but we haven't explicitly refreshed, it's likely from localStorage
+        const isLoadedFromStorage = dataStatus.processedData && dataStatus.processedData.length > 0 &&
+            !isDataRefresh && hasAppliedInitialRegex;
+
         console.log('🔍 Auto-apply useEffect triggered:', {
             hasData: dataStatus.processedData && dataStatus.processedData.length > 0,
             dataLength: dataStatus.processedData?.length || 0,
             isDataRefresh,
+            isLoadedFromStorage,
             hasAppliedInitialRegex,
-            shouldRun: dataStatus.processedData && dataStatus.processedData.length > 0 && !isDataRefresh && !hasAppliedInitialRegex
+            dataLoadTimestamp: dataStatus.dataLoadTimestamp,
+            shouldRun: dataStatus.processedData && dataStatus.processedData.length > 0 && !isDataRefresh && !isLoadedFromStorage && !hasAppliedInitialRegex
         });
 
-        if (dataStatus.processedData && dataStatus.processedData.length > 0 && !isDataRefresh && !hasAppliedInitialRegex) {
+        // TEMPORARILY DISABLED: Auto-apply logic is marking all items as modified on page refresh
+        // TODO: Fix the isLoadedFromStorage detection logic
+        if (false && dataStatus.processedData && dataStatus.processedData.length > 0 && !isDataRefresh && !isLoadedFromStorage && !hasAppliedInitialRegex) {
             // Check which fields need regex extraction on a per-field basis
             const fieldsNeedingExtraction = {
                 localCaseId: 0,
@@ -171,8 +217,8 @@ const InputDataTab = () => {
             if (totalNeedingExtraction > 0) {
                 console.log(`🔄 Found items needing regex extraction:`, fieldsNeedingExtraction);
                 console.log(`🔄 Auto-applying regex rules to extract missing field values...`);
-                // Don't mark items as modified during data refresh - only mark as modified for initial load
-                const shouldMarkAsModified = !isDataRefresh;
+                // Don't mark items as modified during data refresh or page refresh - only mark as modified for initial load
+                const shouldMarkAsModified = !isDataRefresh && !isLoadedFromStorage;
                 const result = dataStore.applyRegexRules(regexRules, shouldMarkAsModified);
                 if (result.success) {
                     const action = shouldMarkAsModified ? 'marked as modified for sync' : 'extracted (not marked as modified - data refresh)';
@@ -186,8 +232,8 @@ const InputDataTab = () => {
             // Also auto-apply column mappings if they exist
             if (columnMappings && (columnMappings.localCaseId || columnMappings.localStainID || columnMappings.localRegionId)) {
                 console.log(`🔄 Auto-applying column mappings:`, columnMappings);
-                // Don't mark items as modified during data refresh - only mark as modified for initial load
-                const shouldMarkAsModified = !isDataRefresh;
+                // Don't mark items as modified during data refresh or page refresh - only mark as modified for initial load
+                const shouldMarkAsModified = !isDataRefresh && !isLoadedFromStorage;
                 const mappingResult = dataStore.applyColumnMappings(columnMappings, shouldMarkAsModified);
                 if (mappingResult.success) {
                     const action = shouldMarkAsModified ? 'updated' : 'mapped (not marked as modified - data refresh)';
@@ -374,6 +420,13 @@ const InputDataTab = () => {
             if (result.success) {
                 console.log(`✅ Successfully loaded ${result.itemCount} items from DSA`);
 
+                // Reset hasMoreData when loading fresh data
+                // If we loaded a large number of items, assume we might have loaded everything
+                // (This is a heuristic - if we loaded 1000+ items, we probably got the full dataset)
+                const itemCount = result.itemCount || 0;
+                console.log(`🔍 DEBUG: Loaded ${itemCount} items, setting hasMoreData to ${itemCount < 1000}`);
+                setHasMoreData(itemCount < 1000); // Assume more data available if we loaded less than 1000 items
+
                 // Check for file filtering stats
                 if (window.dsaSkipStats && window.dsaSkipStats.totalSkipped > 0) {
                     console.log('📁 File filtering applied:', window.dsaSkipStats);
@@ -470,7 +523,17 @@ const InputDataTab = () => {
             });
 
             if (result.success) {
+                const newItemsCount = result.data?.length || 0;
                 console.log(`✅ Successfully loaded ${result.totalItemCount} total items from DSA`);
+
+                // If we got no new items, we've reached the end
+                if (newItemsCount === 0) {
+                    setHasMoreData(false);
+                    console.log('🏁 No more data available - reached end of dataset');
+                }
+            } else {
+                console.error('❌ Failed to load more data:', result.error);
+                setHasMoreData(false); // Assume no more data if loading failed
             }
         } catch (error) {
             console.error('Error loading more DSA data:', error);
@@ -854,16 +917,20 @@ const InputDataTab = () => {
                 </div>
             )}
 
-            {/* File Filtering Alert - Compact */}
-            {window.dsaSkipStats && window.dsaSkipStats.totalSkipped > 0 && (
-                <div className="compact-notification file-filter-notification">
+            {/* File Filtering Alert - Toast notification */}
+            {showFileFilterNotification && window.dsaSkipStats && window.dsaSkipStats.totalSkipped > 0 && (
+                <div className={`file-filter-notification ${isNotificationFading ? 'fade-out' : ''}`}>
                     <span className="notification-icon">📁</span>
                     <span className="notification-text">
                         {window.dsaSkipStats.totalSkipped.toLocaleString()} files filtered (image files only)
                     </span>
                     <button
                         className="notification-close"
-                        onClick={() => window.dsaSkipStats = null}
+                        onClick={() => {
+                            setShowFileFilterNotification(false);
+                            setIsNotificationFading(false);
+                            window.dsaSkipStats = null;
+                        }}
                         title="Dismiss"
                     >
                         ×
@@ -872,17 +939,28 @@ const InputDataTab = () => {
             )}
 
             {/* Load More Data Button - Compact */}
-            {dataStatus.processedData && dataStatus.processedData.length > 0 && dataStatus.dataSource === 'dsa' && !isLoadingMore && (
-                <div className="compact-notification load-more-notification">
-                    <span className="notification-icon">⬇️</span>
-                    <span className="notification-text">
-                        Showing {dataStatus.processedData.length.toLocaleString()} items
-                    </span>
-                    <button className="notification-btn" onClick={handleLoadMoreData}>
-                        Load More
-                    </button>
-                </div>
-            )}
+            {(() => {
+                const shouldShow = dataStatus.processedData && dataStatus.processedData.length > 0 && dataStatus.dataSource === 'dsa' && !isLoadingMore && hasMoreData;
+                console.log(`🔍 DEBUG: Load More button conditions:`, {
+                    hasData: !!dataStatus.processedData,
+                    dataLength: dataStatus.processedData?.length || 0,
+                    isDSA: dataStatus.dataSource === 'dsa',
+                    notLoadingMore: !isLoadingMore,
+                    hasMoreData,
+                    shouldShow
+                });
+                return shouldShow;
+            })() && (
+                    <div className="compact-notification load-more-notification">
+                        <span className="notification-icon">⬇️</span>
+                        <span className="notification-text">
+                            Showing {dataStatus.processedData.length.toLocaleString()} items
+                        </span>
+                        <button className="notification-btn" onClick={handleLoadMoreData}>
+                            Load More
+                        </button>
+                    </div>
+                )}
 
             {/* Loading More Progress */}
             {isLoadingMore && (
