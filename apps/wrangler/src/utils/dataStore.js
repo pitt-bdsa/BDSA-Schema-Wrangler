@@ -4,6 +4,18 @@
 import * as XLSX from 'xlsx';
 import suggestionEngine from './SuggestionEngine.js';
 import protocolCaseGenerator from './ProtocolCaseGenerator.js';
+import dsaSync from './DsaSync.js';
+import dataLoader from './DataLoader.js';
+import caseManager from './CaseManager.js';
+import protocolMapper from './ProtocolMapper.js';
+import storageManager from './StorageManager.js';
+import statisticsManager from './StatisticsManager.js';
+import csvLoader from './CsvLoader.js';
+import excelLoader from './ExcelLoader.js';
+import dsaLoader from './DsaLoader.js';
+import bdsaInitializer from './BdsaInitializer.js';
+import columnMapper from './ColumnMapper.js';
+import accessoryDataMatcher from './AccessoryDataMatcher.js';
 
 class DataStore {
     constructor() {
@@ -267,442 +279,38 @@ class DataStore {
 
     // Local Storage Management
     loadFromStorage() {
-        try {
-            const stored = localStorage.getItem('bdsa_data_store');
-            if (stored) {
-                const data = JSON.parse(stored);
-                this.processedData = this.initializeBdsaStructure(data.processedData || []);
-                this.dataSource = data.dataSource;
-                this.dataSourceInfo = data.dataSourceInfo;
-                this.dataLoadTimestamp = data.dataLoadTimestamp;
-                this.modifiedItems = new Set(data.modifiedItems || []);
-                this.caseIdMappings = new Map(data.caseIdMappings || []);
-
-                // Restore caseIdConflicts with proper Set values
-                this.caseIdConflicts = new Map();
-                if (data.caseIdConflicts) {
-                    for (const [localCaseId, bdsaIds] of data.caseIdConflicts) {
-                        this.caseIdConflicts.set(localCaseId, new Set(bdsaIds));
-                    }
-                }
-
-                // Restore bdsaCaseIdConflicts with proper Set values
-                this.bdsaCaseIdConflicts = new Map();
-                if (data.bdsaCaseIdConflicts) {
-                    for (const [bdsaCaseId, localIds] of data.bdsaCaseIdConflicts) {
-                        this.bdsaCaseIdConflicts.set(bdsaCaseId, new Set(localIds));
-                    }
-                }
-
-                this.caseProtocolMappings = new Map(data.caseProtocolMappings || []);
-
-                console.log(`📦 Loaded data from localStorage:`, {
-                    itemCount: this.processedData.length,
-                    dataSource: this.dataSource,
-                    modifiedItems: this.modifiedItems.size,
-                    hasBdsaCaseIds: this.processedData.some(item => item.BDSA?.bdsaLocal?.bdsaCaseId),
-                    sampleBDSA: this.processedData[0]?.BDSA
-                });
-            }
-        } catch (error) {
-            console.error('Error loading data store from storage:', error);
-        }
+        return storageManager.loadFromStorage(this);
     }
 
     saveToStorage() {
-        try {
-            const data = {
-                processedData: this.processedData,
-                dataSource: this.dataSource,
-                dataSourceInfo: this.dataSourceInfo,
-                dataLoadTimestamp: this.dataLoadTimestamp,
-                modifiedItems: Array.from(this.modifiedItems),
-                caseIdMappings: Array.from(this.caseIdMappings),
-                caseIdConflicts: Array.from(this.caseIdConflicts),
-                bdsaCaseIdConflicts: Array.from(this.bdsaCaseIdConflicts),
-                caseProtocolMappings: Array.from(this.caseProtocolMappings)
-            };
-            localStorage.setItem('bdsa_data_store', JSON.stringify(data));
-        } catch (error) {
-            console.error('Error saving data store to storage:', error);
-        }
+        return storageManager.saveToStorage(this);
     }
 
     // CSV Data Loading
     async loadCsvData(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-
-            reader.onload = (e) => {
-                try {
-                    const csvText = e.target.result;
-                    const data = this.parseCsv(csvText, file.name);
-
-                    this.processedData = this.initializeBdsaStructure(data);
-                    this.dataSource = 'csv';
-                    this.dataSourceInfo = {
-                        fileName: file.name,
-                        fileSize: file.size,
-                        lastModified: file.lastModified
-                    };
-                    this.dataLoadTimestamp = new Date().toISOString();
-                    console.log(`🧹 Clearing modifiedItems (${this.modifiedItems.size} items) from:`, new Error().stack);
-                    this.modifiedItems.clear();
-
-                    // Enable BDSA tracking for the loaded data
-                    this.enableBdsaTracking();
-
-                    // Clear case ID mappings when loading new data (they're specific to the previous dataset)
-                    this.caseIdMappings.clear();
-                    this.caseIdConflicts.clear();
-                    this.bdsaCaseIdConflicts.clear();
-
-                    // Skip saveToStorage() for large datasets to avoid quota errors
-                    // this.saveToStorage();
-                    this.notify();
-
-                    resolve({
-                        success: true,
-                        itemCount: data.length,
-                        message: `Successfully loaded ${data.length} items from CSV`
-                    });
-                } catch (error) {
-                    reject(new Error(`Failed to parse CSV: ${error.message}`));
-                }
-            };
-
-            reader.onerror = () => {
-                reject(new Error('Failed to read CSV file'));
-            };
-
-            reader.readAsText(file);
-        });
+        return csvLoader.loadCsvData(file, this);
     }
 
-    parseCsv(csvText, fileName = 'unknown') {
-        const lines = csvText.split('\n').filter(line => line.trim());
-        if (lines.length < 2) {
-            throw new Error('CSV file must have at least a header and one data row');
-        }
-
-        const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
-        const data = [];
-
-        // Create a unique prefix based on filename and timestamp
-        const filePrefix = fileName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
-        const timestamp = Date.now();
-
-        for (let i = 1; i < lines.length; i++) {
-            const values = this.parseCsvLine(lines[i]);
-            if (values.length !== headers.length) {
-                console.warn(`Row ${i + 1} has ${values.length} values but expected ${headers.length}`);
-                continue;
-            }
-
-            const item = {};
-            headers.forEach((header, index) => {
-                item[header] = values[index];
-            });
-
-            // Add consistent row identifier and BDSA structure
-            item.id = `csv_${filePrefix}_${timestamp}_row_${i}`;
-            item.BDSA = {
-                bdsaLocal: {
-                    localCaseId: null,
-                    localStainID: null,
-                    localRegionId: null
-                },
-                _dataSource: {},
-                _lastModified: new Date().toISOString()
-            };
-
-            data.push(item);
-        }
-
-        return data;
-    }
 
     // Excel Data Loading - Get sheet names first
     async getExcelSheetNames(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-
-            reader.onload = (e) => {
-                try {
-                    const data = e.target.result;
-                    const workbook = XLSX.read(data, { type: 'binary' });
-                    resolve(workbook.SheetNames);
-                } catch (error) {
-                    reject(new Error(`Failed to read Excel file: ${error.message}`));
-                }
-            };
-
-            reader.onerror = () => {
-                reject(new Error('Failed to read Excel file'));
-            };
-
-            reader.readAsBinaryString(file);
-        });
+        return excelLoader.getExcelSheetNames(file);
     }
 
     // Excel Data Loading - Load specific sheet
     async loadExcelData(file, sheetName = null) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-
-            reader.onload = (e) => {
-                try {
-                    const data = e.target.result;
-                    const workbook = XLSX.read(data, { type: 'binary' });
-
-                    // Use provided sheet name or first sheet
-                    const targetSheetName = sheetName || workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[targetSheetName];
-
-                    if (!worksheet) {
-                        throw new Error(`Sheet "${targetSheetName}" not found`);
-                    }
-
-                    // Convert to JSON
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
-
-                    this.processedData = this.initializeBdsaStructure(jsonData);
-                    this.dataSource = 'excel';
-                    this.dataSourceInfo = {
-                        fileName: file.name,
-                        fileSize: file.size,
-                        lastModified: file.lastModified,
-                        sheetName: targetSheetName
-                    };
-                    this.dataLoadTimestamp = new Date().toISOString();
-                    console.log(`🧹 Clearing modifiedItems (${this.modifiedItems.size} items) from:`, new Error().stack);
-                    this.modifiedItems.clear();
-
-                    // Clear case ID mappings when loading new data (they're specific to the previous dataset)
-                    this.caseIdMappings.clear();
-                    this.caseIdConflicts.clear();
-                    this.bdsaCaseIdConflicts.clear();
-
-                    // Skip saveToStorage() for large datasets to avoid quota errors
-                    // this.saveToStorage();
-                    this.notify();
-
-                    resolve({
-                        success: true,
-                        itemCount: jsonData.length,
-                        message: `Successfully loaded ${jsonData.length} items from Excel sheet "${targetSheetName}"`
-                    });
-                } catch (error) {
-                    reject(new Error(`Failed to parse Excel file: ${error.message}`));
-                }
-            };
-
-            reader.onerror = () => {
-                reject(new Error('Failed to read Excel file'));
-            };
-
-            reader.readAsBinaryString(file);
-        });
+        return excelLoader.loadExcelData(file, sheetName, this);
     }
 
-    parseCsvLine(line) {
-        const values = [];
-        let current = '';
-        let inQuotes = false;
-
-        for (let i = 0; i < line.length; i++) {
-            const char = line[i];
-
-            if (char === '"') {
-                inQuotes = !inQuotes;
-            } else if (char === ',' && !inQuotes) {
-                values.push(current.trim().replace(/"/g, ''));
-                current = '';
-            } else {
-                current += char;
-            }
-        }
-
-        values.push(current.trim().replace(/"/g, ''));
-        return values;
-    }
 
     // Accessory File Loading - for CSV/Excel files with additional metadata
     async loadAccessoryFile(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-
-            reader.onload = (e) => {
-                try {
-                    let accessoryData;
-
-                    if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
-                        // Handle CSV file
-                        const csvText = e.target.result;
-                        accessoryData = this.parseCsv(csvText, file.name);
-                    } else {
-                        // Handle Excel file
-                        const data = e.target.result;
-                        const workbook = XLSX.read(data, { type: 'binary' });
-                        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-                        accessoryData = XLSX.utils.sheet_to_json(worksheet);
-                    }
-
-                    if (!accessoryData || accessoryData.length === 0) {
-                        throw new Error('Accessory file is empty or could not be parsed');
-                    }
-
-                    // Match accessory data with existing DSA data based on filename
-                    const matchedData = this.matchAccessoryData(accessoryData);
-
-                    resolve({
-                        success: true,
-                        itemCount: accessoryData.length,
-                        matchedCount: matchedData.matchedCount,
-                        data: accessoryData,
-                        matchedData: matchedData.matchedData,
-                        message: `Successfully loaded ${accessoryData.length} accessory items, matched ${matchedData.matchedCount} with DSA data`
-                    });
-                } catch (error) {
-                    reject(new Error(`Failed to parse accessory file: ${error.message}`));
-                }
-            };
-
-            reader.onerror = () => {
-                reject(new Error('Failed to read accessory file'));
-            };
-
-            if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
-                reader.readAsText(file);
-            } else {
-                reader.readAsBinaryString(file);
-            }
-        });
+        return accessoryDataMatcher.loadAccessoryFile(file, this, csvLoader);
     }
 
     // Match accessory data with existing DSA data based on filename
     matchAccessoryData(accessoryData) {
-        if (!this.processedData || this.processedData.length === 0) {
-            return { matchedData: [], matchedCount: 0 };
-        }
-
-        const matchedData = [];
-        let matchedCount = 0;
-
-        // Create a map of DSA filenames for quick lookup
-        const dsaFilenameMap = new Map();
-        this.processedData.forEach((item, index) => {
-            const filename = item.name || item.dsa_name || '';
-            if (filename) {
-                // Store both exact match and normalized versions
-                dsaFilenameMap.set(filename, { item, index });
-                dsaFilenameMap.set(filename.toLowerCase(), { item, index });
-
-                // Also try without extension
-                const nameWithoutExt = filename.replace(/\.[^/.]+$/, '');
-                dsaFilenameMap.set(nameWithoutExt, { item, index });
-                dsaFilenameMap.set(nameWithoutExt.toLowerCase(), { item, index });
-            }
-        });
-
-        // Try to match each accessory item
-        accessoryData.forEach((accessoryItem, accessoryIndex) => {
-            let matched = false;
-            let dsaItem = null; // Declare dsaItem at the top of the loop scope
-
-            // Look for filename field in accessory data (could be 'new_filename', 'filename', 'name', etc.)
-            const possibleFilenameFields = ['new_filename', 'filename', 'name', 'file_name', 'image_name', 'FileName', 'Filename', 'ImageName'];
-            let accessoryFilename = '';
-
-            for (const field of possibleFilenameFields) {
-                if (accessoryItem[field]) {
-                    accessoryFilename = accessoryItem[field];
-                    console.log(`🔍 Found filename in field "${field}": ${accessoryFilename}`);
-                    break;
-                }
-            }
-
-            // If no match found, try case-insensitive search through all fields
-            if (!accessoryFilename) {
-                const allKeys = Object.keys(accessoryItem);
-                for (const key of allKeys) {
-                    if (key.toLowerCase().includes('filename') || key.toLowerCase().includes('name')) {
-                        accessoryFilename = accessoryItem[key];
-                        console.log(`🔍 Found filename in field "${key}" (case-insensitive): ${accessoryFilename}`);
-                        break;
-                    }
-                }
-            }
-
-            if (accessoryFilename) {
-                // Try exact match first
-                dsaItem = dsaFilenameMap.get(accessoryFilename);
-
-                if (!dsaItem) {
-                    // Try case-insensitive match
-                    dsaItem = dsaFilenameMap.get(accessoryFilename.toLowerCase());
-                }
-
-                if (!dsaItem) {
-                    // Try without extension
-                    const nameWithoutExt = accessoryFilename.replace(/\.[^/.]+$/, '');
-                    dsaItem = dsaFilenameMap.get(nameWithoutExt);
-                    if (!dsaItem) {
-                        dsaItem = dsaFilenameMap.get(nameWithoutExt.toLowerCase());
-                    }
-                }
-
-                if (dsaItem) {
-                    // Add accessory data as temporary fields to the DSA item
-                    if (!dsaItem.item.accessoryData) {
-                        dsaItem.item.accessoryData = {};
-                    }
-
-                    // Add all accessory fields with a prefix to avoid conflicts
-                    // Skip filename fields, BDSA fields, and other internal fields
-                    Object.keys(accessoryItem).forEach(key => {
-                        // Skip filename fields
-                        if (key === 'new_filename' || key === 'filename' || key === 'name') {
-                            return;
-                        }
-
-                        // Skip BDSA fields (these are app-internal, not from the original accessory file)
-                        if (key === 'BDSA' || key.startsWith('BDSA.')) {
-                            console.log(`⚠️ Skipping internal BDSA field from accessory item: ${key}`);
-                            return;
-                        }
-
-                        // Skip internal fields
-                        if (key.startsWith('_')) {
-                            return;
-                        }
-
-                        dsaItem.item.accessoryData[`accessory_${key}`] = accessoryItem[key];
-                    });
-
-                    // Mark the item as modified
-                    this.modifiedItems.add(dsaItem.item.id || dsaItem.index);
-                    matched = true;
-                    matchedCount++;
-                }
-            }
-
-            matchedData.push({
-                accessoryIndex,
-                accessoryItem,
-                matched,
-                dsaItem: matched ? dsaItem : null
-            });
-        });
-
-        // Save changes and notify listeners
-        // Skip saveToStorage() for large datasets to avoid quota errors
-        // this.saveToStorage();
-        this.notify();
-
-        console.log(`🔗 Accessory data matching complete: ${matchedCount}/${accessoryData.length} items matched with DSA data`);
-
-        return { matchedData, matchedCount };
+        return accessoryDataMatcher.matchAccessoryData(accessoryData, this);
     }
 
     // Retry accessory matching with a specific filename field
@@ -794,344 +402,30 @@ class DataStore {
 
     // DSA Data Loading - Back to working approach with file filtering
     async loadDsaData(dsaAuthStore) {
-        console.log('🚀 DEBUG - loadDsaData called');
-        try {
-            const authStatus = dsaAuthStore.getStatus();
-            if (!authStatus.isAuthenticated) {
-                throw new Error('Not authenticated with DSA server');
-            }
-
-            if (!authStatus.isConfigured) {
-                throw new Error('DSA server not configured');
-            }
-
-            const config = dsaAuthStore.config;
-            const token = dsaAuthStore.token;
-
-            console.log('🔄 Using dsaIntegration.loadDsaData for proper filtering...');
-
-            // Import and use the proper loadDsaData from dsaIntegration that includes filtering
-            const { loadDsaData } = await import('./dsaIntegration.js');
-            console.log('🚀 Calling dsaIntegration.loadDsaData with config:', config);
-            const result = await loadDsaData(config, token);
-            console.log('✅ dsaIntegration.loadDsaData returned:', result);
-
-            if (!result.success) {
-                throw new Error(result.error || 'Failed to load DSA data');
-            }
-
-            console.log(`📊 DataStore: Setting processedData to ${result.data.length} items`);
-            this.processedData = result.data;
-            this.dataSource = 'dsa';
-            this.dataSourceInfo = {
-                baseUrl: config.baseUrl,
-                resourceId: config.resourceId,
-                resourceType: config.resourceType
-            };
-            this.dataLoadTimestamp = new Date().toISOString();
-
-            // Clean up orphaned IDs from modifiedItems Set
-            // (items that were modified but no longer exist after data refresh)
-            this.cleanupModifiedItems();
-
-            // Only clear modifiedItems if this is a fresh data load (not a refresh with existing modifications)
-            if (this.modifiedItems.size === 0) {
-                console.log(`🧹 Clearing modifiedItems (${this.modifiedItems.size} items) from:`, new Error().stack);
-                this.modifiedItems.clear();
-            } else {
-                console.log(`🔍 Preserving ${this.modifiedItems.size} existing modified items during data load`);
-            }
-
-            // Enable BDSA tracking for the loaded data
-            console.log(`🔍 About to enable BDSA tracking. Current modifiedItems size: ${this.modifiedItems.size}`);
-            this.enableBdsaTracking();
-            console.log(`🔍 After enabling BDSA tracking. Current modifiedItems size: ${this.modifiedItems.size}`);
-
-            // Set DSA configuration for sync functionality
-            this.girderToken = token;
-            this.dsaConfig = config;
-
-            // Try to save to storage, but don't fail if quota exceeded
-            try {
-                // Skip saveToStorage() for large datasets to avoid quota errors
-                // this.saveToStorage();
-            } catch (error) {
-                if (error.name === 'QuotaExceededError') {
-                    console.warn('⚠️ Data too large for localStorage, skipping storage save');
-                    console.warn(`📊 Data size: ${JSON.stringify(this.processedData).length} characters`);
-                    console.warn('💡 Consider using file filtering to reduce data size');
-                } else {
-                    console.error('Error saving to storage:', error);
-                }
-            }
-            this.notify();
-
-            console.log(`📊 DataStore: Final processedData length: ${this.processedData.length}`);
-            console.log(`📊 DataStore: Data source: ${this.dataSource}`);
-            console.log(`📊 DataStore: Data type: ${typeof this.processedData}`);
-            console.log(`📊 DataStore: Is array: ${Array.isArray(this.processedData)}`);
-            if (this.processedData.length > 0) {
-                const sampleItem = this.processedData[0];
-                console.log(`📊 DataStore: Sample item:`, sampleItem);
-                console.log(`📊 DataStore: Sample item BDSA structure:`, {
-                    hasBDSA: !!sampleItem.BDSA,
-                    hasBdsaLocal: !!sampleItem.BDSA?.bdsaLocal,
-                    bdsaLocalKeys: sampleItem.BDSA?.bdsaLocal ? Object.keys(sampleItem.BDSA.bdsaLocal) : [],
-                    localCaseId: sampleItem.BDSA?.bdsaLocal?.localCaseId,
-                    localStainID: sampleItem.BDSA?.bdsaLocal?.localStainID,
-                    localRegionId: sampleItem.BDSA?.bdsaLocal?.localRegionId,
-                    bdsaCaseId: sampleItem.BDSA?.bdsaLocal?.bdsaCaseId
-                });
-            }
-
-            return {
-                success: true,
-                itemCount: result.data.length,
-                message: `Successfully loaded ${result.data.length} items from DSA (filtered)`
-            };
-        } catch (error) {
-            throw new Error(`Failed to load DSA data: ${error.message}`);
-        }
+        return dsaLoader.loadDsaData(dsaAuthStore, this);
     }
 
     async loadMoreDsaData(dsaAuthStore, progressCallback) {
-        console.log('🚀 Loading more DSA data in background...');
-        try {
-            const authStatus = dsaAuthStore.getStatus();
-            if (!authStatus.isAuthenticated) {
-                throw new Error('Not authenticated with DSA server');
-            }
-
-            const config = dsaAuthStore.config;
-            const token = dsaAuthStore.token;
-
-            // Import the pagination function
-            const { loadMoreDsaDataPaginated } = await import('./dsaIntegration.js');
-
-            // Calculate how many pages we've already loaded (5 pages = 5000 items / 1000 per page)
-            const currentPageCount = Math.ceil(this.processedData.length / 1000);
-
-            // Load more pages (e.g., load 20 more pages)
-            const result = await loadMoreDsaDataPaginated(config, token, currentPageCount, 20, progressCallback);
-
-            if (result.success && result.data.length > 0) {
-                // Append new data to existing data
-                this.processedData = [...this.processedData, ...result.data];
-                console.log(`📊 DataStore: Added ${result.data.length} more items. Total: ${this.processedData.length}`);
-
-                // Notify listeners about the update
-                this.notify();
-            }
-
-            return {
-                success: true,
-                totalItemCount: this.processedData.length,
-                newItemCount: result.data.length,
-                message: `Successfully loaded ${result.data.length} more items. Total: ${this.processedData.length}`
-            };
-        } catch (error) {
-            throw new Error(`Failed to load more DSA data: ${error.message}`);
-        }
+        return dsaLoader.loadMoreDsaData(dsaAuthStore, this, progressCallback);
     }
 
     // Background loading to progressively cache more data
     async startBackgroundLoading() {
-        if (this.backgroundLoading.isActive) {
-            console.log('🔄 Background loading already active');
-            return;
-        }
-
-        this.backgroundLoading.isActive = true;
-        console.log('🚀 Starting background data loading...');
-
-        try {
-            const config = this.serverSideConfig;
-            const pageSize = 1000; // Load 1000 items at a time in background
-            let page = 0;
-            let hasMore = true;
-            let totalFilteredCount = 0;
-
-            while (hasMore && this.backgroundLoading.isActive) {
-                console.log(`📄 Background loading page ${page}...`);
-
-                const offset = page * pageSize;
-                const apiUrl = `${config.baseUrl}/api/v1/resource/${config.resourceId}/items?type=${config.resourceType || 'folder'}&limit=${pageSize}&offset=${offset}`;
-
-                const headers = {
-                    'Content-Type': 'application/json',
-                    'Girder-Token': config.token
-                };
-
-                const response = await fetch(apiUrl, {
-                    method: 'GET',
-                    headers: headers
-                });
-
-                if (!response.ok) {
-                    console.error(`Background loading failed at page ${page}:`, response.status);
-                    break;
-                }
-
-                const items = await response.json();
-
-                // Apply file filtering to the page data
-                const { transformDsaData } = await import('./dsaIntegration.js');
-                const filteredData = transformDsaData(items);
-
-                // Cache the filtered data
-                this.backgroundLoading.cachedData.set(page, filteredData);
-                this.backgroundLoading.loadedPages.add(page);
-                totalFilteredCount += filteredData.length;
-
-                console.log(`✅ Background loaded page ${page}: ${filteredData.length} items (total so far: ${totalFilteredCount})`);
-
-                // Check if we should continue
-                if (items.length < pageSize) {
-                    hasMore = false;
-                    console.log('🏁 Background loading complete - reached end of data');
-                } else {
-                    page++;
-                }
-
-                // Update total count as we learn more
-                this.backgroundLoading.totalCount = (page + 1) * pageSize;
-                this.backgroundLoading.filteredCount = totalFilteredCount;
-
-                // Notify UI of progress
-                this.notify();
-
-                // Small delay to prevent overwhelming the server
-                await new Promise(resolve => setTimeout(resolve, 100));
-            }
-
-            console.log(`🎉 Background loading complete! Total filtered items: ${totalFilteredCount}`);
-            this.backgroundLoading.isActive = false;
-
-        } catch (error) {
-            console.error('Background loading error:', error);
-            this.backgroundLoading.isActive = false;
-        }
+        return dataLoader.startBackgroundLoading(this);
     }
 
     // Stop background loading
     stopBackgroundLoading() {
-        console.log('🛑 Stopping background loading...');
-        this.backgroundLoading.isActive = false;
+        return dataLoader.stopBackgroundLoading(this);
     }
 
     async fetchDsaItems(config, token) {
-        const apiUrl = `${config.baseUrl}/api/v1/resource/${config.resourceId}/items?type=${config.resourceType || 'folder'}&limit=0`;
-
-        const headers = {
-            'Content-Type': 'application/json',
-            'Girder-Token': token
-        };
-
-        console.log('Fetching DSA items from:', apiUrl);
-
-        const response = await fetch(apiUrl, {
-            method: 'GET',
-            headers: headers
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('DSA API Error:', {
-                status: response.status,
-                statusText: response.statusText,
-                url: apiUrl,
-                response: errorText
-            });
-            throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
-        }
-
-        const items = await response.json();
-        console.log(`✅ Fetched ${items.length} items from DSA`);
-        return items;
+        return dsaLoader.fetchDsaItems(config, token);
     }
 
     // Server-side pagination for AG Grid with background cache support
     async fetchDsaPage({ page, pageSize, sortModel, filterModel }) {
-        console.log('📄 Fetching DSA page:', { page, pageSize, sortModel, filterModel });
-
-        try {
-            if (!this.serverSideConfig) {
-                throw new Error('Server-side pagination not configured');
-            }
-
-            // Check if we have cached data for this page
-            if (this.backgroundLoading && this.backgroundLoading.cachedData.has(page)) {
-                console.log(`📦 Using cached data for page ${page}`);
-                const cachedData = this.backgroundLoading.cachedData.get(page);
-                const totalCount = this.backgroundLoading.filteredCount || cachedData.length * 100;
-
-                return {
-                    data: cachedData,
-                    totalCount: totalCount
-                };
-            }
-
-            // Fallback to live API request
-            const config = this.serverSideConfig;
-            const token = config.token;
-
-            // Calculate offset for pagination
-            const offset = page * pageSize;
-
-            // Build API URL with pagination
-            let apiUrl = `${config.baseUrl}/api/v1/resource/${config.resourceId}/items?type=${config.resourceType || 'folder'}&limit=${pageSize}&offset=${offset}`;
-
-            // Add sorting if specified
-            if (sortModel && sortModel.length > 0) {
-                const sort = sortModel[0];
-                apiUrl += `&sort=${sort.colId}&sortdir=${sort.sort === 'asc' ? 1 : -1}`;
-            }
-
-            const headers = {
-                'Content-Type': 'application/json',
-                'Girder-Token': token
-            };
-
-            console.log('📄 Fetching page from API:', apiUrl);
-
-            const response = await fetch(apiUrl, {
-                method: 'GET',
-                headers: headers
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('DSA API Error:', {
-                    status: response.status,
-                    statusText: response.statusText,
-                    url: apiUrl,
-                    response: errorText
-                });
-                throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
-            }
-
-            const items = await response.json();
-
-            // Apply file filtering to the page data
-            const { transformDsaData } = await import('./dsaIntegration.js');
-            const filteredData = transformDsaData(items);
-
-            // Use background loading stats if available, otherwise estimate
-            const totalCount = this.backgroundLoading?.filteredCount ||
-                this.backgroundLoading?.totalCount ||
-                Math.max(filteredData.length * 100, 10000);
-
-            console.log(`✅ Fetched page ${page}: ${filteredData.length} items (total: ${totalCount})`);
-
-            return {
-                data: filteredData,
-                totalCount: totalCount
-            };
-
-        } catch (error) {
-            console.error('Error fetching DSA page:', error);
-            throw error;
-        }
+        return dsaLoader.fetchDsaPage({ page, pageSize, sortModel, filterModel }, this);
     }
 
     transformDsaData(dsaData) {
@@ -1332,22 +626,7 @@ class DataStore {
 
     // Status and Getters
     getStatus() {
-        // Ensure BDSA structure is always initialized when data is accessed
-        if (this.processedData && this.processedData.length > 0) {
-            this.processedData = this.initializeBdsaStructure(this.processedData);
-        }
-
-        return {
-            processedData: this.processedData,
-            dataSource: this.dataSource,
-            dataSourceInfo: this.dataSourceInfo,
-            dataLoadTimestamp: this.dataLoadTimestamp,
-            modifiedItems: Array.from(this.modifiedItems),
-            caseIdMappings: Object.fromEntries(this.caseIdMappings),
-            caseIdConflicts: Object.fromEntries(this.caseIdConflicts),
-            bdsaCaseIdConflicts: Object.fromEntries(this.bdsaCaseIdConflicts),
-            caseProtocolMappings: Array.from(this.caseProtocolMappings)
-        };
+        return statisticsManager.getStatus(this);
     }
 
     // Data Query Methods
@@ -1363,32 +642,7 @@ class DataStore {
 
     // Statistics
     getStatistics() {
-        const totalItems = this.processedData.length;
-        const fieldCounts = {};
-
-        // Count unique values for each field
-        this.processedData.forEach(item => {
-            Object.keys(item).forEach(key => {
-                if (!fieldCounts[key]) {
-                    fieldCounts[key] = new Set();
-                }
-                if (item[key] && item[key] !== '') {
-                    fieldCounts[key].add(item[key]);
-                }
-            });
-        });
-
-        // Convert sets to counts
-        const uniqueFieldCounts = {};
-        Object.keys(fieldCounts).forEach(key => {
-            uniqueFieldCounts[key] = fieldCounts[key].size;
-        });
-
-        return {
-            totalItems,
-            uniqueFieldCounts,
-            modifiedItems: this.modifiedItems.size
-        };
+        return statisticsManager.getStatistics(this.processedData, this.modifiedItems);
     }
 
     /**
@@ -1398,7 +652,7 @@ class DataStore {
      * @returns {*} The value at the path, or undefined if not found
      */
     getNestedValue(obj, path) {
-        return path.split('.').reduce((current, key) => current?.[key], obj);
+        return columnMapper.getNestedValue(obj, path);
     }
 
     /**
@@ -1408,84 +662,7 @@ class DataStore {
      * @returns {Object} - Result with success status and updated count
      */
     applyColumnMappings(columnMappings, markAsModified = true) {
-        if (!this.processedData || this.processedData.length === 0) {
-            return { success: false, error: 'No data available' };
-        }
-
-        if (!columnMappings) {
-            return { success: false, error: 'No column mappings provided' };
-        }
-
-        let updatedCount = 0;
-        const updatedItems = [];
-
-        this.processedData.forEach((item, index) => {
-            let itemUpdated = false;
-
-            // Apply mappings for each field
-            Object.entries(columnMappings).forEach(([bdsaField, sourceColumn]) => {
-                if (sourceColumn && sourceColumn.trim() !== '') {
-                    // Use nested property access for columns like 'accessoryData.accessory_SubNum'
-                    const sourceValue = this.getNestedValue(item, sourceColumn);
-
-                    // Debug first few items
-                    if (index < 3) {
-                        console.log(`🔍 Column mapping [item ${index}]: ${bdsaField} ← ${sourceColumn} = ${sourceValue}`);
-                    }
-
-                    // Only update if source value exists and is not empty
-                    if (sourceValue !== null && sourceValue !== undefined && sourceValue !== '') {
-                        // Initialize nested structure if needed (directly on item, not a copy)
-                        if (!item.BDSA) {
-                            item.BDSA = {
-                                bdsaLocal: {},
-                                _dataSource: {}
-                            };
-                        }
-                        if (!item.BDSA.bdsaLocal) {
-                            item.BDSA.bdsaLocal = {};
-                        }
-                        if (!item.BDSA._dataSource) {
-                            item.BDSA._dataSource = {};
-                        }
-
-                        // Set the value and track source directly on the item
-                        item.BDSA.bdsaLocal[bdsaField] = sourceValue;
-                        item.BDSA._dataSource[bdsaField] = 'column_mapping';
-                        item.BDSA._lastModified = new Date().toISOString();
-                        itemUpdated = true;
-
-                        // Debug successful mapping
-                        if (index < 3) {
-                            console.log(`✅ Mapped ${bdsaField} = ${sourceValue} from ${sourceColumn}`);
-                        }
-                    }
-                }
-            });
-
-            if (itemUpdated) {
-                // Only mark as modified if requested
-                if (markAsModified) {
-                    this.modifiedItems.add(item.id);
-                    console.log(`🔍 Added item ${item.id} to modifiedItems. Total modified: ${this.modifiedItems.size}`);
-                } else {
-                    console.log(`🔍 Updated item ${item.id} but did not mark as modified (data refresh)`);
-                }
-                updatedCount++;
-            }
-        });
-
-        // Skip saveToStorage() for large datasets to avoid quota errors
-        // Data will be persisted via export/sync instead
-        // this.saveToStorage();
-        this.notify();
-
-        console.log(`📊 Applied column mappings: ${updatedCount} items updated`);
-        return {
-            success: true,
-            updatedCount,
-            totalItems: this.processedData.length
-        };
+        return columnMapper.applyColumnMappings(this.processedData, columnMappings, this.modifiedItems, () => this.notify(), markAsModified);
     }
 
     /**
@@ -1494,102 +671,7 @@ class DataStore {
      * @returns {Object} - Result with success status and extracted count
      */
     applyRegexRules(regexRules, markAsModified = true) {
-        if (!this.processedData || this.processedData.length === 0) {
-            return { success: false, error: 'No data available' };
-        }
-
-        if (!regexRules) {
-            return { success: false, error: 'No regex rules provided' };
-        }
-
-        let extractedCount = 0;
-        const updatedItems = [];
-
-        this.processedData.forEach((item, index) => {
-            let itemUpdated = false;
-            const updatedItem = { ...item };
-            const fileName = item.name || item.dsa_name || '';
-
-            // Ensure BDSA object exists
-            if (!updatedItem.BDSA) {
-                updatedItem.BDSA = {
-                    bdsaLocal: {},
-                    _dataSource: {},
-                    _lastModified: new Date().toISOString()
-                };
-            }
-
-            // Skip regex processing entirely if this item has server metadata
-            if (updatedItem._hasServerMetadata) {
-                console.log(`⏭️ Skipping regex processing for item ${updatedItem.id} - has server metadata`);
-                return; // Skip this item entirely
-            }
-
-            // Apply regex rules for each field
-            Object.entries(regexRules).forEach(([field, rule]) => {
-                if (rule && rule.pattern && rule.pattern.trim() !== '') {
-                    // Only apply regex if field is not already populated
-                    const currentValue = updatedItem.BDSA.bdsaLocal?.[field];
-                    const currentSource = updatedItem.BDSA._dataSource?.[field];
-
-                    // Don't apply regex if:
-                    // 1. Field already has a value from any source other than regex
-                    // 2. Field has a value from regex but we're not re-applying regex
-                    if (!currentValue || (currentSource === 'regex' && markAsModified)) {
-                        try {
-                            const regex = new RegExp(rule.pattern);
-                            const match = fileName.match(regex);
-
-                            if (match) {
-                                const extractedValue = match[1] || match[0];
-
-                                // Initialize nested structure if needed
-                                if (!updatedItem.BDSA.bdsaLocal) {
-                                    updatedItem.BDSA.bdsaLocal = {};
-                                }
-                                if (!updatedItem.BDSA._dataSource) {
-                                    updatedItem.BDSA._dataSource = {};
-                                }
-
-                                updatedItem.BDSA.bdsaLocal[field] = extractedValue;
-                                updatedItem.BDSA._dataSource[field] = 'regex';
-                                updatedItem.BDSA._lastModified = new Date().toISOString();
-                                itemUpdated = true;
-                            }
-                        } catch (error) {
-                            console.error(`Regex error for field ${field}:`, error);
-                        }
-                    }
-                }
-            });
-
-            if (itemUpdated) {
-                updatedItems.push(updatedItem);
-                // Only mark as modified if this is user-initiated processing, not initial data loading
-                if (markAsModified) {
-                    this.modifiedItems.add(updatedItem.id);
-                    console.log(`🔍 Added item ${updatedItem.id} to modifiedItems via regex. Total modified: ${this.modifiedItems.size}`);
-                }
-                extractedCount++;
-            }
-        });
-
-        // Update the processed data
-        this.processedData = this.processedData.map(item => {
-            const updated = updatedItems.find(u => u.id === item.id);
-            return updated || item;
-        });
-
-        // Skip saveToStorage() for large datasets to avoid quota errors
-        // this.saveToStorage();
-        this.notify();
-
-        console.log(`🔍 Applied regex rules: ${extractedCount} items updated`);
-        return {
-            success: true,
-            extractedCount,
-            totalItems: this.processedData.length
-        };
+        return columnMapper.applyRegexRules(this.processedData, regexRules, this.modifiedItems, () => this.notify(), markAsModified);
     }
 
     /**
@@ -1597,29 +679,7 @@ class DataStore {
      * @returns {Array} - Array of modified items
      */
     getModifiedItems() {
-        // Use a Map to deduplicate by item.id (in case of duplicates in processedData)
-        const itemsMap = new Map();
-
-        this.processedData.forEach(item => {
-            if (this.modifiedItems.has(item.id)) {
-                // Only add if not already in map (prevents duplicates)
-                if (!itemsMap.has(item.id)) {
-                    itemsMap.set(item.id, item);
-                }
-            }
-        });
-
-        const modifiedItems = Array.from(itemsMap.values());
-        console.log(`📊 Found ${modifiedItems.length} unique modified items out of ${this.processedData.length} total items`);
-        console.log(`📊 modifiedItems Set size: ${this.modifiedItems.size}`);
-
-        // If there's a mismatch, log a warning
-        if (modifiedItems.length !== this.modifiedItems.size) {
-            console.warn(`⚠️ Mismatch: ${modifiedItems.length} items found but ${this.modifiedItems.size} IDs in Set`);
-            console.warn(`⚠️ This might indicate duplicate items or orphaned IDs in modifiedItems Set`);
-        }
-
-        return modifiedItems;
+        return statisticsManager.getModifiedItems(this.processedData, this.modifiedItems);
     }
 
     /**
@@ -1674,190 +734,7 @@ class DataStore {
     }
 
     // DSA Sync Methods
-    async syncBdsaMetadataToServer(progressCallback = null) {
-        if (this.dataSource !== 'dsa') {
-            throw new Error('DSA sync is only available when using DSA data source');
-        }
 
-        // Import dsaAuthStore to check authentication
-        const { default: dsaAuthStore } = await import('./dsaAuthStore');
-        const authStatus = dsaAuthStore.getStatus();
-
-        if (!authStatus.isAuthenticated || !authStatus.isConfigured) {
-            throw new Error('DSA authentication or configuration missing');
-        }
-
-        if (this.syncInProgress) {
-            throw new Error('Sync already in progress');
-        }
-
-        try {
-            // Set sync in progress
-            this.syncInProgress = true;
-            this.syncStatus = 'syncing';
-            this.syncProgress = { processed: 0, total: this.processedData.length };
-
-            this.notifySync('SYNC_STATUS_CHANGED', {
-                syncStatus: this.syncStatus
-            });
-
-            // Import sync utilities
-            const { syncAllBdsaMetadata } = await import('./dsaIntegration.js');
-
-            // Get authentication info from dsaAuthStore
-            const config = dsaAuthStore.config;
-            const token = dsaAuthStore.token;
-
-            // Create processor reference for cancellation
-            const processorRef = { current: null };
-
-            // Only sync modified items, not all items
-            const itemsToSync = this.getModifiedItems();
-            console.log(`🔄 Syncing ${itemsToSync.length} modified items out of ${this.processedData.length} total items`);
-
-            if (itemsToSync.length === 0) {
-                console.log('✅ No modified items to sync - sync complete');
-                this.syncStatus = 'synced';
-                this.notifySync('SYNC_COMPLETED', {
-                    completed: true,
-                    totalItems: 0,
-                    processed: 0,
-                    success: 0,
-                    errors: 0,
-                    skipped: 0,
-                    results: []
-                });
-                return {
-                    completed: true,
-                    totalItems: 0,
-                    processed: 0,
-                    success: 0,
-                    errors: 0,
-                    skipped: 0,
-                    results: []
-                };
-            }
-
-            // Start sync process
-            const syncPromise = syncAllBdsaMetadata(
-                config.baseUrl,
-                itemsToSync,
-                token,
-                this.columnMappings,
-                (progress) => {
-                    this.syncProgress = progress;
-                    if (progressCallback) {
-                        progressCallback(progress);
-                    }
-                    // Notify only sync listeners
-                    this.notifySync('SYNC_PROGRESS_UPDATED', progress);
-                },
-                processorRef
-            );
-
-            // Store processor reference for cancellation (available immediately after syncAllBdsaMetadata call)
-            this.batchProcessor = processorRef.current;
-
-            // Wait for sync to complete
-            const results = await syncPromise;
-
-            // Store results
-            this.lastSyncResults = results;
-            this.syncStatus = results.completed ? 'synced' : 'error';
-
-            // Clear modified items for successfully synced items
-            if (results.completed && results.results) {
-                let clearedCount = 0;
-                console.log(`🧹 Before clearing - modifiedItems size: ${this.modifiedItems.size}`);
-                console.log(`🧹 Modified items before sync:`, Array.from(this.modifiedItems));
-
-                results.results.forEach(result => {
-                    console.log(`🧹 Sync result:`, { success: result.success, itemId: result.itemId });
-                    if (result.success && result.itemId) {
-                        const wasInSet = this.modifiedItems.has(result.itemId);
-                        this.modifiedItems.delete(result.itemId);
-                        if (wasInSet) {
-                            clearedCount++;
-                            console.log(`✅ Cleared item ${result.itemId} from modifiedItems`);
-                        } else {
-                            console.log(`⚠️ Item ${result.itemId} was not in modifiedItems set`);
-                        }
-                    }
-                });
-                console.log(`🧹 After clearing - modifiedItems size: ${this.modifiedItems.size}`);
-                console.log(`🧹 Cleared ${clearedCount} items from modified items set after successful sync`);
-
-                // Notify UI to update the counter
-                this.notify();
-
-                // Save the updated state
-                // Skip saveToStorage() for large datasets to avoid quota errors
-                // this.saveToStorage();
-            }
-
-            console.log('DSA metadata sync completed:', results);
-
-            // Clear processor reference after completion
-            this.batchProcessor = null;
-
-            // Notify only sync listeners about completion
-            this.notifySync('SYNC_COMPLETED', results);
-
-            return results;
-
-        } catch (error) {
-            console.error('DSA metadata sync failed:', error);
-            this.syncStatus = 'error';
-            this.lastSyncResults = {
-                completed: false,
-                error: error.message,
-                totalItems: this.processedData.length,
-                success: 0,
-                errors: 1,
-                skipped: 0
-            };
-
-            // Clear processor reference on error
-            this.batchProcessor = null;
-
-            this.notifySync('SYNC_ERROR', {
-                error: error.message
-            });
-
-            throw error;
-        } finally {
-            this.syncInProgress = false;
-            this.batchProcessor = null;
-        }
-    }
-
-    cancelDsaMetadataSync() {
-        console.log('🚫 Cancel sync requested - checking for active processor...');
-        if (this.batchProcessor) {
-            console.log('🚫 Found active batch processor - cancelling DSA metadata sync...');
-            this.batchProcessor.cancel();
-            this.syncStatus = 'offline';
-            this.syncInProgress = false;
-            this.batchProcessor = null;
-
-            this.notifySync('SYNC_CANCELLED', {
-                dataStore: this.getSnapshot()
-            });
-
-            console.log('✅ DSA metadata sync cancelled successfully');
-        } else {
-            console.log('⚠️ No active batch processor found - sync may have already completed or not started');
-        }
-    }
-
-    getSyncStatus() {
-        return {
-            inProgress: this.syncInProgress,
-            status: this.syncStatus,
-            progress: this.syncProgress,
-            lastResults: this.lastSyncResults
-        };
-    }
 
     setColumnMappings(mappings) {
         this.columnMappings = { ...this.columnMappings, ...mappings };
@@ -1984,52 +861,7 @@ class DataStore {
      * This updates the BDSA.bdsaLocal.bdsaCaseId field in the data items
      */
     applyCaseIdMappingsToData() {
-        if (!this.processedData || this.processedData.length === 0) {
-            console.log('🔧 applyCaseIdMappingsToData: No processed data');
-            return;
-        }
-
-        console.log(`🔧 applyCaseIdMappingsToData: Processing ${this.processedData.length} items with ${this.caseIdMappings.size} mappings`);
-        if (this.caseIdMappings.size > 0) {
-            console.log('🔧 Current mappings:', Array.from(this.caseIdMappings.entries()));
-        }
-        let updatedCount = 0;
-
-        this.processedData.forEach((item) => {
-            const currentLocalCaseId = item.BDSA?.bdsaLocal?.localCaseId;
-            if (currentLocalCaseId && this.caseIdMappings.has(currentLocalCaseId)) {
-                const bdsaCaseId = this.caseIdMappings.get(currentLocalCaseId);
-
-                // Only update if the value has changed
-                if (item.BDSA?.bdsaLocal?.bdsaCaseId !== bdsaCaseId) {
-                    if (!item.BDSA) {
-                        item.BDSA = {};
-                    }
-                    if (!item.BDSA.bdsaLocal) {
-                        item.BDSA.bdsaLocal = {};
-                    }
-
-                    item.BDSA.bdsaLocal.bdsaCaseId = bdsaCaseId;
-                    item.BDSA._lastModified = new Date().toISOString();
-
-                    // Mark the data source for UI highlighting
-                    if (!item.BDSA._dataSource) {
-                        item.BDSA._dataSource = {};
-                    }
-                    item.BDSA._dataSource.bdsaCaseId = 'case_id_mapping';
-
-                    // Note: modifiedItems.add() is now handled automatically by the BDSA tracking proxy
-                    updatedCount++;
-                }
-            }
-        });
-
-        if (updatedCount > 0) {
-            console.log(`Applied case ID mappings to ${updatedCount} data items`);
-            console.log(`🔍 Added ${updatedCount} items to modifiedItems via case ID mappings. Total modified: ${this.modifiedItems.size}`);
-
-            // Note: notify() is now handled automatically by the BDSA tracking proxy
-        }
+        return caseManager.applyCaseIdMappingsToData(this.processedData, this.caseIdMappings, this);
     }
 
     /**
@@ -2038,78 +870,7 @@ class DataStore {
      * Handles conflicts where the same localCaseId has different bdsaCaseId values
      */
     initializeCaseIdMappingsFromData() {
-        console.log('🔍 initializeCaseIdMappingsFromData called with', this.processedData?.length, 'items');
-        if (!this.processedData || this.processedData.length === 0) {
-            console.log('🔍 No processed data available for conflict detection');
-            return;
-        }
-
-        const mappings = new Map();
-        const conflicts = new Map();
-        const bdsaConflicts = new Map();
-
-        // First pass: collect all mappings and detect localCaseId conflicts
-        this.processedData.forEach((item) => {
-            const localCaseId = item.BDSA?.bdsaLocal?.localCaseId;
-            const bdsaCaseId = item.BDSA?.bdsaLocal?.bdsaCaseId;
-
-            if (localCaseId && bdsaCaseId) {
-                // Check for conflicts - same localCaseId but different bdsaCaseId
-                if (mappings.has(localCaseId) && mappings.get(localCaseId) !== bdsaCaseId) {
-                    // Record the conflict
-                    if (!conflicts.has(localCaseId)) {
-                        conflicts.set(localCaseId, new Set([mappings.get(localCaseId)]));
-                    }
-                    conflicts.get(localCaseId).add(bdsaCaseId);
-                    console.warn(`⚠️ Local Case ID Conflict: localCaseId "${localCaseId}" has multiple BDSA Case IDs:`, Array.from(conflicts.get(localCaseId)));
-                } else {
-                    mappings.set(localCaseId, bdsaCaseId);
-                }
-            }
-        });
-
-        // Second pass: detect bdsaCaseId conflicts (same BDSA Case ID mapped to multiple local case IDs)
-        const bdsaToLocalMap = new Map();
-        this.processedData.forEach((item) => {
-            const localCaseId = item.BDSA?.bdsaLocal?.localCaseId;
-            const bdsaCaseId = item.BDSA?.bdsaLocal?.bdsaCaseId;
-
-            if (localCaseId && bdsaCaseId) {
-                if (bdsaToLocalMap.has(bdsaCaseId)) {
-                    const existingLocalIds = bdsaToLocalMap.get(bdsaCaseId);
-                    if (!existingLocalIds.has(localCaseId)) {
-                        existingLocalIds.add(localCaseId);
-                        if (existingLocalIds.size === 2) {
-                            // First time we detect this conflict
-                            bdsaConflicts.set(bdsaCaseId, new Set(existingLocalIds));
-                            console.warn(`⚠️ BDSA Case ID Conflict: bdsaCaseId "${bdsaCaseId}" is mapped to multiple local case IDs:`, Array.from(existingLocalIds));
-                        } else {
-                            // Update existing conflict
-                            bdsaConflicts.get(bdsaCaseId).add(localCaseId);
-                            console.warn(`⚠️ BDSA Case ID Conflict: bdsaCaseId "${bdsaCaseId}" is mapped to multiple local case IDs:`, Array.from(bdsaConflicts.get(bdsaCaseId)));
-                        }
-                    }
-                } else {
-                    bdsaToLocalMap.set(bdsaCaseId, new Set([localCaseId]));
-                }
-            }
-        });
-
-        this.caseIdMappings = mappings;
-        this.caseIdConflicts = conflicts;
-        this.bdsaCaseIdConflicts = bdsaConflicts;
-
-        console.log(`Initialized case ID mappings from data: ${mappings.size} mappings found`);
-        if (conflicts.size > 0) {
-            console.warn(`⚠️ Found ${conflicts.size} local case ID conflicts that need resolution`);
-            console.log('🔍 Local conflicts:', conflicts);
-        }
-        if (bdsaConflicts.size > 0) {
-            console.warn(`⚠️ Found ${bdsaConflicts.size} BDSA case ID conflicts that need resolution`);
-            console.log('🔍 BDSA conflicts:', bdsaConflicts);
-        } else {
-            console.log('🔍 No BDSA conflicts detected');
-        }
+        return caseManager.initializeCaseIdMappingsFromData(this.processedData, this);
     }
 
     /**
@@ -2310,67 +1071,7 @@ class DataStore {
      * @returns {Array} Data with initialized BDSA structure
      */
     initializeBdsaStructure(data) {
-        if (!data || !Array.isArray(data)) {
-            return data;
-        }
-
-        // console.log('🔧 DEBUG - initializeBdsaStructure called, checking first item:', {
-        //     hasBDSA: !!data[0]?.BDSA,
-        //     hasBdsaLocal: !!data[0]?.BDSA?.bdsaLocal,
-        //     bdsaLocalValues: data[0]?.BDSA?.bdsaLocal
-        // });
-
-        return data.map(item => {
-            // Initialize BDSA structure if it doesn't exist
-            if (!item.BDSA) {
-                item.BDSA = {
-                    bdsaLocal: {
-                        localCaseId: null,
-                        localStainID: null,
-                        localRegionId: null,
-                        bdsaCaseId: null,  // Initialize this field so the column appears
-                        bdsaStainProtocol: null,  // Initialize BDSA Region Protocol field (can be array)
-                        bdsaRegionProtocol: null  // Initialize BDSA Protocol field (can be array)
-                    },
-                    _dataSource: {}
-                    // Don't set _lastModified here - only set it when actually modifying data
-                };
-            } else {
-                // Ensure bdsaLocal structure exists
-                if (!item.BDSA.bdsaLocal) {
-                    item.BDSA.bdsaLocal = {
-                        localCaseId: null,
-                        localStainID: null,
-                        localRegionId: null,
-                        bdsaCaseId: null,
-                        bdsaStainProtocol: null,  // Initialize BDSA Region Protocol field (can be array)
-                        bdsaRegionProtocol: null  // Initialize BDSA Protocol field (can be array)
-                    };
-                } else {
-                    // Ensure bdsaCaseId field exists - but preserve existing value if it exists
-                    if (!item.BDSA.bdsaLocal.hasOwnProperty('bdsaCaseId')) {
-                        item.BDSA.bdsaLocal.bdsaCaseId = null;
-                    }
-                    // Ensure bdsaStainProtocol field exists - but preserve existing value if it exists
-                    if (!item.BDSA.bdsaLocal.hasOwnProperty('bdsaStainProtocol')) {
-                        item.BDSA.bdsaLocal.bdsaStainProtocol = null;
-                    }
-                    // Ensure bdsaRegionProtocol field exists - but preserve existing value if it exists
-                    if (!item.BDSA.bdsaLocal.hasOwnProperty('bdsaRegionProtocol')) {
-                        item.BDSA.bdsaLocal.bdsaRegionProtocol = null;
-                    }
-                    // Preserve existing values - don't overwrite them with null
-                    // The existing values should already be set by transformDsaData
-                }
-
-                // Ensure _dataSource exists
-                if (!item.BDSA._dataSource) {
-                    item.BDSA._dataSource = {};
-                }
-            }
-
-            return item;
-        });
+        return bdsaInitializer.initializeBdsaStructure(data);
     }
 
     /**
@@ -2422,163 +1123,18 @@ class DataStore {
 
     // DSA Sync Methods
     async syncBdsaMetadataToServer(progressCallback) {
-        if (this.syncInProgress) {
-            throw new Error('Sync already in progress');
-        }
-
-        console.log('🚀 Starting sync - setting syncInProgress to true');
-        this.syncInProgress = true;
-        this.syncCancelled = false; // Reset cancellation flag
-        this.syncStatus = 'syncing';
-        this.syncProgress = {
-            current: 0,
-            total: this.processedData.length,
-            percentage: 0,
-            success: 0,
-            errors: 0,
-            skipped: 0
-        };
-        this.notifySyncListeners('syncStatusChanged');
-        console.log('📡 Notified listeners of sync status change');
-
-        try {
-            const results = {
-                success: 0,
-                errors: 0,
-                skipped: 0,
-                details: []
-            };
-
-            for (let i = 0; i < this.processedData.length; i++) {
-                // Check for cancellation before processing each item
-                if (this.syncCancelled) {
-                    console.log('🛑 Sync cancelled by user, stopping at item', i);
-                    break;
-                }
-
-                const item = this.processedData[i];
-
-                try {
-                    // Check if item has BDSA metadata to sync AND has been modified
-                    if (item.BDSA?.bdsaLocal && this.shouldSyncItem(item)) {
-                        // Here you would implement the actual DSA API call
-                        // For now, we'll just simulate the sync
-                        await this.syncItemToServer(item);
-                        results.success++;
-                    } else {
-                        results.skipped++;
-                    }
-                } catch (error) {
-                    console.error(`Failed to sync item ${i}:`, error);
-                    results.errors++;
-                    results.details.push({
-                        itemIndex: i,
-                        error: error.message
-                    });
-                }
-
-                // Update progress
-                this.syncProgress.current = i + 1;
-                this.syncProgress.percentage = Math.round(((i + 1) / this.processedData.length) * 100);
-                this.syncProgress.success = results.success;
-                this.syncProgress.errors = results.errors;
-                this.syncProgress.skipped = results.skipped;
-
-                if (progressCallback) {
-                    progressCallback({
-                        current: i + 1,
-                        total: this.processedData.length,
-                        percentage: this.syncProgress.percentage,
-                        success: results.success,
-                        errors: results.errors,
-                        skipped: results.skipped
-                    });
-                }
-                this.notifySyncListeners('syncProgressUpdated');
-            }
-
-            // Check if sync was cancelled
-            if (this.syncCancelled) {
-                console.log('🚫 Sync was cancelled by user');
-                this.syncStatus = 'offline';
-                this.lastSyncResults = {
-                    ...results,
-                    cancelled: true,
-                    totalItems: this.processedData.length
-                };
-                this.notifySyncListeners('syncCancelled');
-            } else {
-                console.log('✅ Sync completed successfully');
-                this.syncStatus = 'synced';
-                this.lastSyncResults = results;
-                this.notifySyncListeners('syncCompleted');
-            }
-
-            return results;
-        } catch (error) {
-            console.error('❌ Sync failed:', error);
-            this.syncStatus = 'error';
-            this.notifySyncListeners('syncError');
-            throw error;
-        } finally {
-            console.log('🛑 Sync finished - setting syncInProgress to false');
-            this.syncInProgress = false;
-            this.syncCancelled = false; // Reset cancellation flag
-            this.notifySyncListeners('syncStatusChanged');
-        }
+        return dsaSync.syncBdsaMetadataToServer(this.processedData, this.modifiedItems, this, progressCallback);
     }
-
     shouldSyncItem(item) {
-        // Only sync items that are explicitly marked as modified
-        return this.modifiedItems.has(item.id);
+        return dsaSync.shouldSyncItem(item, this.modifiedItems);
     }
 
     getItemsToSyncCount() {
-        // Simple: only count items that are explicitly marked as modified
-        return this.modifiedItems.size;
+        return dsaSync.getItemsToSyncCount(this.modifiedItems);
     }
 
     async syncItemToServer(item) {
-        console.log('Syncing item to server:', item.id);
-
-        // Get DSA configuration from auth store
-        const { default: dsaAuthStore } = await import('./dsaAuthStore.js');
-        const authStatus = dsaAuthStore.getStatus();
-
-        if (!authStatus.isAuthenticated || !authStatus.serverUrl || !authStatus.hasToken) {
-            throw new Error('DSA configuration or authentication token not available');
-        }
-
-        console.log('DSA auth status for sync:', {
-            isAuthenticated: authStatus.isAuthenticated,
-            hasConfig: !!authStatus.serverUrl,
-            hasToken: authStatus.hasToken,
-            baseUrl: authStatus.serverUrl
-        });
-
-        // Import the DSA sync function dynamically to avoid circular dependencies
-        const { syncItemBdsaMetadata } = await import('./dsaIntegration.js');
-
-        // Use empty column mapping since we're reading from BDSA.bdsaLocal directly
-        const columnMapping = {
-            localCaseId: 'BDSA.bdsaLocal.localCaseId',
-            localStainID: 'BDSA.bdsaLocal.localStainID',
-            localRegionId: 'BDSA.bdsaLocal.localRegionId'
-        };
-
-        const result = await syncItemBdsaMetadata(
-            authStatus.serverUrl,
-            item,
-            dsaAuthStore.token,
-            columnMapping,
-            () => this.syncCancelled
-        );
-
-        if (!result.success) {
-            throw new Error(result.error || 'Sync failed');
-        }
-
-        console.log('Successfully synced item to server:', item.id);
+        return dsaSync.syncItemToServer(item, this);
     }
 
     cancelDsaMetadataSync() {
@@ -2646,24 +1202,7 @@ class DataStore {
     }
 
     getSnapshot() {
-        return {
-            processedData: this.processedData,
-            dataSource: this.dataSource,
-            dataSourceInfo: this.dataSourceInfo,
-            dataLoadTimestamp: this.dataLoadTimestamp,
-            modifiedItems: this.modifiedItems,
-            caseIdMappings: this.caseIdMappings,
-            caseIdConflicts: this.caseIdConflicts,
-            bdsaCaseIdConflicts: this.bdsaCaseIdConflicts,
-            caseProtocolMappings: this.caseProtocolMappings,
-            syncInProgress: this.syncInProgress,
-            syncStatus: this.syncStatus,
-            syncProgress: this.syncProgress,
-            lastSyncResults: this.lastSyncResults,
-            girderToken: this.girderToken,
-            dsaConfig: this.dsaConfig,
-            columnMappings: this.columnMappings
-        };
+        return statisticsManager.getSnapshot(this);
     }
 
     // Generate cases with stain slides for stain protocol mapping
@@ -2681,308 +1220,22 @@ class DataStore {
         return this.generateStainProtocolCases();
     }
 
-    // Internal helper to generate cases for a specific protocol type
-    generateProtocolCases(protocolType) {
-        if (!this.processedData.length) {
-            console.log('🔍 No processed data available');
-            return [];
-        }
-
-        // Debugging for protocol case generation
-        console.log(`🔍 generate${protocolType.charAt(0).toUpperCase() + protocolType.slice(1)}ProtocolCases: ${this.processedData.length} rows, ${this.caseIdMappings.size} case mappings`);
-
-        // Sample first few rows to see what data looks like
-        const sampleRows = this.processedData.slice(0, 3).map(row => ({
-            localCaseId: row.BDSA?.bdsaLocal?.localCaseId,
-            localStainID: row.BDSA?.bdsaLocal?.localStainID,
-            localRegionId: row.BDSA?.bdsaLocal?.localRegionId,
-            hasBDSA: !!row.BDSA,
-            hasBdsaLocal: !!row.BDSA?.bdsaLocal,
-            name: row.name
-        }));
-        console.log(`🔍 Sample rows (first 3):`, sampleRows);
-
-        // Show what case IDs are actually in the mappings
-        const mappingKeys = Array.from(this.caseIdMappings.keys()).slice(0, 10);
-        console.log(`🔍 Case ID mappings (first 10 keys):`, mappingKeys);
-
-        // Check if sample row case IDs are in mappings
-        const sampleCaseIds = sampleRows.map(r => r.localCaseId);
-        const mappingChecks = sampleCaseIds.map(id => ({
-            localCaseId: id,
-            hasMapping: this.caseIdMappings.has(id),
-            mappedTo: this.caseIdMappings.get(id)
-        }));
-        console.log(`🔍 Sample case ID mapping checks:`, mappingChecks);
-
-        // Use default column mappings for BDSA data if not set
-        const columnMapping = this.columnMappings.localStainID ? this.columnMappings : {
-            localCaseId: 'BDSA.bdsaLocal.localCaseId',
-            localStainID: 'BDSA.bdsaLocal.localStainID',
-            localRegionId: 'BDSA.bdsaLocal.localRegionId'
-        };
-
-        // Removed verbose column mapping logging
-
-        // Build case ID mappings directly from the data (single source of truth)
-        // This matches how the Case ID Mapping tab reads the data
-        const caseIdMappings = new Map();
-        this.processedData.forEach((item) => {
-            const localCaseId = item.BDSA?.bdsaLocal?.localCaseId;
-            const bdsaCaseId = item.BDSA?.bdsaLocal?.bdsaCaseId;
-            if (localCaseId && bdsaCaseId) {
-                caseIdMappings.set(localCaseId, bdsaCaseId);
-            }
-        });
-
-        console.log(`🔍 Built case ID mappings from data: ${caseIdMappings.size} mappings found`);
-
-        // Check if case ID mappings are empty
-        if (caseIdMappings.size === 0) {
-            console.log('🚨 WARNING: No case ID mappings found! This will cause no cases to be generated.');
-            console.log('💡 Make sure to set up case ID mappings first in the Case ID Mapping tab.');
-            return [];
-        }
-
-        const caseGroups = {};
-        const slideIdsSeen = new Set(); // Track slide IDs to prevent duplicates
-
-        this.processedData.forEach((row, index) => {
-            // Access the BDSA data correctly from the nested structure
-            const localCaseId = row.BDSA?.bdsaLocal?.localCaseId;
-            const localStainId = row.BDSA?.bdsaLocal?.localStainID;
-            const localRegionId = row.BDSA?.bdsaLocal?.localRegionId;
-            const filename = row['name'] || row['dsa_name'];
-
-            const finalFilename = filename || `${localCaseId}_${localStainId || localRegionId}.svs`;
-
-            // Use the actual _id or dsa_id from the data for proper table reference
-            const slideId = row._id || row.dsa_id || finalFilename;
-
-            // Removed verbose row debugging
-
-            // Filter based on protocol type - only include slides with the relevant ID type
-            const hasRelevantId = protocolType === 'stain' ? localStainId : localRegionId;
-
-            // Skip if no relevant ID for this protocol type, or no BDSA case ID mapping
-            if (!hasRelevantId || !caseIdMappings.has(localCaseId)) {
-                return;
-            }
-
-            const bdsaCaseId = caseIdMappings.get(localCaseId);
-
-            if (!caseGroups[bdsaCaseId]) {
-                caseGroups[bdsaCaseId] = {
-                    bdsaId: bdsaCaseId,
-                    localCaseId: localCaseId,
-                    slides: []
-                };
-            }
-
-            // Skip if we've already processed this slide ID
-            if (slideIdsSeen.has(slideId)) {
-                console.log(`🔍 Skipping duplicate slide: ${slideId}`);
-                return;
-            }
-            slideIdsSeen.add(slideId);
-
-            // Get protocol information for the specific protocol type
-            const protocolFieldName = `bdsa${protocolType.charAt(0).toUpperCase() + protocolType.slice(1)}Protocol`;
-            const bdsaProtocol = row.BDSA?.bdsaLocal?.[protocolFieldName];
-
-            // Parse the protocol data - always store as arrays internally
-            let protocols = [];
-            if (bdsaProtocol) {
-                if (Array.isArray(bdsaProtocol)) {
-                    // Already an array, just filter out invalid entries
-                    protocols = bdsaProtocol.filter(p => p && typeof p === 'string');
-                } else if (typeof bdsaProtocol === 'string') {
-                    // Convert string to array
-                    protocols = bdsaProtocol.split(',').map(p => p.trim()).filter(p => p);
-                }
-            }
-
-            // Also check the caseProtocolMappings for any additional mappings
-            const additionalSlideProtocols = this.caseProtocolMappings.get(bdsaCaseId)?.[slideId] || { stain: [], region: [] };
-
-            // Combine protocols from data and mappings for this protocol type
-            const allProtocols = [...protocols, ...(additionalSlideProtocols[protocolType] || [])];
-
-            // Check if slide is mapped (has protocols for this type)
-            const isMapped = allProtocols.length > 0;
-
-            // Debug logging for protocol detection (reduced)
-            if (index < 2) { // Show fewer rows
-                console.log(`🔍 Row ${index} ${protocolType} protocols:`, { protocols: allProtocols, isMapped });
-            }
-
-            // Create slide object with protocol-type specific data
-            const slideData = {
-                id: slideId, // This is now the actual _id or dsa_id for table reference
-                filename: finalFilename, // This is the display name
-                status: isMapped ? 'mapped' : 'unmapped',
-                localStainId: localStainId,
-                localRegionId: localRegionId,
-                hasProtocol: isMapped
-            };
-
-            // Add protocol-type specific fields
-            if (protocolType === 'stain') {
-                slideData.stainType = localStainId;
-                slideData.stainProtocols = allProtocols;
-                slideData.hasStainProtocol = isMapped;
-            } else {
-                slideData.regionType = localRegionId;
-                slideData.regionProtocols = allProtocols;
-                slideData.hasRegionProtocol = isMapped;
-            }
-
-            caseGroups[bdsaCaseId].slides.push(slideData);
-        });
-
-        const allCases = Object.values(caseGroups);
-        // Return ALL cases that have slides with the relevant protocol type
-        const casesWithRelevantSlides = allCases.filter(caseData =>
-            caseData.slides.some(slide =>
-                protocolType === 'stain' ? slide.stainType : slide.regionType
-            )
-        );
-
-        console.log(`🔍 DEBUG - ${protocolType} case generation results:`, {
-            protocolType,
-            totalCaseGroups: allCases.length,
-            casesWithRelevantSlides: casesWithRelevantSlides.length,
-            allCases: allCases.map(c => ({
-                bdsaId: c.bdsaId,
-                localCaseId: c.localCaseId,
-                totalSlides: c.slides.length,
-                relevantSlides: c.slides.filter(s =>
-                    protocolType === 'stain' ? s.stainType : s.regionType
-                ).length,
-                mappedSlides: c.slides.filter(s => s.status === 'mapped').length,
-                unmappedSlides: c.slides.filter(s => s.status === 'unmapped').length
-            })),
-            caseGroupsKeys: Object.keys(caseGroups)
-        });
-
-        return casesWithRelevantSlides;
-    }
-
-    // Add protocol mapping to a specific slide
     addProtocolMapping(bdsaCaseId, slideId, protocolId, protocolType, batchMode = false) {
-        console.log(`🔍 addProtocolMapping called: ${bdsaCaseId}, ${slideId}, ${protocolId}, ${protocolType}`);
-
-        // Find the data row that matches this case and slide
-        const dataRow = this.processedData.find(row =>
-            row.BDSA?.bdsaLocal?.bdsaCaseId === bdsaCaseId &&
-            (row._id === slideId || row.dsa_id === slideId || row.id === slideId)
+        return protocolMapper.addProtocolMapping(
+            bdsaCaseId, slideId, protocolId, protocolType,
+            this.processedData, this.modifiedItems, this.caseProtocolMappings,
+            () => this.notify(), batchMode
         );
-
-        if (!dataRow) {
-            console.log(`❌ No data row found for case ${bdsaCaseId}, slide ${slideId}`);
-            return;
-        }
-
-        // Get the field name based on protocol type
-        const fieldName = `bdsa${protocolType === 'stain' ? 'Stain' : 'Region'}Protocol`;
-        const currentProtocols = dataRow.BDSA?.bdsaLocal?.[fieldName] || [];
-
-        // Convert to array if it's a string
-        const protocolArray = Array.isArray(currentProtocols) ? currentProtocols :
-            (typeof currentProtocols === 'string' ? currentProtocols.split(',').map(p => p.trim()).filter(p => p) : []);
-
-        console.log(`🔍 Current ${fieldName} for slide ${slideId}:`, protocolArray);
-
-        // Add protocol if not already present
-        if (!protocolArray.includes(protocolId)) {
-            protocolArray.push(protocolId);
-            dataRow.BDSA.bdsaLocal[fieldName] = protocolArray;
-
-            // Mark item as modified
-            dataRow.BDSA._lastModified = new Date().toISOString();
-            this.modifiedItems.add(dataRow.id);
-
-            // Only save to storage and notify if not in batch mode
-            if (!batchMode) {
-                // Skip saveToStorage() for large datasets to avoid quota errors
-                // this.saveToStorage();
-                this.notify();
-            }
-            console.log(`✅ Added protocol ${protocolId} to slide ${slideId}. New protocols:`, protocolArray);
-        } else {
-            console.log(`🔔 Protocol ${protocolId} already exists for slide ${slideId}`);
-        }
     }
 
 
     // Remove protocol mapping from a specific slide
     removeProtocolMapping(bdsaCaseId, slideId, protocolId, protocolType) {
-        console.log(`🔍 removeProtocolMapping called: ${bdsaCaseId}, ${slideId}, ${protocolId}, ${protocolType}`);
-
-        // Find the data row that matches this case and slide
-        const dataRow = this.processedData.find(row =>
-            row.BDSA?.bdsaLocal?.bdsaCaseId === bdsaCaseId &&
-            (row._id === slideId || row.dsa_id === slideId || row.id === slideId)
+        return protocolMapper.removeProtocolMapping(
+            bdsaCaseId, slideId, protocolId, protocolType,
+            this.processedData, this.modifiedItems, this.caseProtocolMappings,
+            () => this.notify()
         );
-
-        if (!dataRow) {
-            console.log(`❌ No data row found for case ${bdsaCaseId}, slide ${slideId}`);
-            return;
-        }
-
-        // Get the field name based on protocol type
-        const fieldName = `bdsa${protocolType === 'stain' ? 'Stain' : 'Region'}Protocol`;
-        const bdsaProtocol = dataRow.BDSA?.bdsaLocal?.[fieldName];
-
-        // Parse the protocol data - use the same logic as generateUnmappedCases
-        let protocols = [];
-        if (bdsaProtocol) {
-            if (Array.isArray(bdsaProtocol)) {
-                protocols = bdsaProtocol.filter(p => p && typeof p === 'string');
-            } else if (typeof bdsaProtocol === 'string') {
-                protocols = bdsaProtocol.split(',').map(p => p.trim()).filter(p => p);
-            }
-        }
-
-        // Also check the caseProtocolMappings for any additional mappings (same logic as generateUnmappedCases)
-        const additionalSlideProtocols = this.caseProtocolMappings.get(bdsaCaseId)?.[slideId] || { stain: [], region: [] };
-
-        // Combine protocols from data and mappings (same logic as generateUnmappedCases)
-        const allProtocols = [...protocols, ...(additionalSlideProtocols[protocolType] || [])];
-
-        console.log(`🔍 Current ${fieldName} for slide ${slideId}:`, allProtocols);
-        console.log(`🔍 Original data:`, protocols);
-        console.log(`🔍 Additional mappings:`, additionalSlideProtocols[protocolType] || []);
-
-        // Remove protocol if present
-        const index = allProtocols.indexOf(protocolId);
-        if (index > -1) {
-            console.log(`✅ Found protocol ${protocolId} at index ${index}, removing...`);
-
-            // Remove from the appropriate source
-            if (index < protocols.length) {
-                // Remove from original data
-                protocols.splice(index, 1);
-                dataRow.BDSA.bdsaLocal[fieldName] = protocols;
-                console.log(`✅ Removed from original data. New protocols:`, protocols);
-            } else {
-                // Remove from caseProtocolMappings
-                const mappingIndex = index - protocols.length;
-                additionalSlideProtocols[protocolType].splice(mappingIndex, 1);
-                console.log(`✅ Removed from caseProtocolMappings. New mappings:`, additionalSlideProtocols[protocolType]);
-            }
-
-            // Mark item as modified
-            dataRow.BDSA._lastModified = new Date().toISOString();
-            this.modifiedItems.add(dataRow.id);
-
-            // Skip saveToStorage() for large datasets to avoid quota errors
-            // this.saveToStorage();
-            this.notify();
-            console.log(`✅ Protocol ${protocolId} removed from slide ${slideId} (marked as modified)`);
-        } else {
-            console.log(`❌ Protocol ${protocolId} not found in slide protocols:`, allProtocols);
-        }
     }
 
     /**
