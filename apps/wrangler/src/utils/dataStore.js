@@ -3,6 +3,7 @@
 
 import * as XLSX from 'xlsx';
 import suggestionEngine from './SuggestionEngine.js';
+import protocolCaseGenerator from './ProtocolCaseGenerator.js';
 
 class DataStore {
     constructor() {
@@ -2667,12 +2668,12 @@ class DataStore {
 
     // Generate cases with stain slides for stain protocol mapping
     generateStainProtocolCases() {
-        return this.generateProtocolCases('stain');
+        return protocolCaseGenerator.generateStainProtocolCases(this.processedData, this.caseIdMappings, this.columnMappings);
     }
 
     // Generate cases with region slides for region protocol mapping  
     generateRegionProtocolCases() {
-        return this.generateProtocolCases('region');
+        return protocolCaseGenerator.generateRegionProtocolCases(this.processedData, this.caseIdMappings, this.columnMappings);
     }
 
     // Generate unmapped cases from current data for protocol mapping (legacy - now calls stain)
