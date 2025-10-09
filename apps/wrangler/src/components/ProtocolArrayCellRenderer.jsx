@@ -47,7 +47,7 @@ const ProtocolArrayCellRenderer = ({ value, data, colDef, api }) => {
     };
 
     const updateCellValue = (newProtocols) => {
-        // Update the data
+        // Update the data directly (for immediate UI feedback)
         const fieldName = colDef.field.replace('BDSA.bdsaLocal.', '');
         if (!data.BDSA) {
             data.BDSA = {};
@@ -58,6 +58,31 @@ const ProtocolArrayCellRenderer = ({ value, data, colDef, api }) => {
         data.BDSA.bdsaLocal[fieldName] = newProtocols;
         data.BDSA._lastModified = new Date().toISOString();
 
+        // Also update the dataStore to ensure persistence
+        const protocolType = fieldName.includes('Stain') ? 'stain' : 'region';
+        const bdsaCaseId = data.BDSA?.bdsaLocal?.bdsaCaseId;
+        const slideId = data.id || data._id || data.dsa_id;
+
+        if (bdsaCaseId && slideId) {
+            // Use the dataStore's protocol mapping methods for proper persistence
+            const currentProtocols = data.BDSA.bdsaLocal[fieldName] || [];
+            const previousProtocols = value ? (Array.isArray(value) ? value : value.split(',').map(p => p.trim()).filter(p => p)) : [];
+
+            // Find protocols that were added or removed
+            const addedProtocols = newProtocols.filter(p => !previousProtocols.includes(p));
+            const removedProtocols = previousProtocols.filter(p => !newProtocols.includes(p));
+
+            // Add new protocols
+            addedProtocols.forEach(protocol => {
+                dataStore.addProtocolMapping(bdsaCaseId, slideId, protocol, protocolType, true); // batch mode
+            });
+
+            // Remove protocols
+            removedProtocols.forEach(protocol => {
+                dataStore.removeProtocolMapping(bdsaCaseId, slideId, protocol, protocolType);
+            });
+        }
+
         // Mark as modified (with fallback ID fields for safety)
         const itemId = data.id || data._id || data.dsa_id;
         if (itemId) {
@@ -66,9 +91,6 @@ const ProtocolArrayCellRenderer = ({ value, data, colDef, api }) => {
         } else {
             console.error(`❌ Cannot mark item as modified - no valid ID found:`, data);
         }
-
-        // Skip saveToStorage() for large datasets to avoid quota errors
-        // dataStore.saveToStorage();
 
         // Notify listeners to update UI
         dataStore.notify();

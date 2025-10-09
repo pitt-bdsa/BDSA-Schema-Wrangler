@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import dataStore from '../utils/dataStore';
+import suggestionEngine from '../utils/SuggestionEngine';
 import './ProtocolDebugPanel.css';
 
 const ProtocolDebugPanel = () => {
@@ -16,9 +17,9 @@ const ProtocolDebugPanel = () => {
         console.log('🔍 Loading protocol data...');
         console.log('📊 DataStore processedData length:', dataStore.processedData?.length || 0);
 
-        // Get actual protocol mappings from the data
-        const stainMappings = getProtocolMappingsFromData('stain');
-        const regionMappings = getProtocolMappingsFromData('region');
+        // Use the new SuggestionEngine to get protocol mappings
+        const stainMappings = suggestionEngine.getProtocolMappingsFromData(dataStore.processedData, 'stain');
+        const regionMappings = suggestionEngine.getProtocolMappingsFromData(dataStore.processedData, 'region');
 
         console.log('🧪 Stain mappings found:', stainMappings.size);
         console.log('🧠 Region mappings found:', regionMappings.size);
@@ -29,65 +30,6 @@ const ProtocolDebugPanel = () => {
         });
     };
 
-    const getProtocolMappingsFromData = (protocolType) => {
-        const mappings = new Map();
-
-        if (!dataStore.processedData || dataStore.processedData.length === 0) {
-            console.log(`❌ No processed data available for ${protocolType}`);
-            return mappings;
-        }
-
-        // Use the correct BDSA field structure
-        const typeField = protocolType === 'stain' ? 'BDSA.bdsaLocal.localStainID' : 'BDSA.bdsaLocal.localRegionId';
-        const protocolField = protocolType === 'stain' ? 'BDSA.bdsaLocal.bdsaStainProtocol' : 'BDSA.bdsaLocal.bdsaRegionProtocol';
-
-        console.log(`🔍 Looking for ${protocolType} protocols with BDSA fields:`, { typeField, protocolField });
-
-        dataStore.processedData.forEach((item, index) => {
-            // Navigate to the BDSA structure
-            const bdsaLocal = item.BDSA?.bdsaLocal;
-            if (!bdsaLocal) return;
-
-            const type = bdsaLocal[protocolType === 'stain' ? 'localStainID' : 'localRegionId'];
-            const protocols = bdsaLocal[protocolType === 'stain' ? 'bdsaStainProtocol' : 'bdsaRegionProtocol'] || [];
-
-            if (index < 3) { // Debug first few items
-                console.log(`🔍 Item ${index}:`, {
-                    type,
-                    protocols,
-                    hasProtocols: protocols.length > 0,
-                    bdsaLocal: bdsaLocal
-                });
-            }
-
-            if (type && protocols.length > 0) {
-                protocols.forEach(protocol => {
-                    if (!mappings.has(protocol)) {
-                        mappings.set(protocol, {
-                            suggested: protocol,
-                            confidence: 1.0,
-                            reason: `Found in BDSA data`,
-                            isExactMatch: true,
-                            totalCases: 0,
-                            uniqueTypes: new Set()
-                        });
-                    }
-
-                    const mapping = mappings.get(protocol);
-                    mapping.totalCases++;
-                    mapping.uniqueTypes.add(type);
-                });
-            }
-        });
-
-        // Convert Set to Array for display
-        mappings.forEach(mapping => {
-            mapping.uniqueTypes = Array.from(mapping.uniqueTypes);
-        });
-
-        console.log(`✅ Found ${mappings.size} ${protocolType} protocol mappings in BDSA structure`);
-        return mappings;
-    };
 
     const getProtocolMappings = (protocolType) => {
         const mappings = new Map();

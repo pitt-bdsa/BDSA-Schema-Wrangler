@@ -2,6 +2,7 @@
 // with localStorage persistence and data transformation
 
 import * as XLSX from 'xlsx';
+import suggestionEngine from './SuggestionEngine.js';
 
 class DataStore {
     constructor() {
@@ -2873,7 +2874,7 @@ class DataStore {
         // Find the data row that matches this case and slide
         const dataRow = this.processedData.find(row =>
             row.BDSA?.bdsaLocal?.bdsaCaseId === bdsaCaseId &&
-            (row._id === slideId || row.dsa_id === slideId)
+            (row._id === slideId || row.dsa_id === slideId || row.id === slideId)
         );
 
         if (!dataRow) {
@@ -2920,7 +2921,7 @@ class DataStore {
         // Find the data row that matches this case and slide
         const dataRow = this.processedData.find(row =>
             row.BDSA?.bdsaLocal?.bdsaCaseId === bdsaCaseId &&
-            (row._id === slideId || row.dsa_id === slideId)
+            (row._id === slideId || row.dsa_id === slideId || row.id === slideId)
         );
 
         if (!dataRow) {
@@ -2990,132 +2991,7 @@ class DataStore {
      * @returns {Object} Suggestion data with recommended protocol and confidence
      */
     getProtocolSuggestions(stainType, protocolType = 'stain') {
-        console.log(`🔍 ANALYZING SUGGESTIONS for ${stainType} (${protocolType}):`, {
-            dataLength: this.processedData?.length || 0,
-            hasData: !!this.processedData
-        });
-
-        if (!this.processedData || this.processedData.length === 0) {
-            return { suggested: null, confidence: 0, reason: 'No data available' };
-        }
-
-        // For suggestions, we need to look at the BDSA metadata structure
-        // The protocols are stored in BDSA.bdsaLocal as bdsaStainProtocol/bdsaRegionProtocol
-        const protocolField = protocolType === 'stain' ? 'bdsaStainProtocol' : 'bdsaRegionProtocol';
-        const typeField = protocolType === 'stain' ? 'localStainID' : 'localRegionId';
-
-        // Collect all mappings for this stain/region type across all cases
-        const mappings = new Map(); // stainType -> Set of protocols used
-
-        this.processedData.forEach((item, index) => {
-            const itemStainType = item.BDSA?.bdsaLocal?.[typeField];
-            const protocols = item.BDSA?.bdsaLocal?.[protocolField];
-
-            // Debug first few items to see the data structure
-            if (index < 3) {
-                console.log(`🔍 DEBUG ITEM ${index}:`, {
-                    itemStainType,
-                    protocols,
-                    BDSA: item.BDSA,
-                    bdsaLocal: item.BDSA?.bdsaLocal,
-                    protocolField,
-                    typeField,
-                    allKeys: Object.keys(item),
-                    bdsaLocalKeys: item.BDSA?.bdsaLocal ? Object.keys(item.BDSA.bdsaLocal) : 'no bdsaLocal'
-                });
-            }
-
-            if (itemStainType && protocols && Array.isArray(protocols) && protocols.length > 0) {
-                // Filter out IGNORE protocols from suggestion calculations
-                const nonIgnoreProtocols = protocols.filter(protocol =>
-                    protocol && protocol.toUpperCase() !== 'IGNORE'
-                );
-
-                // Only include this mapping if there are non-IGNORE protocols
-                if (nonIgnoreProtocols.length > 0) {
-                    if (!mappings.has(itemStainType)) {
-                        mappings.set(itemStainType, new Map());
-                    }
-
-                    const typeMappings = mappings.get(itemStainType);
-                    nonIgnoreProtocols.forEach(protocol => {
-                        typeMappings.set(protocol, (typeMappings.get(protocol) || 0) + 1);
-                    });
-                } else {
-                    console.log(`🔍 SKIPPING MAPPING: ${itemStainType} -> ${protocols.join(', ')} (only IGNORE protocols)`);
-                }
-            }
-        });
-
-        console.log(`🔍 ALL MAPPINGS FOUND:`, Array.from(mappings.entries()));
-
-        // Check for exact 1:1 mapping
-        if (mappings.has(stainType)) {
-            const typeMappings = mappings.get(stainType);
-            const entries = Array.from(typeMappings.entries());
-
-            if (entries.length === 1) {
-                // Perfect 1:1 mapping
-                const [protocol, count] = entries[0];
-                return {
-                    suggested: protocol,
-                    confidence: 1.0,
-                    reason: `Perfect 1:1 mapping: ${stainType} → ${protocol} (${count} cases)`,
-                    isExactMatch: true
-                };
-            } else if (entries.length > 1) {
-                // Multiple protocols, find the most common
-                entries.sort((a, b) => b[1] - a[1]);
-                const [mostCommonProtocol, count] = entries[0];
-                const totalCases = Array.from(typeMappings.values()).reduce((sum, c) => sum + c, 0);
-                const confidence = count / totalCases;
-
-                return {
-                    suggested: mostCommonProtocol,
-                    confidence: confidence,
-                    reason: `Most common mapping: ${stainType} → ${mostCommonProtocol} (${count}/${totalCases} cases, ${Math.round(confidence * 100)}%)`,
-                    isExactMatch: false,
-                    alternatives: entries.slice(1).map(([protocol, count]) => ({ protocol, count }))
-                };
-            }
-        }
-
-        // Check for similar stain types (fuzzy matching)
-        const similarTypes = Array.from(mappings.keys()).filter(type =>
-            type.toLowerCase().includes(stainType.toLowerCase()) ||
-            stainType.toLowerCase().includes(type.toLowerCase())
-        );
-
-        if (similarTypes.length > 0) {
-            // Find the most common protocol across similar types
-            const similarMappings = new Map();
-            similarTypes.forEach(type => {
-                const typeMappings = mappings.get(type);
-                typeMappings.forEach((count, protocol) => {
-                    similarMappings.set(protocol, (similarMappings.get(protocol) || 0) + count);
-                });
-            });
-
-            if (similarMappings.size > 0) {
-                const entries = Array.from(similarMappings.entries());
-                entries.sort((a, b) => b[1] - a[1]);
-                const [suggestedProtocol, totalCount] = entries[0];
-
-                return {
-                    suggested: suggestedProtocol,
-                    confidence: 0.6, // Lower confidence for fuzzy matches
-                    reason: `Similar types use: ${suggestedProtocol} (${totalCount} cases across similar types)`,
-                    isExactMatch: false,
-                    similarTypes: similarTypes
-                };
-            }
-        }
-
-        return {
-            suggested: null,
-            confidence: 0,
-            reason: `No existing mappings found for ${stainType}`
-        };
+        return suggestionEngine.getProtocolSuggestions(this.processedData, stainType, protocolType);
     }
 
     /**
@@ -3124,32 +3000,7 @@ class DataStore {
      * @returns {Map} Map of stain/region types to their suggestions
      */
     getAllProtocolSuggestions(protocolType = 'stain') {
-        const suggestions = new Map();
-
-        if (!this.processedData || this.processedData.length === 0) {
-            return suggestions;
-        }
-
-        const typeField = protocolType === 'stain' ? 'stainType' : 'regionType';
-
-        // Get all unique stain/region types in the data
-        const types = new Set();
-        this.processedData.forEach(item => {
-            const type = item[typeField];
-            if (type) {
-                types.add(type);
-            }
-        });
-
-        // Get suggestions for each type
-        types.forEach(type => {
-            const suggestion = this.getProtocolSuggestions(type, protocolType);
-            if (suggestion.suggested) {
-                suggestions.set(type, suggestion);
-            }
-        });
-
-        return suggestions;
+        return suggestionEngine.getAllProtocolSuggestions(this.processedData, protocolType);
     }
 }
 
