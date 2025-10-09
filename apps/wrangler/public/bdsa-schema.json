@@ -576,6 +576,15 @@
                     "minimum": 0.1,
                     "maximum": 1000,
                     "multipleOf": 0.1
+                },
+                "landmarks": {
+                    "type": "array",
+                    "title": "Landmarks",
+                    "description": "Multiple anatomical landmarks present in this region (allows for non-mutually exclusive landmarks)",
+                    "items": {
+                        "type": "string"
+                    },
+                    "uniqueItems": true
                 }
             }
         },

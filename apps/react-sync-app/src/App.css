@@ -1,26 +1,26 @@
 /* Additional styles for the sync app */
 
 .debug-controls {
-  margin-top: 12px;
+  margin-top: 8px;
   text-align: right;
 }
 
 /* Large Image Config Section */
 .large-image-config-section {
-  margin-top: 20px;
-  padding-top: 20px;
+  margin-top: 12px;
+  padding-top: 12px;
   border-top: 1px solid #e9ecef;
 }
 
 .large-image-config-section h3 {
   color: #495057;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
   font-size: 1.2rem;
 }
 
 .section-description {
   color: #6c757d;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
   font-size: 0.9rem;
   line-height: 1.4;
 }
@@ -28,21 +28,21 @@
 .config-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 15px;
-  margin-bottom: 20px;
+  gap: 10px;
+  margin-bottom: 12px;
   align-items: center;
 }
 
 .action-group {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
 }
 
 .upload-status {
-  padding: 10px 15px;
+  padding: 8px 12px;
   border-radius: 6px;
-  margin-bottom: 15px;
+  margin-bottom: 10px;
   font-weight: 500;
 }
 
@@ -186,32 +186,32 @@
 .stats-panel {
   background: #f8f9fa;
   border: 1px solid #e9ecef;
-  border-radius: 8px;
-  padding: 20px;
-  margin: 20px 0;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin: 12px 0;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
 }
 
 .stat-item {
   text-align: center;
-  padding: 16px;
+  padding: 12px;
   background: white;
-  border-radius: 6px;
+  border-radius: 4px;
   border: 1px solid #e9ecef;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .stat-value {
-  font-size: 2rem;
+  font-size: 1.6rem;
   font-weight: bold;
   color: #007bff;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .stat-label {
@@ -259,29 +259,29 @@
 }
 
 .config-section {
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
 
 .config-section label {
   display: block;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .config-section input,
 .config-section select {
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .connection-section {
-  margin: 16px 0;
-  padding: 16px;
+  margin: 12px 0;
+  padding: 12px;
   background: #f8f9fa;
   border-radius: 4px;
 }
 
 .connection-status {
-  margin-top: 8px;
-  padding: 8px;
+  margin-top: 6px;
+  padding: 6px;
   border-radius: 4px;
   font-size: 14px;
 }
@@ -299,13 +299,13 @@
 }
 
 .auth-section {
-  margin-top: 20px;
-  padding-top: 20px;
+  margin-top: 12px;
+  padding-top: 12px;
   border-top: 1px solid #eee;
 }
 
 .auth-status {
-  padding: 16px;
+  padding: 12px;
   background: #d4edda;
   border: 1px solid #c3e6cb;
   border-radius: 4px;
@@ -326,7 +326,7 @@
 }
 
 .auth-form {
-  padding: 16px;
+  padding: 12px;
   background: #f8f9fa;
   border-radius: 4px;
 }
@@ -338,28 +338,28 @@
 
 .auth-form label {
   display: block;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .auth-form input {
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .auth-form button {
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 /* Checkbox label styling */
 .checkbox-label {
   display: flex !important;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 6px;
+  margin-bottom: 8px;
 }
 
 .checkbox-label input[type="checkbox"] {
   margin-top: 0;
-  margin-right: 8px;
+  margin-right: 6px;
 }
 
 /* Help text styling */
