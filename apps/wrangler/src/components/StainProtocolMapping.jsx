@@ -69,7 +69,7 @@ const StainProtocolMapping = () => {
     const getAllStainSlides = (caseData) => {
         if (!caseData || !caseData.slides) return [];
         return caseData.slides.filter(slide =>
-            slide.stainType // Show all slides that have a stain type
+            slide.localStainID // Show all slides that have a stain type
         );
     };
 
@@ -77,7 +77,7 @@ const StainProtocolMapping = () => {
     const groupSlidesByStainType = (slides) => {
         const groups = {};
         slides.forEach(slide => {
-            const stainType = slide.stainType;
+            const stainType = slide.localStainID;
             if (!groups[stainType]) {
                 groups[stainType] = [];
             }

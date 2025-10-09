@@ -69,7 +69,7 @@ const RegionProtocolMapping = () => {
     const getAllRegionSlides = (caseData) => {
         if (!caseData || !caseData.slides) return [];
         return caseData.slides.filter(slide =>
-            slide.regionType // Show all slides that have a region type
+            slide.localRegionId // Show all slides that have a region type
         );
     };
 

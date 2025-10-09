@@ -76,9 +76,10 @@ class ProtocolCaseGenerator {
                 return;
             }
 
-            const localCaseId = bdsaLocal.localCaseId;
+            const localCaseId = bdsaLocal.bdsaCaseId;
             const localTypeId = bdsaLocal[typeField];
             const bdsaProtocol = bdsaLocal[protocolField];
+
 
             // Parse the protocol data - always store as arrays internally
             let protocols = [];
@@ -118,7 +119,8 @@ class ProtocolCaseGenerator {
             };
 
             // Get the BDSA case ID (mapped or fallback)
-            const bdsaCaseId = caseIdMappings.get(localCaseId) || bdsaLocal.bdsaCaseId || localCaseId;
+            const bdsaCaseId = caseIdMappings.get(localCaseId) || bdsaLocal.bdsaCaseId || localCaseId || 'unknown';
+
 
             if (!casesMap.has(bdsaCaseId)) {
                 casesMap.set(bdsaCaseId, {
@@ -160,13 +162,17 @@ class ProtocolCaseGenerator {
                 hasUnmappedSlides: caseData.unmappedSlides.length > 0,
                 unmappedCount: caseData.unmappedSlides.length,
                 mappedCount: caseData.mappedSlides,
-                completionPercentage: caseData.totalSlides > 0 ? 
+                completionPercentage: caseData.totalSlides > 0 ?
                     Math.round((caseData.mappedSlides / caseData.totalSlides) * 100) : 0
             };
         });
 
         // Sort by BDSA ID for consistent ordering
-        casesWithRelevantSlides.sort((a, b) => a.bdsaId.localeCompare(b.bdsaId));
+        casesWithRelevantSlides.sort((a, b) => {
+            const idA = a.bdsaId || '';
+            const idB = b.bdsaId || '';
+            return idA.localeCompare(idB);
+        });
 
         console.log(`✅ Generated ${casesWithRelevantSlides.length} ${protocolType} protocol cases`);
         return casesWithRelevantSlides;
