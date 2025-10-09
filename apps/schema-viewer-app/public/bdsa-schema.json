@@ -25,6 +25,9 @@
                     "TDP-43": {
                         "type": "object",
                         "title": "TDP-43",
+                        "required": [
+                            "phospho-specific"
+                        ],
                         "properties": {
                             "phospho-specific": {
                                 "type": "string",
@@ -38,18 +41,24 @@
                                 "type": "string",
                                 "title": "Dilution",
                                 "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
-                                "pattern": "^\\d+:\\d+$"
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
                             },
                             "vendor": {
                                 "type": "string",
-                                "title": "Vendor",
-                                "pattern": "^\\w+$"
+                                "title": "Vendor"
                             }
                         }
                     },
                     "aSyn": {
                         "type": "object",
                         "title": "Alpha Synuclein",
+                        "required": [
+                            "phospho-specific"
+                        ],
                         "properties": {
                             "phospho-specific": {
                                 "type": "string",
@@ -63,12 +72,15 @@
                                 "type": "string",
                                 "title": "Dilution",
                                 "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
-                                "pattern": "^\\d+:\\d+$"
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
                             },
                             "vendor": {
                                 "type": "string",
-                                "title": "Vendor",
-                                "pattern": "^\\w+$"
+                                "title": "Vendor"
                             }
                         }
                     },
@@ -80,18 +92,24 @@
                                 "type": "string",
                                 "title": "Dilution",
                                 "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
-                                "pattern": "^\\d+:\\d+$"
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
                             },
                             "vendor": {
                                 "type": "string",
-                                "title": "Vendor",
-                                "pattern": "^\\w+$"
+                                "title": "Vendor"
                             }
                         }
                     },
                     "Silver": {
                         "type": "object",
                         "title": "Silver",
+                        "required": [
+                            "technique"
+                        ],
                         "properties": {
                             "technique": {
                                 "type": "string",
@@ -106,12 +124,15 @@
                                 "type": "string",
                                 "title": "Dilution",
                                 "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
-                                "pattern": "^\\d+:\\d+$"
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
                             },
                             "vendor": {
                                 "type": "string",
-                                "title": "Vendor",
-                                "pattern": "^\\w+$"
+                                "title": "Vendor"
                             }
                         }
                     },
@@ -122,6 +143,9 @@
                     "Tau": {
                         "type": "object",
                         "title": "Tau",
+                        "required": [
+                            "antibody"
+                        ],
                         "properties": {
                             "antibody": {
                                 "type": "string",
@@ -137,8 +161,7 @@
                             },
                             "vendor": {
                                 "type": "string",
-                                "title": "Vendor",
-                                "pattern": "^\\w+$"
+                                "title": "Vendor"
                             },
                             "dilution": {
                                 "type": "string",
@@ -151,6 +174,9 @@
                     "aBeta": {
                         "type": "object",
                         "title": "aBeta",
+                        "required": [
+                            "antibody"
+                        ],
                         "properties": {
                             "antibody": {
                                 "type": "string",
@@ -162,14 +188,93 @@
                             },
                             "vendor": {
                                 "type": "string",
-                                "title": "Vendor",
-                                "pattern": "^\\w+$"
+                                "title": "Vendor"
                             },
                             "dilution": {
                                 "type": "string",
                                 "title": "Dilution",
                                 "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
                                 "pattern": "^\\d+:\\d+$"
+                            }
+                        }
+                    },
+                    "LFB": {
+                        "type": "object",
+                        "title": "Luxol Fast Blue",
+                        "properties": {
+                            "dilution": {
+                                "type": "string",
+                                "title": "Dilution",
+                                "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
+                            },
+                            "vendor": {
+                                "type": "string",
+                                "title": "Vendor"
+                            }
+                        }
+                    },
+                    "GFAP": {
+                        "type": "object",
+                        "title": "GFAP",
+                        "properties": {
+                            "dilution": {
+                                "type": "string",
+                                "title": "Dilution",
+                                "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
+                            },
+                            "vendor": {
+                                "type": "string",
+                                "title": "Vendor"
+                            }
+                        }
+                    },
+                    "IBA1": {
+                        "type": "object",
+                        "title": "IBA1",
+                        "properties": {
+                            "dilution": {
+                                "type": "string",
+                                "title": "Dilution",
+                                "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
+                            },
+                            "vendor": {
+                                "type": "string",
+                                "title": "Vendor"
+                            }
+                        }
+                    },
+                    "NeuN": {
+                        "type": "object",
+                        "title": "NeuN",
+                        "properties": {
+                            "dilution": {
+                                "type": "string",
+                                "title": "Dilution",
+                                "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
+                            },
+                            "vendor": {
+                                "type": "string",
+                                "title": "Vendor"
                             }
                         }
                     }
@@ -510,6 +615,117 @@
                 "description": "An object containing both the caseID and the caseSource for other case identifiers associated with the case."
             },
             "description": "List of other case identifiers that may be associated with the case, each including a caseID and a caseSource."
+        },
+        "clinicalData": {
+            "type": "object",
+            "title": "Clinical Metadata",
+            "description": "The metadata fields that each case must have to include in the BDSA database, based on NACC fields.",
+            "required": [
+                "NPSEX",
+                "NACCDAGE",
+                "EDUC",
+                "HISPANIC",
+                "NACCUDSD",
+                "RACE",
+                "NPPMIH",
+                "NPADNC"
+            ],
+            "properties": {
+                "NACCID": {
+                    "type": "string",
+                    "title": "NACC ID",
+                    "description": "NACCID is a unique identifier for each case in the NACC database."
+                },
+                "NPSEX": {
+                    "type": "integer",
+                    "title": "Sex",
+                    "enum": [
+                        1,
+                        2
+                    ],
+                    "description": "1=male, 2=female. NACC variable.\nCDE: `sex`",
+                    "cde": "sex"
+                },
+                "NACCDAGE": {
+                    "type": "integer",
+                    "title": "Age at Death",
+                    "description": "Age at death in years. NACC variable.\nCDE: `age_at_death`",
+                    "cde": "age_at_death"
+                },
+                "EDUC": {
+                    "type": "integer",
+                    "title": "Years of Education",
+                    "description": "Number of years of formal education. NACC variable.\nCDE: `years_of_education`",
+                    "cde": "years_of_education"
+                },
+                "HISPANIC": {
+                    "type": "integer",
+                    "title": "Hispanic Ethnicity",
+                    "enum": [
+                        0,
+                        1
+                    ],
+                    "description": "0=no, 1=yes. NACC variable.\nCDE: `hispanic_ethnicity`",
+                    "cde": "hispanic_ethnicity"
+                },
+                "NACCUDSD": {
+                    "type": "integer",
+                    "title": "NACC UDS Dementia Status",
+                    "enum": [
+                        1,
+                        2,
+                        3,
+                        4,
+                        5,
+                        6,
+                        7,
+                        8,
+                        9
+                    ],
+                    "description": "NACC UDS Dementia Status. NACC variable.\nCDE: `dementia_status`",
+                    "cde": "dementia_status"
+                },
+                "RACE": {
+                    "type": "integer",
+                    "title": "Race",
+                    "enum": [
+                        1,
+                        2,
+                        3,
+                        4,
+                        5,
+                        6,
+                        7,
+                        8,
+                        9
+                    ],
+                    "description": "Race categories. NACC variable.\nCDE: `race`",
+                    "cde": "race"
+                },
+                "NPPMIH": {
+                    "type": "integer",
+                    "title": "NACC PMI Hours",
+                    "description": "Post-mortem interval in hours. NACC variable.\nCDE: `pmi_hours`",
+                    "cde": "pmi_hours"
+                },
+                "NPADNC": {
+                    "type": "integer",
+                    "title": "NACC ADNC",
+                    "enum": [
+                        1,
+                        2,
+                        3,
+                        4,
+                        5,
+                        6,
+                        7,
+                        8,
+                        9
+                    ],
+                    "description": "NACC ADNC (Alzheimer's Disease Neuropathologic Change) score. NACC variable.\nCDE: `adnc_score`",
+                    "cde": "adnc_score"
+                }
+            }
         }
     }
 }

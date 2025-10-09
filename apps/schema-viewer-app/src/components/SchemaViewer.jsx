@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './SchemaViewer.css';
 
-const SchemaViewer = ({ schemaFile, schemaType }) => {
+const SchemaViewer = ({ schemaFile, schemaType, schemaSection }) => {
     const [schema, setSchema] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -10,7 +10,7 @@ const SchemaViewer = ({ schemaFile, schemaType }) => {
         if (schemaFile) {
             loadSchema();
         }
-    }, [schemaFile]);
+    }, [schemaFile, schemaSection]);
 
     const loadSchema = async () => {
         try {
@@ -21,7 +21,44 @@ const SchemaViewer = ({ schemaFile, schemaType }) => {
                 throw new Error(`Failed to load ${schemaType} schema`);
             }
             const schemaData = await response.json();
-            setSchema(schemaData);
+
+            // Extract the appropriate section based on schemaSection
+            if (schemaSection && schemaData.properties) {
+                let sectionData = null;
+
+                switch (schemaSection) {
+                    case 'clinical':
+                        sectionData = schemaData.properties.clinicalData;
+                        break;
+                    case 'region':
+                        sectionData = schemaData.properties.regionIDs;
+                        break;
+                    case 'stain':
+                        // Extract the stain properties from the array items
+                        const stainSchema = schemaData.properties.stainIDs;
+                        if (stainSchema && stainSchema.items && stainSchema.items.properties) {
+                            sectionData = {
+                                type: 'object',
+                                title: 'Stain Schema',
+                                description: 'Stain-related properties from BDSA schema',
+                                properties: stainSchema.items.properties
+                            };
+                        } else {
+                            sectionData = stainSchema;
+                        }
+                        break;
+                    case 'bdsa':
+                        // Show the full schema
+                        sectionData = schemaData;
+                        break;
+                    default:
+                        sectionData = schemaData;
+                }
+
+                setSchema(sectionData);
+            } else {
+                setSchema(schemaData);
+            }
         } catch (err) {
             setError(err.message);
         } finally {

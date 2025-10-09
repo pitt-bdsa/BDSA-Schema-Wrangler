@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import SchemaViewer from './components/SchemaViewer';
+import FlattenedDataView from './components/FlattenedDataView';
 import './App.css';
 
 const App = () => {
     const [activeSchema, setActiveSchema] = useState('clinical');
 
     const schemas = [
-        { id: 'clinical', label: 'Clinical Schema', file: '/api/schemas/clinical-metadata' },
-        { id: 'region', label: 'Region Schema', file: '/api/schemas/region-metadata' },
-        { id: 'stain', label: 'Stain Schema', file: '/api/schemas/stain-metadata' },
-        { id: 'bdsa', label: 'BDSA Schema', file: '/api/schemas/bdsa-schema' }
+        { id: 'clinical', label: 'Clinical Schema', file: '/api/schemas/bdsa-schema', section: 'clinical' },
+        { id: 'region', label: 'Region Schema', file: '/api/schemas/bdsa-schema', section: 'region' },
+        { id: 'stain', label: 'Stain Schema', file: '/api/schemas/bdsa-schema', section: 'stain' },
+        { id: 'bdsa', label: 'BDSA Schema', file: '/api/schemas/bdsa-schema', section: 'bdsa' },
+        { id: 'flattened', label: 'Flattened View', file: '/api/schemas/bdsa-schema', section: 'flattened' }
     ];
 
     return (
@@ -46,10 +48,17 @@ const App = () => {
             </div>
 
             <div className="schema-content">
-                <SchemaViewer
-                    schemaFile={schemas.find(s => s.id === activeSchema)?.file}
-                    schemaType={activeSchema}
-                />
+                {activeSchema === 'flattened' ? (
+                    <FlattenedDataView
+                        schemaFile={schemas.find(s => s.id === activeSchema)?.file}
+                    />
+                ) : (
+                    <SchemaViewer
+                        schemaFile={schemas.find(s => s.id === activeSchema)?.file}
+                        schemaType={activeSchema}
+                        schemaSection={schemas.find(s => s.id === activeSchema)?.section}
+                    />
+                )}
             </div>
         </div>
     );
