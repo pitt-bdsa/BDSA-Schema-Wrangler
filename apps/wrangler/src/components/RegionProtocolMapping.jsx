@@ -208,11 +208,8 @@ const RegionProtocolMapping = () => {
         let skippedCount = 0;
         const skippedTypes = [];
 
-        console.log('🚀 Starting auto-apply suggestions for case:', currentCase.bdsaId);
-
         Object.entries(regionGroups).forEach(([regionType, slides]) => {
             const suggestion = getSuggestionForRegionType(regionType);
-            console.log(`🔍 Processing region type "${regionType}":`, suggestion);
 
             // Only apply if we have high confidence (>= 80%), it's an exact match, and it's not IGNORE
             if (suggestion.suggested && suggestion.confidence >= 0.8 && suggestion.isExactMatch &&
@@ -223,11 +220,8 @@ const RegionProtocolMapping = () => {
                 );
 
                 if (!alreadyApplied) {
-                    console.log(`✅ Applying suggestion: ${regionType} → ${suggestion.suggested}`);
                     handleApplyRegionProtocol(slides, suggestion.suggested);
                     appliedCount++;
-                } else {
-                    console.log(`ℹ️ Suggestion already applied: ${regionType} → ${suggestion.suggested}`);
                 }
             } else {
                 skippedCount++;
@@ -237,33 +231,20 @@ const RegionProtocolMapping = () => {
                         ? `Low confidence (${Math.round(suggestion.confidence * 100)}%)`
                         : 'No suggestion available'
                 });
-                console.log(`⚠️ Skipping ${regionType}:`, suggestion.suggested ? `Low confidence (${Math.round(suggestion.confidence * 100)}%)` : 'No suggestion');
             }
         });
 
-        // Show results with better feedback
-        console.log(`🎯 Auto-apply complete: ${appliedCount} applied, ${skippedCount} skipped`);
-
-        // Log results to console instead of showing alert
+        // Show results with better feedback - only log summary
         if (appliedCount > 0) {
-            const message = `✅ Auto-applied ${appliedCount} region protocol suggestion(s)!` +
-                (skippedCount > 0
-                    ? ` ⚠️ Skipped ${skippedCount} region type(s) due to ambiguity: ${skippedTypes.map(t => `${t.type} (${t.reason})`).join(', ')}`
-                    : ' 🎉 All suggestions applied successfully!'
-                );
-            console.log(message);
-        } else {
-            const message = skippedCount > 0
-                ? `⚠️ No suggestions applied. Skipped ${skippedCount} region type(s) due to ambiguity: ${skippedTypes.map(t => `${t.type} (${t.reason})`).join(', ')}`
-                : 'ℹ️ No region types found in this case.';
-            console.log(message);
+            console.log(`✅ Auto-applied ${appliedCount} region protocol suggestion(s)`);
+        } else if (skippedCount > 0) {
+            console.log(`⚠️ No region suggestions applied (${skippedCount} skipped due to low confidence)`);
         }
     };
 
     // Auto-apply suggestions for ALL cases
     const handleAutoApplyAllCases = async (progressCallback) => {
-        console.log('🚀 Starting auto-apply suggestions for ALL cases');
-        console.log(`📊 Total cases to process: ${cases.length}`);
+        console.log(`🚀 Starting auto-apply suggestions for ${cases.length} cases`);
 
         let totalProcessed = 0;
         let totalApplied = 0;
@@ -271,7 +252,6 @@ const RegionProtocolMapping = () => {
 
         for (let caseIndex = 0; caseIndex < cases.length; caseIndex++) {
             const caseData = cases[caseIndex];
-            console.log(`\n🔍 Processing case ${caseIndex + 1}/${cases.length}: ${caseData.bdsaId}`);
 
             // Update progress
             const progress = {
@@ -309,7 +289,6 @@ const RegionProtocolMapping = () => {
                         );
 
                         if (!alreadyApplied) {
-                            console.log(`  ✅ Applying suggestion: ${regionType} → ${suggestion.suggested} to case ${caseData.bdsaId}`);
                             handleApplyRegionProtocol(slides, suggestion.suggested, caseData, true); // Use batch mode
                             caseApplied++;
                         }

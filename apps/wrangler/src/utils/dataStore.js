@@ -2809,20 +2809,9 @@ class DataStore {
             // Check if slide is mapped (has protocols for this type)
             const isMapped = allProtocols.length > 0;
 
-            // Debug logging for protocol detection
-            if (index < 5) { // Show fewer rows but with more detail
-                console.log(`🔍 Row ${index} ${protocolType} protocol detection:`, {
-                    slideId,
-                    filename: finalFilename,
-                    protocolType,
-                    protocolFieldName,
-                    bdsaProtocol,
-                    protocols,
-                    allProtocols,
-                    isMapped,
-                    localStainId,
-                    localRegionId
-                });
+            // Debug logging for protocol detection (reduced)
+            if (index < 2) { // Show fewer rows
+                console.log(`🔍 Row ${index} ${protocolType} protocols:`, { protocols: allProtocols, isMapped });
             }
 
             // Create slide object with protocol-type specific data
@@ -3044,7 +3033,6 @@ class DataStore {
 
                 // Only include this mapping if there are non-IGNORE protocols
                 if (nonIgnoreProtocols.length > 0) {
-                    console.log(`🔍 FOUND MAPPING: ${itemStainType} -> ${nonIgnoreProtocols.join(', ')} (filtered out IGNORE)`);
                     if (!mappings.has(itemStainType)) {
                         mappings.set(itemStainType, new Map());
                     }

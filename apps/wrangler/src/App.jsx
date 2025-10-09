@@ -4,6 +4,7 @@ import SchemaTab from './components/SchemaTab';
 import ProtocolsTab from './components/ProtocolsTab';
 import InputDataTab from './components/InputDataTab';
 import CaseManagementTab from './components/CaseManagementTab';
+import ProtocolDebugPanel from './components/ProtocolDebugPanel';
 import DsaLogin from './components/DsaLogin';
 import './App.css';
 
@@ -14,7 +15,8 @@ function App() {
         { id: 0, label: 'Input Data', component: <InputDataTab /> },
         { id: 1, label: 'BDSA Schema', component: <SchemaTab /> },
         { id: 2, label: 'Protocols', component: <ProtocolsTab /> },
-        { id: 3, label: 'Case Management', component: <CaseManagementTab /> }
+        { id: 3, label: 'Case Management', component: <CaseManagementTab /> },
+        { id: 4, label: '🔍 Protocol Debug', component: <ProtocolDebugPanel /> }
     ];
 
     return (

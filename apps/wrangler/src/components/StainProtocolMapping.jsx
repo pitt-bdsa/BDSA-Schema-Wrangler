@@ -161,9 +161,6 @@ const StainProtocolMapping = () => {
     };
 
     const handleRemoveStainProtocol = (slides, protocolToRemove) => {
-        console.log('🔍 Removing stain protocol', protocolToRemove, 'from slides:', slides);
-        console.log('🔍 Current case:', cases[currentCaseIndex]);
-
         // Get the current case
         const currentCase = cases[currentCaseIndex];
         if (!currentCase) {
@@ -173,8 +170,6 @@ const StainProtocolMapping = () => {
 
         // Remove protocol from each slide
         slides.forEach(slide => {
-            console.log(`🔍 Removing ${protocolToRemove} from slide ${slide.id} (${slide.filename})`);
-            console.log(`🔍 Slide current protocols:`, slide.stainProtocols);
             dataStore.removeProtocolMapping(currentCase.bdsaId, slide.id, protocolToRemove, 'stain');
         });
 
@@ -183,19 +178,12 @@ const StainProtocolMapping = () => {
 
     // Get suggestion for a specific stain type
     const getSuggestionForStainType = (stainType) => {
-        const suggestion = getProtocolSuggestions(stainType, 'stain');
-        console.log(`🔍 GETTING SUGGESTION for ${stainType}:`, suggestion);
-        return suggestion;
+        return getProtocolSuggestions(stainType, 'stain');
     };
 
     // Check if a protocol is suggested for a stain type
     const isProtocolSuggested = (protocolName, stainType) => {
         const suggestion = getSuggestionForStainType(stainType);
-        console.log(`🔍 SUGGESTION CHECK - ${stainType}:`, {
-            protocolName,
-            suggestion,
-            isSuggested: suggestion.suggested === protocolName
-        });
         return suggestion.suggested === protocolName;
     };
 
@@ -217,11 +205,8 @@ const StainProtocolMapping = () => {
         let skippedCount = 0;
         const skippedTypes = [];
 
-        console.log('🚀 Starting auto-apply suggestions for case:', currentCase.bdsaId);
-
         Object.entries(stainGroups).forEach(([stainType, slides]) => {
             const suggestion = getSuggestionForStainType(stainType);
-            console.log(`🔍 Processing stain type "${stainType}":`, suggestion);
 
             // Only apply if we have high confidence (>= 80%), it's an exact match, and it's not IGNORE
             if (suggestion.suggested && suggestion.confidence >= 0.8 && suggestion.isExactMatch &&
@@ -232,11 +217,8 @@ const StainProtocolMapping = () => {
                 );
 
                 if (!alreadyApplied) {
-                    console.log(`✅ Applying suggestion: ${stainType} → ${suggestion.suggested}`);
                     handleApplyStainProtocol(slides, suggestion.suggested);
                     appliedCount++;
-                } else {
-                    console.log(`ℹ️ Suggestion already applied: ${stainType} → ${suggestion.suggested}`);
                 }
             } else {
                 skippedCount++;
@@ -246,33 +228,20 @@ const StainProtocolMapping = () => {
                         ? `Low confidence (${Math.round(suggestion.confidence * 100)}%)`
                         : 'No suggestion available'
                 });
-                console.log(`⚠️ Skipping ${stainType}:`, suggestion.suggested ? `Low confidence (${Math.round(suggestion.confidence * 100)}%)` : 'No suggestion');
             }
         });
 
-        // Show results with better feedback
-        console.log(`🎯 Auto-apply complete: ${appliedCount} applied, ${skippedCount} skipped`);
-
-        // Log results to console instead of showing alert
+        // Show results with better feedback - only log summary
         if (appliedCount > 0) {
-            const message = `✅ Auto-applied ${appliedCount} protocol suggestion(s)!` +
-                (skippedCount > 0
-                    ? ` ⚠️ Skipped ${skippedCount} stain type(s) due to ambiguity: ${skippedTypes.map(t => `${t.type} (${t.reason})`).join(', ')}`
-                    : ' 🎉 All suggestions applied successfully!'
-                );
-            console.log(message);
-        } else {
-            const message = skippedCount > 0
-                ? `⚠️ No suggestions applied. Skipped ${skippedCount} stain type(s) due to ambiguity: ${skippedTypes.map(t => `${t.type} (${t.reason})`).join(', ')}`
-                : 'ℹ️ No stain types found in this case.';
-            console.log(message);
+            console.log(`✅ Auto-applied ${appliedCount} stain protocol suggestion(s)`);
+        } else if (skippedCount > 0) {
+            console.log(`⚠️ No stain suggestions applied (${skippedCount} skipped due to low confidence)`);
         }
     };
 
     // Auto-apply suggestions for ALL cases with progress callback
     const handleAutoApplyAllCases = async (progressCallback) => {
-        console.log('🚀 Starting auto-apply suggestions for ALL cases');
-        console.log(`📊 Total cases to process: ${cases.length}`);
+        console.log(`🚀 Starting auto-apply suggestions for ${cases.length} cases`);
 
         let totalProcessed = 0;
         let totalApplied = 0;
@@ -280,7 +249,6 @@ const StainProtocolMapping = () => {
 
         for (let caseIndex = 0; caseIndex < cases.length; caseIndex++) {
             const caseData = cases[caseIndex];
-            console.log(`\n🔍 Processing case ${caseIndex + 1}/${cases.length}: ${caseData.bdsaId}`);
 
             // Update progress
             const progress = {
@@ -318,7 +286,6 @@ const StainProtocolMapping = () => {
                         );
 
                         if (!alreadyApplied) {
-                            console.log(`  ✅ Applying suggestion: ${stainType} → ${suggestion.suggested} to case ${caseData.bdsaId}`);
                             handleApplyStainProtocol(slides, suggestion.suggested, caseData);
                             caseApplied++;
                         }

@@ -136,9 +136,6 @@ export const filterFilesByExtension = (dsaData) => {
  * @returns {Array} Transformed and flattened data
  */
 export const transformDsaData = (dsaData, regexRules = {}) => {
-    console.log('🚨🚨🚨 TRANSFORM DSA DATA CALLED 🚨🚨🚨');
-    console.log('🚨🚨🚨 TRANSFORM DSA DATA CALLED 🚨🚨🚨');
-    console.log('🚨🚨🚨 TRANSFORM DSA DATA CALLED 🚨🚨🚨');
     // This function will transform DSA API response to match your expected data format
     // and flatten nested JSON dictionaries
     if (!dsaData || !Array.isArray(dsaData)) {
@@ -146,9 +143,7 @@ export const transformDsaData = (dsaData, regexRules = {}) => {
     }
 
     // First, enhance data with existing server metadata
-    console.log('🚀 About to call enhanceDataWithExistingMetadata with', dsaData.length, 'items');
     const enhancedData = enhanceDataWithExistingMetadata(dsaData);
-    console.log('✅ enhanceDataWithExistingMetadata completed, returned', enhancedData.length, 'items');
 
     // Apply file extension filtering
     const { filteredData, skipStats } = filterFilesByExtension(enhancedData);

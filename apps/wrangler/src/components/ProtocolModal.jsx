@@ -15,6 +15,7 @@ const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
         vendor: '',
         regionType: '',
         subRegion: '',
+        landmarks: [],
         hemisphere: '',
         sliceOrientation: '',
         sliceThickness: ''
@@ -45,6 +46,7 @@ const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
                 vendor: protocol.vendor || '',
                 regionType: protocol.regionType || '',
                 subRegion: protocol.subRegion || '',
+                landmarks: protocol.landmarks || [],
                 hemisphere: protocol.hemisphere || '',
                 sliceOrientation: protocol.sliceOrientation || '',
                 sliceThickness: protocol.sliceThickness || ''
@@ -246,7 +248,8 @@ const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
                                 ...formData,
                                 regionType: e.target.value,
                                 // Clear dependent fields when region type changes
-                                subRegion: ''
+                                subRegion: '',
+                                landmarks: []
                             };
                             setFormData(newFormData);
                             setErrors(prev => ({ ...prev, regionType: '', subRegion: '' }));
@@ -282,6 +285,31 @@ const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
                                     ))}
                                 </select>
                                 {errors.subRegion && <span className="error-message">{errors.subRegion}</span>}
+                            </div>
+                        )}
+
+                        {/* Landmarks field - multi-select for non-mutually exclusive landmarks */}
+                        {schemaValidator.getLandmarkOptions(formData.regionType).length > 0 && (
+                            <div className="form-group">
+                                <label htmlFor="landmarks">Landmarks (Multiple Selection)</label>
+                                <div className="landmarks-checkbox-group">
+                                    {schemaValidator.getLandmarkOptions(formData.regionType).map(landmark => (
+                                        <label key={landmark} className="checkbox-label">
+                                            <input
+                                                type="checkbox"
+                                                checked={formData.landmarks.includes(landmark)}
+                                                onChange={(e) => {
+                                                    const newLandmarks = e.target.checked
+                                                        ? [...formData.landmarks, landmark]
+                                                        : formData.landmarks.filter(l => l !== landmark);
+                                                    handleFieldChange('landmarks', newLandmarks);
+                                                }}
+                                            />
+                                            {landmark}
+                                        </label>
+                                    ))}
+                                </div>
+                                {errors.landmarks && <span className="error-message">{errors.landmarks}</span>}
                             </div>
                         )}
 

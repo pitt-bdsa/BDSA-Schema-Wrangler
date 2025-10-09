@@ -38,6 +38,9 @@ const ProtocolList = ({ protocols, type, onEdit, onDelete, onAdd }) => {
                     {protocol.subRegion && (
                         <p><strong>Sub-Region:</strong> {protocol.subRegion}</p>
                     )}
+                    {protocol.landmarks && protocol.landmarks.length > 0 && (
+                        <p><strong>Landmarks:</strong> {protocol.landmarks.join(', ')}</p>
+                    )}
                     {protocol.hemisphere && (
                         <p><strong>Hemisphere:</strong> {protocol.hemisphere}</p>
                     )}
