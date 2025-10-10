@@ -151,7 +151,7 @@ const ApplyAllCasesModal = ({ isOpen, onClose, onApplyAll, protocolType, totalCa
                                     </div>
                                     {results.skipped > 0 && (
                                         <div className="results-details">
-                                            ⚠️ Skipped {results.skipped} stain types due to ambiguity
+                                            ⚠️ Skipped {results.skipped} stain types (low confidence or no suggestion)
                                         </div>
                                     )}
                                 </div>

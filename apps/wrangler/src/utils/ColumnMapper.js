@@ -19,7 +19,15 @@ class ColumnMapper {
         }
 
         let extractedCount = 0;
+        let skippedCount = 0;
         const updatedItems = [];
+
+        // Debug: Log what we're about to process
+        console.log('🔍 Starting regex processing:', {
+            totalItems: processedData.length,
+            rulesToApply: Object.entries(regexRules).filter(([field, rule]) => rule.pattern && rule.pattern.trim() !== ''),
+            markAsModified
+        });
 
         processedData.forEach((item, index) => {
             let itemUpdated = false;
@@ -34,10 +42,17 @@ class ColumnMapper {
                 };
             }
 
-            // Skip regex processing entirely if this item has server metadata
-            if (item._hasServerMetadata) {
-                console.log(`⏭️ Skipping regex processing for item ${item.id} - has server metadata`);
-                return; // Skip this item entirely
+            // Note: We no longer skip items with server metadata entirely
+            // Instead, we'll check each field individually to see if it's empty
+
+            // Debug: Log first few items to see what's happening
+            if (index < 3) {
+                console.log(`🔍 Processing item ${index}:`, {
+                    id: item.id,
+                    name: fileName,
+                    hasBDSA: !!item.BDSA,
+                    bdsaLocal: item.BDSA?.bdsaLocal
+                });
             }
 
             // Apply regex rules for each field
@@ -47,9 +62,20 @@ class ColumnMapper {
                     const currentValue = item.BDSA.bdsaLocal?.[field];
                     const currentSource = item.BDSA._dataSource?.[field];
 
+                    // Debug: Log field processing for first few items
+                    if (index < 3) {
+                        console.log(`🔍 Processing field ${field}:`, {
+                            currentValue,
+                            currentSource,
+                            willApply: !currentValue || (currentSource === 'regex' && markAsModified),
+                            pattern: rule.pattern
+                        });
+                    }
+
                     // Don't apply regex if:
                     // 1. Field already has a value from any source other than regex
                     // 2. Field has a value from regex but we're not re-applying regex
+                    // 3. When markAsModified=false, only apply if field is completely empty
                     if (!currentValue || (currentSource === 'regex' && markAsModified)) {
                         try {
                             const regex = new RegExp(rule.pattern);
@@ -85,6 +111,14 @@ class ColumnMapper {
                     console.log(`🔍 Added item ${item.id} to modifiedItems via regex. Total modified: ${modifiedItems.size}`);
                 }
                 extractedCount++;
+                if (index < 3) {
+                    console.log(`✅ Item ${index} updated via regex`);
+                }
+            } else {
+                skippedCount++;
+                if (index < 3) {
+                    console.log(`⏭️ Item ${index} skipped (no updates needed)`);
+                }
             }
         });
 
@@ -96,6 +130,8 @@ class ColumnMapper {
         return {
             success: true,
             extractedCount,
+            updatedItems: extractedCount,
+            skippedItems: processedData.length - extractedCount,
             totalItems: processedData.length
         };
     }

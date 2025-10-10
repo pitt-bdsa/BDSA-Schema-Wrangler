@@ -20,6 +20,9 @@ class SuggestionEngine {
             return { suggested: null, confidence: 0, reason: 'No data available' };
         }
 
+        // Debug: Log what stain type we're looking for
+        console.log(`🔍 SuggestionEngine.getProtocolSuggestions called for stain type: "${stainType}"`);
+
         // For suggestions, we need to look at the BDSA metadata structure
         const protocolField = protocolType === 'stain' ? 'bdsaStainProtocol' : 'bdsaRegionProtocol';
         const typeField = protocolType === 'stain' ? 'localStainID' : 'localRegionId';
@@ -27,12 +30,25 @@ class SuggestionEngine {
         // Collect all mappings for this stain/region type across all cases
         const mappings = new Map(); // stainType -> Set of protocols used
 
+        // Debug: Count how many items have this stain type and existing protocols
+        let debugCount = 0;
+        let itemsWithThisStainType = 0;
+        let itemsWithProtocols = 0;
+
         processedData.forEach(item => {
             const bdsaLocal = item.BDSA?.bdsaLocal;
             if (!bdsaLocal) return;
 
             const itemStainType = bdsaLocal[typeField];
             const bdsaProtocol = bdsaLocal[protocolField];
+
+            // Debug counting
+            if (itemStainType === stainType) {
+                itemsWithThisStainType++;
+                if (bdsaProtocol && (Array.isArray(bdsaProtocol) ? bdsaProtocol.length > 0 : bdsaProtocol.trim() !== '')) {
+                    itemsWithProtocols++;
+                }
+            }
 
             if (itemStainType && bdsaProtocol) {
                 // Parse the protocol data - always store as arrays internally
@@ -127,6 +143,22 @@ class SuggestionEngine {
         }
 
         // No suggestion found
+        // Debug output for first few stain types
+        if (debugCount < 3) {
+            console.log(`🔍 SuggestionEngine DEBUG for stain type "${stainType}":`, {
+                itemsWithThisStainType,
+                itemsWithProtocols,
+                mappingsFound: mappings.has(stainType),
+                mappingsSize: mappings.has(stainType) ? mappings.get(stainType).size : 0
+            });
+
+            // Also log what stain types DO have mappings
+            if (debugCount === 0) {
+                console.log(`🔍 Available stain types with mappings:`, Array.from(mappings.keys()));
+            }
+            debugCount++;
+        }
+
         return {
             suggested: null,
             confidence: 0,

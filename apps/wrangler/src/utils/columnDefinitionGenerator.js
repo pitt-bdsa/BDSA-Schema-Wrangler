@@ -7,6 +7,8 @@ const getColumnDisplayName = (fieldName) => {
         'id': 'ID',
         'name': 'Name',
         'BDSA.bdsaLocal.bdsaCaseId': 'BDSA Case ID',
+        'BDSA.bdsaLocal.bdsaStainProtocol': 'BDSA Stain Protocol',
+        'BDSA.bdsaLocal.bdsaRegionProtocol': 'BDSA Region Protocol',
         'BDSA.bdsaLocal.localCaseId': 'Local Case ID',
         'BDSA.bdsaLocal.localRegionId': 'Local Region ID',
         'BDSA.bdsaLocal.localStainID': 'Local Stain ID',

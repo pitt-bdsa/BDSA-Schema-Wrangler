@@ -400,6 +400,11 @@ const InputDataTab = () => {
             return;
         }
 
+        if (!authStatus.resourceId) {
+            setError('Please configure a Resource ID first. Go to the DSA configuration and select a folder or collection.');
+            return;
+        }
+
         // Check if this is a refresh (data already exists from same source)
         const isRefresh = dataStatus.processedData && dataStatus.processedData.length > 0 &&
             dataStatus.dataSource === 'dsa';
@@ -889,7 +894,53 @@ const InputDataTab = () => {
         // Finally, add any remaining columns
         orderedColumns.push(...remainingColumns);
 
-        const columnDefs = orderedColumns;
+        // Add status column at the beginning
+        const statusColumn = {
+            field: '_status',
+            headerName: 'Status',
+            sortable: true,
+            filter: true,
+            resizable: false,
+            width: 120,
+            hide: false,
+            pinned: 'left',
+            suppressHtmlEncode: true, // Allow HTML rendering
+            cellRenderer: (params) => {
+                const rowData = params.data;
+                const isModified = dataStore.modifiedItems?.has(rowData?.id);
+
+                if (!isModified) {
+                    return '';
+                }
+
+                // Determine the modification type based on BDSA data sources
+                const bdsaSources = rowData?.BDSA?._dataSource || {};
+                const sources = Object.values(bdsaSources);
+
+                let statusType = 'manual-edit'; // default
+                let statusText = 'Modified';
+
+                if (sources.includes('column_mapping')) {
+                    statusType = 'column-mapping';
+                    statusText = 'Column';
+                } else if (sources.includes('regex')) {
+                    statusType = 'regex-extraction';
+                    statusText = 'Regex';
+                } else {
+                    statusType = 'modified-row';
+                    statusText = 'Manual';
+                }
+
+                // Return HTML string that AG Grid can render
+                return `<span class="status-badge ${statusType}" title="${statusText} modification">
+                    <span class="status-indicator ${statusType}"></span>
+                    ${statusText}
+                </span>`;
+            }
+        };
+
+        // Insert status column at the beginning
+        const columnDefs = [statusColumn, ...orderedColumns];
 
         console.log('🔍 Generated column definitions:', {
             count: columnDefs.length,
@@ -914,6 +965,34 @@ const InputDataTab = () => {
                 <div className="error-message">
                     <span className="error-icon">⚠️</span>
                     {error}
+                </div>
+            )}
+
+            {/* Status Legend with Update Count - Compact inline legend */}
+            {dataStatus.processedData && dataStatus.processedData.length > 0 && (
+                <div className="status-legend">
+                    <div className="legend-left">
+                        <span className="legend-title">Status:</span>
+                        <span className="status-badge column-mapping" title="Column mapping applied">
+                            <span className="status-indicator column-mapping"></span>
+                            Column
+                        </span>
+                        <span className="status-badge regex-extraction" title="Regex extraction applied">
+                            <span className="status-indicator regex-extraction"></span>
+                            Regex
+                        </span>
+                        <span className="status-badge manual-edit" title="Manual edit">
+                            <span className="status-indicator manual-edit"></span>
+                            Manual
+                        </span>
+                    </div>
+                    {modifiedItemsCount > 0 && (
+                        <div className="legend-right">
+                            <span className="update-count-text">
+                                {modifiedItemsCount} of {dataStatus.processedData.length} items updated
+                            </span>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -984,6 +1063,37 @@ const InputDataTab = () => {
                 </div>
             )}
 
+            {/* Clear Data Button */}
+            {dataStatus.processedData && dataStatus.processedData.length > 0 && (
+                <div style={{ marginBottom: '10px', textAlign: 'right' }}>
+                    <button
+                        onClick={() => {
+                            if (confirm('🗑️ Clear ALL data and start fresh?\n\nThis will delete all loaded data, localStorage, and modified items.')) {
+                                localStorage.clear();
+                                dataStore.clearData();
+                                setCsvFile(null);
+                                setAccessoryFile(null);
+                                setAccessoryData(null);
+                                setHasAppliedInitialRegex(false);
+                                window.location.reload();
+                            }
+                        }}
+                        className="btn btn-danger"
+                        style={{
+                            fontSize: '12px',
+                            padding: '6px 12px',
+                            backgroundColor: '#dc3545',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        🗑️ Clear ALL Data & Restart
+                    </button>
+                </div>
+            )}
+
             {/* Toolbar */}
             <DataControlsToolbar
                 dataSource={dataSource}
@@ -1010,14 +1120,6 @@ const InputDataTab = () => {
                 setShowDsaSync={setShowDsaSync}
             />
 
-            {/* Update Status Indicator */}
-            {dataStatus.processedData && dataStatus.processedData.length > 0 && modifiedItemsCount > 0 && (
-                <div className="update-status-indicator">
-                    <span className="update-status-text">
-                        {Math.min(modifiedItemsCount, dataStatus.processedData.length)} of {dataStatus.processedData.length} items updated
-                    </span>
-                </div>
-            )}
 
             {/* Accessory Data Help Message */}
             {accessoryData && accessoryMatchInfo && (
@@ -1044,27 +1146,6 @@ const InputDataTab = () => {
                 </div>
             )}
 
-            {/* Color Legend */}
-            {dataStatus.processedData && dataStatus.processedData.length > 0 && (
-                <div className="color-legend">
-                    <span className="legend-item">
-                        <span className="legend-color column-mapping"></span>
-                        Column Mapping
-                    </span>
-                    <span className="legend-item">
-                        <span className="legend-color regex-extraction"></span>
-                        Regex Extraction
-                    </span>
-                    <span className="legend-item">
-                        <span className="legend-color manual-edit"></span>
-                        Manual Edit
-                    </span>
-                    <span className="legend-item">
-                        <span className="legend-color modified-row"></span>
-                        Modified Row
-                    </span>
-                </div>
-            )}
 
             {/* Column Visibility Modal */}
             <ColumnVisibilityModal

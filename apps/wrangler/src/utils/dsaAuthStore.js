@@ -310,7 +310,14 @@ class DsaAuthStore {
     }
 
     isConfigured() {
-        return !!(this.config.baseUrl && this.config.resourceId);
+        // Only require baseUrl for basic configuration
+        // Resource ID is optional for initial setup, required for data loading
+        return !!(this.config.baseUrl);
+    }
+
+    isDataReady() {
+        // Check if we have everything needed for data loading
+        return !!(this.config.baseUrl && this.config.resourceId && this.isAuthenticated);
     }
 
     getStatus() {
@@ -367,8 +374,12 @@ class DsaAuthStore {
 
     // Test resource access
     async testResourceAccess() {
-        if (!this.isAuthenticated || !this.isConfigured()) {
-            throw new Error('Not authenticated or not configured');
+        if (!this.isAuthenticated) {
+            throw new Error('Not authenticated');
+        }
+
+        if (!this.config.resourceId) {
+            throw new Error('Resource ID not configured');
         }
 
         try {

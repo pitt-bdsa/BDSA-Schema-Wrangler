@@ -253,6 +253,113 @@
     border-top: 2px solid #ff9800;
 }
 
+/* Status Column Styles */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.status-badge.column-mapping {
+    background-color: #e8f5e8;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.status-indicator.column-mapping {
+    background-color: #28a745;
+}
+
+.status-badge.regex-extraction {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+.status-indicator.regex-extraction {
+    background-color: #ffc107;
+}
+
+.status-badge.manual-edit {
+    background-color: #f8f9fa;
+    color: #495057;
+    border: 1px solid #dee2e6;
+}
+
+.status-indicator.manual-edit {
+    background-color: #6c757d;
+}
+
+.status-badge.modified-row {
+    background-color: #fff3e0;
+    color: #e65100;
+    border: 1px solid #ffcc80;
+}
+
+.status-indicator.modified-row {
+    background-color: #ff9800;
+}
+
+/* Status Legend - Compact inline legend */
+.status-legend {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    font-size: 12px;
+}
+
+.legend-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.legend-right {
+    display: flex;
+    align-items: center;
+}
+
+.legend-title {
+    font-weight: 600;
+    color: #495057;
+    margin-right: 4px;
+}
+
+.update-count-text {
+    font-size: 11px;
+    color: #495057;
+    font-weight: 500;
+}
+
+.status-legend .status-badge {
+    font-size: 10px;
+    padding: 1px 4px;
+    gap: 3px;
+}
+
+.status-legend .status-indicator {
+    width: 6px;
+    height: 6px;
+}
+
 /* Column Visibility Modal */
 .modal-overlay {
     position: fixed;

@@ -8,6 +8,8 @@ const ProtocolDebugPanel = () => {
     const [protocolData, setProtocolData] = useState({ stain: new Map(), region: new Map() });
     const [selectedProtocol, setSelectedProtocol] = useState('');
     const [mappingDetails, setMappingDetails] = useState(null);
+    const [stainTokenStats, setStainTokenStats] = useState([]);
+    const [regionTokenStats, setRegionTokenStats] = useState([]);
 
     useEffect(() => {
         loadProtocolData();
@@ -27,6 +29,56 @@ const ProtocolDebugPanel = () => {
         setProtocolData({
             stain: stainMappings,
             region: regionMappings
+        });
+
+        // Calculate token statistics
+        calculateTokenStats();
+    };
+
+    const calculateTokenStats = () => {
+        if (!dataStore.processedData || dataStore.processedData.length === 0) {
+            setStainTokenStats([]);
+            setRegionTokenStats([]);
+            return;
+        }
+
+        const stainTokenCounts = new Map();
+        const regionTokenCounts = new Map();
+
+        dataStore.processedData.forEach(item => {
+            const bdsaLocal = item.BDSA?.bdsaLocal;
+            if (!bdsaLocal) return;
+
+            // Count stain tokens
+            const stainToken = bdsaLocal.localStainID;
+            if (stainToken) {
+                stainTokenCounts.set(stainToken, (stainTokenCounts.get(stainToken) || 0) + 1);
+            }
+
+            // Count region tokens
+            const regionToken = bdsaLocal.localRegionId;
+            if (regionToken) {
+                regionTokenCounts.set(regionToken, (regionTokenCounts.get(regionToken) || 0) + 1);
+            }
+        });
+
+        // Convert to sorted arrays
+        const stainStats = Array.from(stainTokenCounts.entries())
+            .map(([token, count]) => ({ token, count }))
+            .sort((a, b) => b.count - a.count); // Sort by count descending
+
+        const regionStats = Array.from(regionTokenCounts.entries())
+            .map(([token, count]) => ({ token, count }))
+            .sort((a, b) => b.count - a.count); // Sort by count descending
+
+        setStainTokenStats(stainStats);
+        setRegionTokenStats(regionStats);
+
+        console.log('📊 Token statistics calculated:', {
+            stainTokens: stainStats.length,
+            regionTokens: regionStats.length,
+            topStainTokens: stainStats.slice(0, 5),
+            topRegionTokens: regionStats.slice(0, 5)
         });
     };
 
@@ -172,6 +224,47 @@ const ProtocolDebugPanel = () => {
                                                 {Math.round(protocolInfo.confidence * 100)}%
                                             </span>
                                         )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* Token Statistics Table */}
+                <div className="token-stats-section">
+                    <h3>📊 {activeTab === 'stain' ? 'Stain' : 'Region'} Token Statistics</h3>
+                    <p>Count of items by {activeTab === 'stain' ? 'localStainID' : 'localRegionId'} - prioritize cleanup by frequency</p>
+
+                    <div className="token-stats-table">
+                        <div className="table-header">
+                            <div className="col-token">Token</div>
+                            <div className="col-count">Count</div>
+                            <div className="col-percentage">% of Total</div>
+                            <div className="col-mapped">Has Protocol</div>
+                        </div>
+
+                        {(activeTab === 'stain' ? stainTokenStats : regionTokenStats).map(({ token, count }, index) => {
+                            const totalItems = dataStore.processedData?.length || 1;
+                            const percentage = Math.round((count / totalItems) * 100);
+
+                            // Check if this token has any protocol mappings
+                            const hasProtocol = activeTab === 'stain'
+                                ? protocolData.stain.has(token)
+                                : protocolData.region.has(token);
+
+                            return (
+                                <div key={token} className={`table-row ${index < 10 ? 'priority' : ''}`}>
+                                    <div className="col-token">
+                                        <span className="token-name">{token}</span>
+                                        {index < 5 && <span className="priority-badge">🔥</span>}
+                                    </div>
+                                    <div className="col-count">{count.toLocaleString()}</div>
+                                    <div className="col-percentage">{percentage}%</div>
+                                    <div className="col-mapped">
+                                        <span className={`mapped-status ${hasProtocol ? 'mapped' : 'unmapped'}`}>
+                                            {hasProtocol ? '✅ Mapped' : '❌ Unmapped'}
+                                        </span>
                                     </div>
                                 </div>
                             );

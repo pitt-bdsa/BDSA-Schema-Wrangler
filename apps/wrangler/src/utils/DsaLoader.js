@@ -17,6 +17,10 @@ class DsaLoader {
                 throw new Error('DSA server not configured');
             }
 
+            if (!authStatus.resourceId) {
+                throw new Error('Resource ID not configured. Please select a folder or collection first.');
+            }
+
             const config = dsaAuthStore.config;
             const token = dsaAuthStore.token;
 

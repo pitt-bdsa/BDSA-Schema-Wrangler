@@ -72,7 +72,7 @@ const DsaConfigModal = ({ onSave, onClose }) => {
         }
     };
 
-    const validateConfig = () => {
+    const validateConfig = (requireResourceId = false) => {
         const newErrors = {};
 
         if (!config.baseUrl.trim()) {
@@ -85,8 +85,10 @@ const DsaConfigModal = ({ onSave, onClose }) => {
             }
         }
 
-        if (!config.resourceId.trim()) {
-            newErrors.resourceId = 'Resource ID is required';
+        // Only require Resource ID if explicitly requested (for data loading)
+        // Allow saving configuration without Resource ID for initial setup
+        if (requireResourceId && !config.resourceId.trim()) {
+            newErrors.resourceId = 'Resource ID is required to load data';
         }
 
         if (config.pageSize && (isNaN(config.pageSize) || config.pageSize < 1)) {
@@ -98,7 +100,8 @@ const DsaConfigModal = ({ onSave, onClose }) => {
     };
 
     const handleTestConnection = async () => {
-        if (!validateConfig()) {
+        // Only require base URL for connection test, not Resource ID
+        if (!validateConfig(false)) {
             return;
         }
 
@@ -123,7 +126,8 @@ const DsaConfigModal = ({ onSave, onClose }) => {
     };
 
     const handleSave = () => {
-        if (!validateConfig()) {
+        // Allow saving configuration without Resource ID for initial setup
+        if (!validateConfig(false)) {
             return;
         }
 
@@ -158,7 +162,9 @@ const DsaConfigModal = ({ onSave, onClose }) => {
         closeFolderBrowser();
     };
 
-    const isFormValid = config.baseUrl.trim() && config.resourceId.trim() && Object.keys(errors).length === 0;
+    // Form is valid if base URL is provided and no validation errors
+    // Resource ID is optional for initial setup
+    const isFormValid = config.baseUrl.trim() && Object.keys(errors).length === 0;
 
     return (
         <>
@@ -194,7 +200,7 @@ const DsaConfigModal = ({ onSave, onClose }) => {
                         </div>
 
                         <div className="form-group">
-                            <label htmlFor="resourceId">Resource ID *</label>
+                            <label htmlFor="resourceId">Resource ID (optional for setup)</label>
                             <div className="input-with-button">
                                 <input
                                     type="text"
@@ -217,6 +223,8 @@ const DsaConfigModal = ({ onSave, onClose }) => {
                             {errors.resourceId && <div className="error-message">{errors.resourceId}</div>}
                             <div className="field-help">
                                 The ID of the DSA resource (folder or collection) you want to access
+                                <br />
+                                <small>💡 You can save the configuration now and select a resource later using the Browse button</small>
                             </div>
                         </div>
 

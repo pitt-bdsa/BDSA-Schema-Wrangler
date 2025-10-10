@@ -277,6 +277,17 @@ const StainProtocolMapping = () => {
                 Object.entries(stainGroups).forEach(([stainType, slides]) => {
                     const suggestion = getSuggestionForStainType(stainType);
 
+                    // Debug: Log suggestion details for first few stain types
+                    if (totalProcessed === 0 && Object.keys(stainGroups).indexOf(stainType) < 3) {
+                        console.log(`🔍 DEBUG suggestion for stain type "${stainType}":`, {
+                            suggested: suggestion.suggested,
+                            confidence: suggestion.confidence,
+                            isExactMatch: suggestion.isExactMatch,
+                            reason: suggestion.reason,
+                            slidesCount: slides.length
+                        });
+                    }
+
                     // Use the same logic as the single-case auto-apply
                     if (suggestion.suggested && suggestion.confidence >= 0.8 && suggestion.isExactMatch &&
                         suggestion.suggested.toUpperCase() !== 'IGNORE') {

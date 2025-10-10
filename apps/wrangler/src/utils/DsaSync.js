@@ -23,10 +23,10 @@ class DsaSync {
 
         // Filter to only modified items
         const itemsToSync = processedData.filter(item => modifiedItems.has(item.id));
-        
+
         console.log(`🚀 Starting sync - ${itemsToSync.length} items to sync out of ${processedData.length} total`);
         console.log('🚀 Modified item IDs:', Array.from(modifiedItems));
-        
+
         dataStore.syncInProgress = true;
         dataStore.syncCancelled = false; // Reset cancellation flag
         dataStore.syncStatus = 'syncing';
@@ -67,17 +67,11 @@ class DsaSync {
                 }
 
                 try {
-                    // Check if this item should be synced
-                    if (this.shouldSyncItem(item, modifiedItems)) {
-                        await this.syncItemToServer(item, dataStore);
-                        results.success++;
-                        dataStore.syncProgress.success++;
-                        console.log(`✅ Synced item ${i + 1}/${processedData.length}: ${item.name}`);
-                    } else {
-                        results.skipped++;
-                        dataStore.syncProgress.skipped++;
-                        console.log(`⏭️ Skipped item ${i + 1}/${processedData.length}: ${item.name} (not modified)`);
-                    }
+                    // All items in itemsToSync are modified, so sync them all
+                    await this.syncItemToServer(item, dataStore);
+                    results.success++;
+                    dataStore.syncProgress.success++;
+                    console.log(`✅ Synced item ${i + 1}/${itemsToSync.length}: ${item.name}`);
                 } catch (error) {
                     results.errors++;
                     dataStore.syncProgress.errors++;

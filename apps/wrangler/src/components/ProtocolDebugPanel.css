@@ -292,3 +292,115 @@
         grid-template-columns: repeat(2, 1fr);
     }
 }
+
+/* Token Statistics Table */
+.token-stats-section {
+    margin: 20px 0;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+}
+
+.token-stats-section h3 {
+    margin: 0 0 8px 0;
+    color: #495057;
+    font-size: 16px;
+}
+
+.token-stats-section p {
+    margin: 0 0 16px 0;
+    color: #6c757d;
+    font-size: 14px;
+}
+
+.token-stats-table {
+    background: white;
+    border-radius: 6px;
+    border: 1px solid #dee2e6;
+    overflow: hidden;
+}
+
+.table-header {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1.5fr;
+    gap: 12px;
+    padding: 12px 16px;
+    background: #e9ecef;
+    font-weight: 600;
+    font-size: 14px;
+    color: #495057;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.table-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1.5fr;
+    gap: 12px;
+    padding: 10px 16px;
+    border-bottom: 1px solid #f1f3f4;
+    font-size: 14px;
+    align-items: center;
+}
+
+.table-row:hover {
+    background: #f8f9fa;
+}
+
+.table-row.priority {
+    background: #fff3cd;
+}
+
+.table-row.priority:hover {
+    background: #ffeaa7;
+}
+
+.col-token {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.token-name {
+    font-weight: 500;
+    color: #495057;
+}
+
+.priority-badge {
+    font-size: 12px;
+}
+
+.col-count {
+    font-weight: 500;
+    color: #495057;
+    text-align: right;
+}
+
+.col-percentage {
+    font-weight: 500;
+    color: #6c757d;
+    text-align: right;
+}
+
+.col-mapped {
+    text-align: center;
+}
+
+.mapped-status {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.mapped-status.mapped {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.mapped-status.unmapped {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}

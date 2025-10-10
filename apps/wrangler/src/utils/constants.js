@@ -17,6 +17,8 @@ export const HIDDEN_DSA_FIELDS = [
     'meta.BDSA.bdsaLocal.localRegionId',
     'meta.BDSA.bdsaLocal.localImageType',
     'meta.BDSA.bdsaLocal.bdsaCaseId',
+    'meta.BDSA.bdsaLocal.bdsaStainProtocol',
+    'meta.BDSA.bdsaLocal.bdsaRegionProtocol',
     'meta.BDSA.bdsaLocal.lastUpdated',
     'meta.BDSA.bdsaLocal.source',
 

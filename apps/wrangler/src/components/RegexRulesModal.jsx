@@ -105,6 +105,76 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
         onClose();
     };
 
+    const handleApplyRegexRules = async () => {
+        // Import dataStore dynamically to avoid circular dependencies
+        const { default: dataStore } = await import('../utils/dataStore');
+
+        // Get current data status
+        const dataStatus = dataStore.getStatus();
+
+        if (!dataStatus.processedData || dataStatus.processedData.length === 0) {
+            alert('No data loaded. Please load data first.');
+            return;
+        }
+
+        // Check if there are any rules to apply
+        const hasRules = Object.values(rules).some(rule => rule.pattern && rule.pattern.trim() !== '');
+
+        if (!hasRules) {
+            alert('No regex patterns defined. Please add some patterns first.');
+            return;
+        }
+
+        // Confirm before applying
+        const confirmed = window.confirm(
+            'This will apply REGEX rules to extract data from filenames.\n\n' +
+            'Rules will ONLY be applied to items that do NOT already have values for:\n' +
+            '- localCaseId\n' +
+            '- localStainID\n' +
+            '- localRegionId\n' +
+            '- localImageType\n\n' +
+            'Continue?'
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            // Debug: Log the rules being applied
+            console.log('🔍 Applying REGEX rules:', rules);
+            console.log('🔍 Rules summary:', Object.entries(rules).map(([field, rule]) => ({
+                field,
+                pattern: rule.pattern,
+                hasPattern: !!rule.pattern && rule.pattern.trim() !== ''
+            })));
+
+            // Apply regex rules with markAsModified = false to avoid marking as modified
+            const result = dataStore.applyRegexRules(rules, false);
+
+            console.log('🔍 REGEX application result:', result);
+
+            if (result.success) {
+                const message = `✅ REGEX Rules Applied Successfully!\n\n` +
+                    `📊 Results:\n` +
+                    `- Items processed: ${result.totalItems}\n` +
+                    `- Items updated: ${result.updatedItems || result.extractedCount}\n` +
+                    `- Items skipped (already had values): ${result.skippedItems || (result.totalItems - (result.updatedItems || result.extractedCount))}\n` +
+                    `- Fields extracted: ${result.extractedCount}`;
+
+                alert(message);
+
+                // Close the modal after successful application
+                onClose();
+            } else {
+                alert(`❌ Error applying REGEX rules: ${result.error}`);
+            }
+        } catch (error) {
+            console.error('Error applying regex rules:', error);
+            alert(`❌ Error applying REGEX rules: ${error.message}`);
+        }
+    };
+
     const handleRuleSetSelect = (ruleSetKey) => {
         const ruleSet = REGEX_RULE_SETS[ruleSetKey];
         if (ruleSet) {
@@ -376,6 +446,7 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
                         </button>
                     </div>
                     <div className="regex-footer-right">
+                        <button onClick={handleApplyRegexRules} className="regex-apply-btn">Apply REGEX Rules</button>
                         <button onClick={onClose} className="regex-cancel-btn">Cancel</button>
                         <button onClick={handleSave} className="regex-save-btn">Save Rules</button>
                     </div>
