@@ -6,6 +6,45 @@
 import { transformDsaData, filterFilesByExtension } from './DsaDataTransformer.js';
 
 /**
+ * Main DSA data loading function - loads all data from a DSA resource
+ * This is the primary entry point for loading DSA data into the application
+ */
+export const loadDsaData = async (dsaConfig, girderToken) => {
+    try {
+        console.log('🚀 loadDsaData: Starting DSA data fetch...');
+
+        // Use the paginated approach for better performance and memory management
+        const rawItems = await fetchAllDsaItemsPaginated(dsaConfig, girderToken, 100);
+
+        console.log(`✅ loadDsaData: Successfully fetched ${rawItems.length} raw items`);
+
+        // Debug: Log sample file names to see what we're getting
+        if (rawItems.length > 0) {
+            console.log('🔍 Sample file names from loadDsaData:', rawItems.slice(0, 5).map(item => item.name || item._id || 'unnamed'));
+        }
+
+        // Transform the data to import existing meta.BDSA metadata and apply filtering
+        console.log('🔄 Transforming DSA data to import existing metadata...');
+        const transformedItems = transformDsaData(rawItems);
+
+        console.log(`✅ loadDsaData: Successfully transformed ${transformedItems.length} items (imported existing metadata)`);
+
+        return {
+            success: true,
+            data: transformedItems,
+            itemCount: transformedItems.length
+        };
+
+    } catch (error) {
+        console.error('❌ loadDsaData error:', error);
+        return {
+            success: false,
+            error: error.message || 'Unknown error occurred while loading DSA data'
+        };
+    }
+};
+
+/**
  * Fetches all items from DSA resource using different strategies
  * @param {Object} dsaConfig - DSA configuration object
  * @param {string} girderToken - Authentication token

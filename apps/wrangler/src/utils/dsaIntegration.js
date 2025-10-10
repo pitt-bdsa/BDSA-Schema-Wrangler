@@ -12,7 +12,7 @@ export { testDirectToken, testResourceAccess } from './DsaAuth.js';
 export { transformDsaData, enhanceDataWithExistingMetadata, filterFilesByExtension, flattenObject } from './DsaDataTransformer.js';
 
 // Data Fetching
-export { fetchAllDsaItems, fetchAllDsaItemsUnlimited, fetchAllDsaItemsPaginated, loadMoreDsaDataPaginated, fetchDsaDataWithRegex } from './DsaDataFetcher.js';
+export { loadDsaData, fetchAllDsaItems, fetchAllDsaItemsUnlimited, fetchAllDsaItemsPaginated, loadMoreDsaDataPaginated, fetchDsaDataWithRegex } from './DsaDataFetcher.js';
 
 // Metadata Management
 export { addItemMetadata, updateItemMetadata, addFolderMetadata, syncItemBdsaMetadata, syncAllBdsaMetadata } from './DsaMetadataManager.js';

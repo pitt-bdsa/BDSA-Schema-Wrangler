@@ -114,7 +114,7 @@ const RegionProtocolMapping = () => {
 
                 // Check if any region group has unmapped slides
                 const hasUnmapped = Object.entries(regionGroups).some(([regionType, slides]) => {
-                    const unmappedCount = slides.filter(s => !s.regionProtocols || s.regionProtocols.length === 0).length;
+                    const unmappedCount = slides.filter(s => !s.bdsaRegionProtocol || s.bdsaRegionProtocol.length === 0).length;
                     return unmappedCount > 0;
                 });
 
@@ -216,7 +216,7 @@ const RegionProtocolMapping = () => {
                 suggestion.suggested.toUpperCase() !== 'IGNORE') {
                 // Check if this protocol is already fully applied to all slides
                 const alreadyApplied = slides.every(slide =>
-                    slide.regionProtocols && slide.regionProtocols.includes(suggestion.suggested)
+                    slide.bdsaRegionProtocol && slide.bdsaRegionProtocol.includes(suggestion.suggested)
                 );
 
                 if (!alreadyApplied) {
@@ -285,7 +285,7 @@ const RegionProtocolMapping = () => {
                         suggestion.suggested.toUpperCase() !== 'IGNORE') {
                         // Check if this protocol is already fully applied to all slides
                         const alreadyApplied = slides.every(slide =>
-                            slide.regionProtocols && slide.regionProtocols.includes(suggestion.suggested)
+                            slide.bdsaRegionProtocol && slide.bdsaRegionProtocol.includes(suggestion.suggested)
                         );
 
                         if (!alreadyApplied) {
@@ -358,11 +358,11 @@ const RegionProtocolMapping = () => {
 
         caseData.slides.forEach(slide => {
             // Check stain protocol mapping
-            if (slide.stainType && (!slide.stainProtocols || slide.stainProtocols.length === 0)) {
+            if (slide.localStainID && (!slide.bdsaStainProtocol || slide.bdsaStainProtocol.length === 0)) {
                 unmappedStain++;
             }
             // Check region protocol mapping  
-            if (slide.regionType && (!slide.regionProtocols || slide.regionProtocols.length === 0)) {
+            if (slide.localRegionId && (!slide.bdsaRegionProtocol || slide.bdsaRegionProtocol.length === 0)) {
                 unmappedRegion++;
             }
         });
@@ -450,7 +450,7 @@ const RegionProtocolMapping = () => {
                             // Find all protocols that are applied to any slide in this group with counts
                             const protocolCounts = {};
                             slides.forEach(slide => {
-                                (slide.regionProtocols || []).forEach(protocol => {
+                                (slide.bdsaRegionProtocol || []).forEach(protocol => {
                                     protocolCounts[protocol] = (protocolCounts[protocol] || 0) + 1;
                                 });
                             });
@@ -548,20 +548,20 @@ const RegionProtocolMapping = () => {
                                                 </thead>
                                                 <tbody>
                                                     {slides.map(slide => (
-                                                        <tr key={slide.id} className={`slide-row ${(slide.regionProtocols && slide.regionProtocols.length > 0) ? 'mapped' : 'unmapped'}`}>
+                                                        <tr key={slide.id} className={`slide-row ${(slide.bdsaRegionProtocol && slide.bdsaRegionProtocol.length > 0) ? 'mapped' : 'unmapped'}`}>
                                                             <td className="file-cell">
                                                                 <div className="file-name">{slide.filename}</div>
                                                                 <div className="slide-id">{slide.id}</div>
                                                             </td>
                                                             <td className="status-cell">
-                                                                <span className={`status-badge ${(slide.regionProtocols && slide.regionProtocols.length > 0) ? 'mapped' : 'unmapped'}`}>
-                                                                    {(slide.regionProtocols && slide.regionProtocols.length > 0) ? '✓ Mapped' : '○ Unmapped'}
+                                                                <span className={`status-badge ${(slide.bdsaRegionProtocol && slide.bdsaRegionProtocol.length > 0) ? 'mapped' : 'unmapped'}`}>
+                                                                    {(slide.bdsaRegionProtocol && slide.bdsaRegionProtocol.length > 0) ? '✓ Mapped' : '○ Unmapped'}
                                                                 </span>
                                                             </td>
                                                             <td className="protocols-cell">
-                                                                {slide.regionProtocols && slide.regionProtocols.length > 0 ? (
+                                                                {slide.bdsaRegionProtocol && slide.bdsaRegionProtocol.length > 0 ? (
                                                                     <div className="protocol-tags">
-                                                                        {slide.regionProtocols.map((protocol, idx) => (
+                                                                        {slide.bdsaRegionProtocol.map((protocol, idx) => (
                                                                             <span key={idx} className="protocol-tag">
                                                                                 {protocol}
                                                                                 <button
@@ -581,7 +581,7 @@ const RegionProtocolMapping = () => {
                                                             <td className="actions-cell">
                                                                 <div className="slide-actions">
                                                                     {availableProtocols
-                                                                        .filter(protocol => !(slide.regionProtocols || []).includes(protocol.name))
+                                                                        .filter(protocol => !(slide.bdsaRegionProtocol || []).includes(protocol.name))
                                                                         .map(protocol => (
                                                                             <button
                                                                                 key={protocol.id}

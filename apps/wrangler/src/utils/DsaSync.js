@@ -21,13 +21,18 @@ class DsaSync {
             throw new Error('Sync already in progress');
         }
 
-        console.log('🚀 Starting sync - setting syncInProgress to true');
+        // Filter to only modified items
+        const itemsToSync = processedData.filter(item => modifiedItems.has(item.id));
+        
+        console.log(`🚀 Starting sync - ${itemsToSync.length} items to sync out of ${processedData.length} total`);
+        console.log('🚀 Modified item IDs:', Array.from(modifiedItems));
+        
         dataStore.syncInProgress = true;
         dataStore.syncCancelled = false; // Reset cancellation flag
         dataStore.syncStatus = 'syncing';
         dataStore.syncProgress = {
             current: 0,
-            total: processedData.length,
+            total: itemsToSync.length,
             percentage: 0,
             success: 0,
             errors: 0,
@@ -44,18 +49,18 @@ class DsaSync {
                 details: []
             };
 
-            for (let i = 0; i < processedData.length; i++) {
+            for (let i = 0; i < itemsToSync.length; i++) {
                 // Check for cancellation before processing each item
                 if (dataStore.syncCancelled) {
                     console.log('🛑 Sync cancelled by user');
                     break;
                 }
 
-                const item = processedData[i];
+                const item = itemsToSync[i];
 
                 // Update progress
                 dataStore.syncProgress.current = i + 1;
-                dataStore.syncProgress.percentage = Math.round(((i + 1) / processedData.length) * 100);
+                dataStore.syncProgress.percentage = Math.round(((i + 1) / itemsToSync.length) * 100);
 
                 if (progressCallback) {
                     progressCallback(dataStore.syncProgress);
@@ -148,20 +153,26 @@ class DsaSync {
         }
 
         // Import sync utilities
-        const { syncItemMetadata } = await import('./dsaIntegration.js');
+        const { syncItemBdsaMetadata } = await import('./dsaIntegration.js');
 
-        // Prepare the metadata to sync
-        const metadata = {
-            BDSA: item.BDSA
-        };
+        // Get column mappings from localStorage or use defaults
+        const columnMappings = JSON.parse(localStorage.getItem('columnMappings') || '{}');
+
+        // Get DSA config
+        const config = dsaAuthStore.getConfig();
+        const token = dsaAuthStore.getToken();
 
         // Sync the item
-        await syncItemMetadata(
-            authStatus.dsaConfig,
-            authStatus.girderToken,
-            item._id || item.dsa_id,
-            metadata
+        const result = await syncItemBdsaMetadata(
+            config.baseUrl,
+            item,
+            token,
+            columnMappings
         );
+
+        if (!result.success) {
+            throw new Error(result.error || 'Failed to sync item metadata');
+        }
 
         // Remove from modified items after successful sync
         dataStore.modifiedItems.delete(item.id);

@@ -33,7 +33,7 @@ class DsaLoader {
             }
 
             console.log(`📊 DataStore: Setting processedData to ${result.data.length} items`);
-            dataStoreInstance.processedData = result.data;
+            dataStoreInstance.processedData = dataStoreInstance.initializeBdsaStructure(result.data);
             dataStoreInstance.dataSource = 'dsa';
             dataStoreInstance.dataSourceInfo = {
                 baseUrl: config.baseUrl,
@@ -44,7 +44,9 @@ class DsaLoader {
 
             // Clean up orphaned IDs from modifiedItems Set
             // (items that were modified but no longer exist after data refresh)
+            console.log('🔍 About to call cleanupModifiedItems...');
             dataStoreInstance.cleanupModifiedItems();
+            console.log('✅ cleanupModifiedItems completed successfully');
 
             // Only clear modifiedItems if this is a fresh data load (not a refresh with existing modifications)
             if (dataStoreInstance.modifiedItems.size === 0) {
@@ -56,8 +58,13 @@ class DsaLoader {
 
             // Enable BDSA tracking for the loaded data
             console.log(`🔍 About to enable BDSA tracking. Current modifiedItems size: ${dataStoreInstance.modifiedItems.size}`);
-            dataStoreInstance.enableBdsaTracking();
-            console.log(`🔍 After enabling BDSA tracking. Current modifiedItems size: ${dataStoreInstance.modifiedItems.size}`);
+            try {
+                dataStoreInstance.enableBdsaTracking();
+                console.log(`🔍 After enabling BDSA tracking. Current modifiedItems size: ${dataStoreInstance.modifiedItems.size}`);
+            } catch (trackingError) {
+                console.error('❌ Error in enableBdsaTracking:', trackingError);
+                throw trackingError;
+            }
 
             // Set DSA configuration for sync functionality
             dataStoreInstance.girderToken = token;
@@ -76,7 +83,9 @@ class DsaLoader {
                     console.error('Error saving to storage:', error);
                 }
             }
+            console.log('🔍 About to call notify...');
             dataStoreInstance.notify();
+            console.log('✅ notify completed successfully');
 
             console.log(`📊 DataStore: Final processedData length: ${dataStoreInstance.processedData.length}`);
             console.log(`📊 DataStore: Data source: ${dataStoreInstance.dataSource}`);
