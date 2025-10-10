@@ -112,6 +112,7 @@ class DsaLoader {
             return {
                 success: true,
                 itemCount: result.data.length,
+                hasMoreData: result.hasMoreData, // Pass through the hasMoreData information
                 message: `Successfully loaded ${result.data.length} items from DSA (filtered)`
             };
         } catch (error) {
@@ -152,6 +153,7 @@ class DsaLoader {
                 success: true,
                 totalItemCount: dataStoreInstance.processedData.length,
                 newItemCount: result.data.length,
+                hasMoreData: result.data.length > 0, // If we got no new items, there's no more data
                 message: `Successfully loaded ${result.data.length} more items. Total: ${dataStoreInstance.processedData.length}`
             };
         } catch (error) {

@@ -130,15 +130,8 @@ const InputDataTab = () => {
         };
     }, []);
 
-    // Set hasMoreData based on loaded data
-    useEffect(() => {
-        if (dataStatus.processedData && dataStatus.processedData.length > 0 && dataStatus.dataSource === 'dsa') {
-            const itemCount = dataStatus.processedData.length;
-            const shouldHaveMoreData = itemCount < 1000; // Assume more data available if we have less than 1000 items
-            console.log(`🔍 DEBUG: Setting hasMoreData based on loaded data: ${itemCount} items -> hasMoreData: ${shouldHaveMoreData}`);
-            setHasMoreData(shouldHaveMoreData);
-        }
-    }, [dataStatus.processedData, dataStatus.dataSource]);
+    // Note: hasMoreData is now managed by the API responses from loadDsaData and loadMoreDsaData
+    // No need for heuristic-based logic here
 
     // Auto-dismiss file filter notification
     useEffect(() => {
@@ -425,12 +418,16 @@ const InputDataTab = () => {
             if (result.success) {
                 console.log(`✅ Successfully loaded ${result.itemCount} items from DSA`);
 
-                // Reset hasMoreData when loading fresh data
-                // If we loaded a large number of items, assume we might have loaded everything
-                // (This is a heuristic - if we loaded 1000+ items, we probably got the full dataset)
-                const itemCount = result.itemCount || 0;
-                console.log(`🔍 DEBUG: Loaded ${itemCount} items, setting hasMoreData to ${itemCount < 1000}`);
-                setHasMoreData(itemCount < 1000); // Assume more data available if we loaded less than 1000 items
+                // Use the hasMoreData information from the API response
+                if (result.hasMoreData !== undefined) {
+                    setHasMoreData(result.hasMoreData);
+                    console.log(`🔍 DEBUG: hasMoreData set to: ${result.hasMoreData} (from API response)`);
+                } else {
+                    // Fallback: If we loaded a large number of items, assume we might have loaded everything
+                    const itemCount = result.itemCount || 0;
+                    console.log(`🔍 DEBUG: Loaded ${itemCount} items, setting hasMoreData to ${itemCount < 1000} (fallback)`);
+                    setHasMoreData(itemCount < 1000); // Assume more data available if we loaded less than 1000 items
+                }
 
                 // Check for file filtering stats
                 if (window.dsaSkipStats && window.dsaSkipStats.totalSkipped > 0) {
@@ -531,10 +528,16 @@ const InputDataTab = () => {
                 const newItemsCount = result.data?.length || 0;
                 console.log(`✅ Successfully loaded ${result.totalItemCount} total items from DSA`);
 
-                // If we got no new items, we've reached the end
-                if (newItemsCount === 0) {
-                    setHasMoreData(false);
-                    console.log('🏁 No more data available - reached end of dataset');
+                // Use the hasMoreData information from the API response
+                if (result.hasMoreData !== undefined) {
+                    setHasMoreData(result.hasMoreData);
+                    console.log(`🏁 hasMoreData set to: ${result.hasMoreData} (from API response)`);
+                } else {
+                    // Fallback: If we got no new items, we've reached the end
+                    if (newItemsCount === 0) {
+                        setHasMoreData(false);
+                        console.log('🏁 No more data available - reached end of dataset');
+                    }
                 }
             } else {
                 console.error('❌ Failed to load more data:', result.error);

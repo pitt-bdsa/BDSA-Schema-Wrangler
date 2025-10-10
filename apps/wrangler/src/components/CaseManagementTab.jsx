@@ -184,6 +184,40 @@ const CaseManagementTab = () => {
             return !hasStainProtocols;
         }).length || 0;
 
+        // Debug: Let's understand the discrepancy
+        if (dataStatus.processedData && dataStatus.processedData.length > 0) {
+            const itemsWithStainID = dataStatus.processedData.filter(row => {
+                const bdsaLocal = row.BDSA?.bdsaLocal;
+                return bdsaLocal && bdsaLocal.localStainID;
+            });
+
+            const itemsWithEmptyProtocols = itemsWithStainID.filter(row => {
+                const protocols = row.BDSA?.bdsaLocal?.bdsaStainProtocol;
+                return !protocols || !Array.isArray(protocols) || protocols.length === 0;
+            });
+
+            const itemsWithNoProtocolField = itemsWithStainID.filter(row => {
+                return !row.BDSA?.bdsaLocal?.bdsaStainProtocol;
+            });
+
+            console.log('🔍 DEBUG - Stain Protocol Analysis:', {
+                totalItems: dataStatus.processedData.length,
+                itemsWithStainID: itemsWithStainID.length,
+                unmappedStainSlides, // Items with no protocols at all
+                itemsWithEmptyProtocols: itemsWithEmptyProtocols.length, // Items with empty protocol arrays
+                itemsWithNoProtocolField: itemsWithNoProtocolField.length // Items with no protocol field
+            });
+
+            // Show some examples
+            if (itemsWithEmptyProtocols.length > 0) {
+                console.log('🔍 Sample items with empty protocols:', itemsWithEmptyProtocols.slice(0, 3).map(item => ({
+                    id: item.id,
+                    localStainID: item.BDSA?.bdsaLocal?.localStainID,
+                    bdsaStainProtocol: item.BDSA?.bdsaLocal?.bdsaStainProtocol
+                })));
+            }
+        }
+
         // Debug: Let's see what's actually in the data
         if (dataStatus.processedData && dataStatus.processedData.length > 0) {
             const sampleRows = dataStatus.processedData.slice(0, 3);

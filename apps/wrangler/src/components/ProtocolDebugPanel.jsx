@@ -16,15 +16,15 @@ const ProtocolDebugPanel = () => {
     }, []);
 
     const loadProtocolData = () => {
-        console.log('🔍 Loading protocol data...');
+        console.log('🔍 Loading protocol data directly from dataStore...');
         console.log('📊 DataStore processedData length:', dataStore.processedData?.length || 0);
 
-        // Use the new SuggestionEngine to get protocol mappings
-        const stainMappings = suggestionEngine.getProtocolMappingsFromData(dataStore.processedData, 'stain');
-        const regionMappings = suggestionEngine.getProtocolMappingsFromData(dataStore.processedData, 'region');
+        // Get actual protocol mappings directly from dataStore data
+        const stainMappings = getActualProtocolMappings('stain');
+        const regionMappings = getActualProtocolMappings('region');
 
-        console.log('🧪 Stain mappings found:', stainMappings.size);
-        console.log('🧠 Region mappings found:', regionMappings.size);
+        console.log('🧪 Actual stain mappings found:', stainMappings.size);
+        console.log('🧠 Actual region mappings found:', regionMappings.size);
 
         setProtocolData({
             stain: stainMappings,
@@ -33,6 +33,59 @@ const ProtocolDebugPanel = () => {
 
         // Calculate token statistics
         calculateTokenStats();
+    };
+
+    const getActualProtocolMappings = (protocolType) => {
+        const mappings = new Map();
+
+        if (!dataStore.processedData || dataStore.processedData.length === 0) {
+            return mappings;
+        }
+
+        const typeField = protocolType === 'stain' ? 'localStainID' : 'localRegionId';
+        const protocolField = protocolType === 'stain' ? 'bdsaStainProtocol' : 'bdsaRegionProtocol';
+
+        dataStore.processedData.forEach(item => {
+            const bdsaLocal = item.BDSA?.bdsaLocal;
+            if (!bdsaLocal) return;
+
+            const type = bdsaLocal[typeField];
+            const protocols = bdsaLocal[protocolField] || [];
+
+            // Handle both array and string formats for protocols
+            let protocolArray = [];
+            if (Array.isArray(protocols)) {
+                protocolArray = protocols.filter(p => p && typeof p === 'string');
+            } else if (typeof protocols === 'string') {
+                protocolArray = protocols.split(',').map(p => p.trim()).filter(p => p);
+            }
+
+            if (type && protocolArray.length > 0) {
+                protocolArray.forEach(protocol => {
+                    if (!mappings.has(protocol)) {
+                        mappings.set(protocol, {
+                            protocolName: protocol,
+                            totalCases: 0,
+                            uniqueTypes: new Set(),
+                            confidence: 1.0,
+                            isExactMatch: true,
+                            reason: 'Found in actual data'
+                        });
+                    }
+
+                    const mapping = mappings.get(protocol);
+                    mapping.totalCases++;
+                    mapping.uniqueTypes.add(type);
+                });
+            }
+        });
+
+        // Convert Set to Array for display
+        mappings.forEach(mapping => {
+            mapping.uniqueTypes = Array.from(mapping.uniqueTypes);
+        });
+
+        return mappings;
     };
 
     const calculateTokenStats = () => {
@@ -249,9 +302,11 @@ const ProtocolDebugPanel = () => {
                             const percentage = Math.round((count / totalItems) * 100);
 
                             // Check if this token has any protocol mappings
-                            const hasProtocol = activeTab === 'stain'
-                                ? protocolData.stain.has(token)
-                                : protocolData.region.has(token);
+                            // Need to check if any protocol has this token in its uniqueTypes
+                            const protocolMap = activeTab === 'stain' ? protocolData.stain : protocolData.region;
+                            const hasProtocol = Array.from(protocolMap.values()).some(mapping =>
+                                mapping.uniqueTypes && mapping.uniqueTypes.includes(token)
+                            );
 
                             return (
                                 <div key={token} className={`table-row ${index < 10 ? 'priority' : ''}`}>

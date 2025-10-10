@@ -22,6 +22,8 @@ const getColumnDisplayName = (fieldName) => {
         'meta.bdsaLocal.localRegionId': 'Meta Local Region ID',
         'meta.bdsaLocal.lastUpdated': 'Meta Last Updated',
         'meta.bdsaLocal.source': 'Meta Source',
+        'meta.BDSA.bdsaLocal.bdsaStainProtocol': 'Meta BDSA Stain Protocol',
+        'meta.BDSA.bdsaLocal.bdsaRegionProtocol': 'Meta BDSA Region Protocol',
         '_id': 'Internal ID',
         '_modelType': 'Model Type',
         '_accessLevel': 'Access Level',

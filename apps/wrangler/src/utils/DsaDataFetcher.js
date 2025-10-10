@@ -32,7 +32,8 @@ export const loadDsaData = async (dsaConfig, girderToken) => {
         return {
             success: true,
             data: transformedItems,
-            itemCount: transformedItems.length
+            itemCount: transformedItems.length,
+            hasMoreData: rawItems.length >= (100 * 100) // If we got 10,000+ items, assume there might be more
         };
 
     } catch (error) {
@@ -300,6 +301,7 @@ export const loadMoreDsaDataPaginated = async (dsaConfig, girderToken, startPage
         success: true,
         data: transformedData,
         pagesLoaded: pagesLoaded,
+        hasMoreData: transformedData.length > 0, // If we got no items, there's no more data
         message: `Loaded ${pagesLoaded} more pages (${transformedData.length} items)`
     };
 };
