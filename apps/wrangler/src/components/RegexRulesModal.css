@@ -405,6 +405,40 @@
     gap: 12px;
 }
 
+.regex-footer-center {
+    display: flex;
+    align-items: center;
+}
+
+.regex-override-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 4px;
+    background-color: #fff3cd;
+    border: 1px solid #ffc107;
+    transition: all 0.2s;
+}
+
+.regex-override-checkbox:hover {
+    background-color: #ffe69c;
+}
+
+.regex-override-checkbox input[type="checkbox"] {
+    cursor: pointer;
+    width: 18px;
+    height: 18px;
+}
+
+.regex-override-checkbox span {
+    font-weight: 500;
+    color: #856404;
+    font-size: 0.9rem;
+    user-select: none;
+}
+
 .regex-footer-right {
     display: flex;
     gap: 12px;

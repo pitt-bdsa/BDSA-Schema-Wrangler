@@ -33,6 +33,7 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
     const [selectedRuleSet, setSelectedRuleSet] = useState(initialSelectedRuleSet || '');
     const [showRuleSetSelector, setShowRuleSetSelector] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
+    const [forceOverride, setForceOverride] = useState(false);
 
     useEffect(() => {
         if (currentRules) {
@@ -126,15 +127,24 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
         }
 
         // Confirm before applying
-        const confirmed = window.confirm(
-            'This will apply REGEX rules to extract data from filenames.\n\n' +
-            'Rules will ONLY be applied to items that do NOT already have values for:\n' +
-            '- localCaseId\n' +
-            '- localStainID\n' +
-            '- localRegionId\n' +
-            '- localImageType\n\n' +
+        const confirmMessage = forceOverride
+            ? '🔄 REGEX OVERRIDE MODE 🔄\n\n' +
+            'This will re-apply REGEX rules and REPLACE values that were previously filled by regex.\n\n' +
+            '✅ Will override:\n' +
+            '- Empty fields\n' +
+            '- Values from previous regex rules\n\n' +
+            '🛡️ PROTECTED (will NOT override):\n' +
+            '- Manual edits\n' +
+            '- Column mappings\n\n' +
+            'Use this when you\'ve corrected a regex pattern and need to re-extract.\n\n' +
             'Continue?'
-        );
+            : 'This will apply REGEX rules to extract data from filenames.\n\n' +
+            '✅ SAFE MODE: Rules will ONLY be applied to:\n' +
+            '- Empty fields (no existing value)\n\n' +
+            '🛡️ PROTECTED: Manual edits, column mappings, and existing regex values will NOT be overwritten.\n\n' +
+            'Continue?';
+
+        const confirmed = window.confirm(confirmMessage);
 
         if (!confirmed) {
             return;
@@ -150,7 +160,8 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
             })));
 
             // Apply regex rules with markAsModified = false to avoid marking as modified
-            const result = dataStore.applyRegexRules(rules, false);
+            // Pass forceOverride flag to override all existing values if requested
+            const result = dataStore.applyRegexRules(rules, false, forceOverride);
 
             console.log('🔍 REGEX application result:', result);
 
@@ -444,6 +455,16 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
                         >
                             {isSyncing ? '⏳' : '🔄'} Push to DSA
                         </button>
+                    </div>
+                    <div className="regex-footer-center">
+                        <label className="regex-override-checkbox" title="Re-apply regex rules to values that were previously extracted by regex (protects manual edits and column mappings)">
+                            <input
+                                type="checkbox"
+                                checked={forceOverride}
+                                onChange={(e) => setForceOverride(e.target.checked)}
+                            />
+                            <span>Override existing regex values</span>
+                        </label>
                     </div>
                     <div className="regex-footer-right">
                         <button onClick={handleApplyRegexRules} className="regex-apply-btn">Apply REGEX Rules</button>

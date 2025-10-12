@@ -595,7 +595,7 @@ class ProtocolStore {
         };
     }
 
-    resetToDefaults() {
+    resetToDefaults(reason = 'manual') {
         this.stainProtocols = [...DEFAULT_STAIN_PROTOCOLS];
         this.regionProtocols = [...DEFAULT_REGION_PROTOCOLS];
         this.conflicts = [];
@@ -604,7 +604,30 @@ class ProtocolStore {
         this.saveRegionProtocols();
         this.saveConflicts();
         this.saveLastSync();
+
+        // Store reason for clearing (useful for UI notifications)
+        this.lastResetReason = reason;
+        this.saveLastResetReason();
+
         this.notify();
+    }
+
+    saveLastResetReason() {
+        try {
+            localStorage.setItem('protocolStore_lastResetReason', JSON.stringify(this.lastResetReason));
+        } catch (error) {
+            console.warn('Failed to save last reset reason:', error);
+        }
+    }
+
+    getLastResetReason() {
+        try {
+            const saved = localStorage.getItem('protocolStore_lastResetReason');
+            return saved ? JSON.parse(saved) : null;
+        } catch (error) {
+            console.warn('Failed to load last reset reason:', error);
+            return null;
+        }
     }
 
     // Approved Protocol Management

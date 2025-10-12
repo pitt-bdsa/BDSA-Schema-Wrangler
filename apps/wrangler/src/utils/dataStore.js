@@ -16,6 +16,7 @@ import dsaLoader from './DsaLoader.js';
 import bdsaInitializer from './BdsaInitializer.js';
 import columnMapper from './ColumnMapper.js';
 import accessoryDataMatcher from './AccessoryDataMatcher.js';
+import protocolStore from './protocolStore.js';
 
 class DataStore {
     constructor() {
@@ -330,8 +331,8 @@ class DataStore {
      * @param {Object} regexRules - Object containing regex patterns for each field
      * @returns {Object} - Result with success status and extracted count
      */
-    applyRegexRules(regexRules, markAsModified = true) {
-        return columnMapper.applyRegexRules(this.processedData, regexRules, this.modifiedItems, () => this.notify(), markAsModified);
+    applyRegexRules(regexRules, markAsModified = true, forceOverride = false) {
+        return columnMapper.applyRegexRules(this.processedData, regexRules, this.modifiedItems, () => this.notify(), markAsModified, forceOverride);
     }
 
     /**
@@ -766,6 +767,14 @@ class DataStore {
         this.caseIdMappings.clear();
         this.caseIdConflicts.clear();
         this.bdsaCaseIdConflicts.clear();
+
+        // Clear protocols when loading new data (they're specific to the previous dataset)
+        // This prevents confusion from protocols from previous datasets
+        this.caseProtocolMappings.clear();
+
+        // Clear protocol store when loading new data
+        protocolStore.resetToDefaults('new_dataset');
+        console.log('🧹 Cleared protocols when loading new dataset - protocols are dataset-specific');
 
         // Clear sync results when loading new data (they're specific to the previous dataset)
         this.lastSyncResults = null;

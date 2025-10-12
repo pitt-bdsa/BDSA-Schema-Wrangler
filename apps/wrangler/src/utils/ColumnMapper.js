@@ -9,7 +9,7 @@ class ColumnMapper {
         return path.split('.').reduce((current, key) => current?.[key], obj);
     }
 
-    applyRegexRules(processedData, regexRules, modifiedItems, notifyCallback, markAsModified = true) {
+    applyRegexRules(processedData, regexRules, modifiedItems, notifyCallback, markAsModified = true, forceOverride = false) {
         if (!processedData || processedData.length === 0) {
             return { success: false, error: 'No data available' };
         }
@@ -23,10 +23,37 @@ class ColumnMapper {
         const updatedItems = [];
 
         // Debug: Log what we're about to process
+        const rulesToApply = Object.entries(regexRules).filter(([field, rule]) => rule.pattern && rule.pattern.trim() !== '');
         console.log('🔍 Starting regex processing:', {
             totalItems: processedData.length,
-            rulesToApply: Object.entries(regexRules).filter(([field, rule]) => rule.pattern && rule.pattern.trim() !== ''),
-            markAsModified
+            rulesToApply,
+            markAsModified,
+            forceOverride
+        });
+
+        // Debug: Check how many items have empty fields for each rule
+        rulesToApply.forEach(([field, rule]) => {
+            const emptyCount = processedData.filter(item => {
+                const currentValue = item.BDSA?.bdsaLocal?.[field];
+                return !currentValue;
+            }).length;
+
+            const regexCount = processedData.filter(item => {
+                const currentSource = item.BDSA?._dataSource?.[field];
+                return currentSource === 'regex';
+            }).length;
+
+            const manualCount = processedData.filter(item => {
+                const currentSource = item.BDSA?._dataSource?.[field];
+                return currentSource === 'manual';
+            }).length;
+
+            const mappingCount = processedData.filter(item => {
+                const currentSource = item.BDSA?._dataSource?.[field];
+                return currentSource === 'column_mapping';
+            }).length;
+
+            console.log(`🔍 Field "${field}": ${emptyCount} empty, ${regexCount} from regex, ${manualCount} manual, ${mappingCount} from mapping`);
         });
 
         processedData.forEach((item, index) => {
@@ -67,16 +94,18 @@ class ColumnMapper {
                         console.log(`🔍 Processing field ${field}:`, {
                             currentValue,
                             currentSource,
-                            willApply: !currentValue || (currentSource === 'regex' && markAsModified),
-                            pattern: rule.pattern
+                            willApply: !currentValue || (currentSource === 'regex' && (markAsModified || forceOverride)),
+                            pattern: rule.pattern,
+                            forceOverride
                         });
                     }
 
-                    // Don't apply regex if:
-                    // 1. Field already has a value from any source other than regex
-                    // 2. Field has a value from regex but we're not re-applying regex
-                    // 3. When markAsModified=false, only apply if field is completely empty
-                    if (!currentValue || (currentSource === 'regex' && markAsModified)) {
+                    // Apply regex if:
+                    // 1. Field is empty (no current value), OR
+                    // 2. Field has value from regex AND (we're re-applying OR forceOverride is true)
+                    // When markAsModified=false, we still apply to empty fields but don't mark as modified
+                    // PROTECTED: Never override 'manual' edits or 'column_mapping' sources, even with forceOverride
+                    if (!currentValue || (currentSource === 'regex' && (markAsModified || forceOverride))) {
                         try {
                             const regex = new RegExp(rule.pattern);
                             const match = fileName.match(regex);
