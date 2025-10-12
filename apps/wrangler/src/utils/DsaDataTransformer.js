@@ -236,32 +236,51 @@ export const transformDsaData = (dsaData, regexRules = {}) => {
         // Flatten the entire item, including nested objects
         const flattenedItem = flattenObject(item);
 
+        // CRITICAL: Remove BDSA-related fields from flattened data to prevent duplicates
+        // We manage BDSA data separately in the BDSA.* structure, so don't include meta.BDSA.* or meta.bdsaLocal.*
+        // This prevents the column filtering from showing duplicate columns like:
+        // - meta.BDSA.bdsaLocal.localCaseId (from DSA) vs BDSA.bdsaLocal.localCaseId (our managed field)
+        // - meta.BDSA.bdsaLocal.bdsaStainProtocol (from DSA) vs BDSA.bdsaLocal.bdsaStainProtocol (our managed field)
+        const cleanedFlattenedItem = {};
+        for (const key in flattenedItem) {
+            // Skip any BDSA-related metadata fields that we manage separately
+            if (!key.startsWith('meta.BDSA.') &&
+                !key.startsWith('meta.bdsaLocal.') &&
+                !key.startsWith('BDSA.')) {
+                cleanedFlattenedItem[key] = flattenedItem[key];
+            }
+        }
+
+        console.log(`🔍 Cleaned flattened data - removed BDSA fields to prevent duplicates`);
+
         // Add some common field mappings for compatibility
         const transformedItem = {
             // Map common fields to expected names
-            name: flattenedItem.name || flattenedItem._id || flattenedItem.id || '',
+            name: cleanedFlattenedItem.name || cleanedFlattenedItem._id || cleanedFlattenedItem.id || '',
             // Use server metadata if available, otherwise fall back to existing metadata
-            localCaseId: item.localCaseId || flattenedItem['meta.caseId'] || flattenedItem['meta.localCaseId'] || flattenedItem.caseId || flattenedItem.localCaseId || '',
-            localStainID: item.localStainID || flattenedItem['meta.stainId'] || flattenedItem['meta.localStainID'] || flattenedItem.stainId || flattenedItem.localStainID || '',
-            localRegionId: item.localRegionId || flattenedItem['meta.regionId'] || flattenedItem['meta.localRegionId'] || flattenedItem.regionId || flattenedItem.localRegionId || '',
+            localCaseId: item.localCaseId || cleanedFlattenedItem['meta.caseId'] || cleanedFlattenedItem['meta.localCaseId'] || cleanedFlattenedItem.caseId || cleanedFlattenedItem.localCaseId || '',
+            localStainID: item.localStainID || cleanedFlattenedItem['meta.stainId'] || cleanedFlattenedItem['meta.localStainID'] || cleanedFlattenedItem.stainId || cleanedFlattenedItem.localStainID || '',
+            localRegionId: item.localRegionId || cleanedFlattenedItem['meta.regionId'] || cleanedFlattenedItem['meta.localRegionId'] || cleanedFlattenedItem.regionId || cleanedFlattenedItem.localRegionId || '',
 
-            // Include all flattened fields
-            ...flattenedItem,
+            // Include cleaned flattened fields (BDSA fields excluded)
+            ...cleanedFlattenedItem,
 
-            // Create a consistent row identifier (must be set AFTER spreading flattenedItem to override any existing id)
-            id: flattenedItem._id || flattenedItem.id || `dsa_item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            // Create a consistent row identifier (must be set AFTER spreading cleanedFlattenedItem to override any existing id)
+            id: cleanedFlattenedItem._id || cleanedFlattenedItem.id || `dsa_item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
 
             // Preserve BDSA structure from enhanceDataWithExistingMetadata (don't flatten it)
             BDSA: item.BDSA || undefined,
 
-            // Preserve server metadata markers
-            _hasServerMetadata: item._hasServerMetadata || false,
-            _serverMetadataSource: item._serverMetadataSource || null,
-            _serverMetadataLastUpdated: item._serverMetadataLastUpdated || null,
+            // Preserve server metadata markers (only if they actually exist)
+            ...(item._hasServerMetadata ? {
+                _hasServerMetadata: item._hasServerMetadata,
+                _serverMetadataSource: item._serverMetadataSource,
+                _serverMetadataLastUpdated: item._serverMetadataLastUpdated
+            } : {}),
 
             // Add original DSA fields for reference
-            dsa_id: flattenedItem._id || flattenedItem.id || '',
-            dsa_name: flattenedItem.name || ''
+            dsa_id: cleanedFlattenedItem._id || cleanedFlattenedItem.id || '',
+            dsa_name: cleanedFlattenedItem.name || ''
         };
 
         return transformedItem;

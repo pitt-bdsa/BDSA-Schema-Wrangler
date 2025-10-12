@@ -180,15 +180,36 @@ export const generateColumnDefinitions = (processedData, columnVisibility, colum
 
                     // Check if field should be hidden
                     const isMetaBDSAPattern = fullKey.startsWith('meta.BDSA.') || fullKey.startsWith('meta.bdsaLocal.');
+                    const isBDSAManagedField = fullKey.startsWith('BDSA.bdsaLocal.');
+                    const isBDSAInternalField = fullKey.startsWith('BDSA._');
+                    const isRawDuplicateField = ['localCaseId', 'localStainID', 'localRegionId', 'localImageType'].includes(fullKey);
+                    const isInternalField = fullKey.startsWith('_') || fullKey.includes('_dataSource') || fullKey.includes('_lastModified') || fullKey.includes('_localLastModified');
+
+                    // Additional check for any BDSA-related fields that might have slipped through
+                    const isAnyBDSAPattern = fullKey.includes('BDSA') || fullKey.includes('bdsaLocal');
+
                     const shouldHide = (columnVisibility[fullKey] === false) ||
                         (HIDDEN_DSA_FIELDS.includes(fullKey) && columnVisibility[fullKey] !== true) ||
                         // Hide all meta.BDSA.* and meta.bdsaLocal.* fields (unless explicitly shown)
-                        (isMetaBDSAPattern && columnVisibility[fullKey] !== true);
+                        (isMetaBDSAPattern && columnVisibility[fullKey] !== true) ||
+                        // Hide raw duplicate fields that we manage in BDSA structure
+                        (isRawDuplicateField && columnVisibility[fullKey] !== true) ||
+                        // Hide internal tracking fields (unless explicitly shown)
+                        (isInternalField && columnVisibility[fullKey] !== true) ||
+                        // Hide BDSA internal fields like BDSA._dataSource, BDSA._lastModified
+                        (isBDSAInternalField && columnVisibility[fullKey] !== true) ||
+                        // Hide any other BDSA-related fields that we manage separately (unless explicitly shown)
+                        (isAnyBDSAPattern && !isBDSAManagedField && columnVisibility[fullKey] !== true);
 
-                    // Debug logging for meta.BDSA fields
-                    if (isMetaBDSAPattern) {
+                    // Debug logging for problematic fields
+                    if (isMetaBDSAPattern || isRawDuplicateField || isAnyBDSAPattern || isInternalField || isBDSAInternalField) {
                         console.log(`🔍 Column hiding check for ${fullKey}:`, {
                             isMetaBDSAPattern,
+                            isRawDuplicateField,
+                            isAnyBDSAPattern,
+                            isInternalField,
+                            isBDSAInternalField,
+                            isBDSAManagedField,
                             columnVisibilityValue: columnVisibility[fullKey],
                             shouldHide,
                             willBeHidden: shouldHide

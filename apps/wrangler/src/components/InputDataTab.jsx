@@ -8,6 +8,7 @@ import BdsaMappingModal from './BdsaMappingModal';
 import DsaSyncModal from './DsaSyncModal';
 import ExcelSheetSelectionModal from './ExcelSheetSelectionModal';
 import AccessoryFieldMappingModal from './AccessoryFieldMappingModal';
+import StatusCellRenderer from './StatusCellRenderer';
 import DataControlsToolbar from './DataControlsToolbar';
 import DataGrid from './DataGrid';
 import ColumnVisibilityModal from './ColumnVisibilityModal';
@@ -907,39 +908,7 @@ const InputDataTab = () => {
             width: 120,
             hide: false,
             pinned: 'left',
-            suppressHtmlEncode: true, // Allow HTML rendering
-            cellRenderer: (params) => {
-                const rowData = params.data;
-                const isModified = dataStore.modifiedItems?.has(rowData?.id);
-
-                if (!isModified) {
-                    return '';
-                }
-
-                // Determine the modification type based on BDSA data sources
-                const bdsaSources = rowData?.BDSA?._dataSource || {};
-                const sources = Object.values(bdsaSources);
-
-                let statusType = 'manual-edit'; // default
-                let statusText = 'Modified';
-
-                if (sources.includes('column_mapping')) {
-                    statusType = 'column-mapping';
-                    statusText = 'Column';
-                } else if (sources.includes('regex')) {
-                    statusType = 'regex-extraction';
-                    statusText = 'Regex';
-                } else {
-                    statusType = 'modified-row';
-                    statusText = 'Manual';
-                }
-
-                // Return HTML string that AG Grid can render
-                return `<span class="status-badge ${statusType}" title="${statusText} modification">
-                    <span class="status-indicator ${statusType}"></span>
-                    ${statusText}
-                </span>`;
-            }
+            cellRenderer: StatusCellRenderer
         };
 
         // Insert status column at the beginning

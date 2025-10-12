@@ -23,9 +23,11 @@ export const HIDDEN_DSA_FIELDS = [
     'meta.BDSA.bdsaLocal.source',
 
     // Raw duplicate fields from transformDsaData (we use BDSA.bdsaLocal versions instead)
+    // These are created during DSA import and conflict with our managed BDSA fields
     'localCaseId',
     'localStainID',
     'localRegionId',
+    'localImageType',
 
     // Internal DSA fields that are not useful for users
     '_id',
@@ -59,6 +61,17 @@ export const HIDDEN_DSA_FIELDS = [
     'BDSA._dataSource.bdsaStainProtocol',
     'BDSA._dataSource.bdsaRegionProtocol',
     'BDSA._lastModified',
+
+    // Internal tracking fields (should never be shown to users)
+    '_hasServerMetadata',
+    '_serverMetadataSource',
+    '_serverMetadataLastUpdated',
+    '_localLastModified',
+    '_dataSource',
+    '_lastModified',
+
+    // Computed/UI fields that shouldn't appear in column settings
+    '_status',
 
     // Other common DSA fields that are typically not needed
     'description',
