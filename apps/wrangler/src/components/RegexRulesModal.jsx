@@ -9,34 +9,11 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
         primaryPattern: {
             pattern: '',
             description: 'Single regex pattern with named groups',
-            example: '^(?<localCaseId>\\d{8})\\s+(?<localRegionId>\\w+)\\s+(?<localStainID>\\w+)_(?<localImageType>.+?)(?:\\.optimized)?\\.tiff?$'
-        },
-        fallbackPatterns: {
-            localCaseId: {
-                pattern: '',
-                description: 'Extract case ID from filename',
-                example: '05-662-Temporal_AT8.czi → 05-662'
-            },
-            localStainID: {
-                pattern: '',
-                description: 'Extract stain ID from filename',
-                example: '05-662-Temporal_AT8.czi → AT8'
-            },
-            localRegionId: {
-                pattern: '',
-                description: 'Extract region ID from filename',
-                example: '05-662-Temporal_AT8.czi → Temporal'
-            },
-            localImageType: {
-                pattern: '',
-                description: 'Extract image type from filename',
-                example: '20232817 B HE_Default_Extended.tif → Default_Extended'
-            }
+            example: '^(?<localCaseId>\\d{8})\\s+(?<localRegionId>[A-Z])\\s+(?<localStainID>\\w+)_\\w+_\\w+\\.\\w+\\.\\w+$'
         }
     });
 
     const [testResults, setTestResults] = useState({});
-    const [activeTab, setActiveTab] = useState('primaryPattern');
     const [selectedRuleSet, setSelectedRuleSet] = useState(initialSelectedRuleSet || '');
     const [showRuleSetSelector, setShowRuleSetSelector] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
@@ -54,29 +31,14 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
         }
     }, [initialSelectedRuleSet]);
 
-    const handleRuleChange = (parentField, childField, property, value) => {
-        if (parentField && childField) {
-            // Handle nested structure (fallbackPatterns.fieldName.property)
-            setRules(prev => ({
-                ...prev,
-                [parentField]: {
-                    ...prev[parentField],
-                    [childField]: {
-                        ...prev[parentField][childField],
-                        [property]: value
-                    }
-                }
-            }));
-        } else if (parentField) {
-            // Handle direct structure (primaryPattern.property)
-            setRules(prev => ({
-                ...prev,
-                [parentField]: {
-                    ...prev[parentField],
-                    [property]: value
-                }
-            }));
-        }
+    const handleRuleChange = (property, value) => {
+        setRules(prev => ({
+            ...prev,
+            primaryPattern: {
+                ...prev.primaryPattern,
+                [property]: value
+            }
+        }));
     };
 
     const testRegex = (pattern, testString) => {
@@ -86,9 +48,12 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
             const regex = new RegExp(pattern);
             const match = testString.match(regex);
 
-            if (match) {
-                // Return the first capture group if it exists, otherwise the full match
-                return match[1] || match[0];
+            if (match && match.groups) {
+                // Return the named groups if they exist
+                return match.groups;
+            } else if (match) {
+                // Fallback: return the first capture group if it exists, otherwise the full match
+                return { primaryPattern: match[1] || match[0] };
             }
             return null;
         } catch (error) {
@@ -142,8 +107,7 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
 
         // Check if there are any rules to apply
         const hasPrimaryPattern = rules.primaryPattern?.pattern && rules.primaryPattern.pattern.trim() !== '';
-        const hasFallbackPatterns = Object.values(rules.fallbackPatterns || {}).some(rule => rule.pattern && rule.pattern.trim() !== '');
-        const hasRules = hasPrimaryPattern || hasFallbackPatterns;
+        const hasRules = hasPrimaryPattern;
 
         if (!hasRules) {
             alert('No regex patterns defined. Please add some patterns first.');
@@ -183,9 +147,16 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
                 hasPattern: !!rule.pattern && rule.pattern.trim() !== ''
             })));
 
-            // Apply regex rules with markAsModified = false to avoid marking as modified
+            // Apply regex rules - only mark as modified when in override mode
             // Pass forceOverride flag to override all existing values if requested
-            const result = dataStore.applyRegexRules(rules, false, forceOverride);
+            console.log('🔍 About to apply regex rules with:', {
+                rules,
+                markAsModified: forceOverride, // Only mark as modified when overriding
+                forceOverride,
+                checkboxChecked: forceOverride
+            });
+            
+            const result = dataStore.applyRegexRules(rules, forceOverride, forceOverride);
 
             console.log('🔍 REGEX application result:', result);
 
@@ -224,31 +195,6 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
         setSelectedRuleSet('');
     };
 
-    const getSuggestedPatterns = (field) => {
-        const suggestions = {
-            localCaseId: [
-                { pattern: '^(\\d+-\\d+)', description: 'Match digits-digits at start (e.g., 05-662)' },
-                { pattern: '^(\\d{2}-\\d{3})', description: 'Match exactly 2 digits, dash, 3 digits' },
-                { pattern: '^([^-]+)', description: 'Match everything before first dash' }
-            ],
-            localStainID: [
-                { pattern: '_(\\w+)\\.', description: 'Match word after underscore before extension' },
-                { pattern: '_(AT\\d+|\\w+)\\.', description: 'Match AT followed by digits or word after underscore' },
-                { pattern: '([A-Z]+\\d*)\\.', description: 'Match uppercase letters followed by optional digits' }
-            ],
-            localRegionId: [
-                { pattern: '-(\\w+)_', description: 'Match word between dash and underscore' },
-                { pattern: '-(Temporal|Parietal|MFG)', description: 'Match specific region names' },
-                { pattern: '-(\\w+)_\\w+\\.', description: 'Match word between dash and underscore before extension' }
-            ],
-            localImageType: [
-                { pattern: '_(\\w+(?:_\\w+)*)\\.', description: 'Match image type after underscore before extension' },
-                { pattern: '_(Default_Extended|Preview_Image|LabelArea_Image)', description: 'Match specific image types' },
-                { pattern: '_(\\w+_\\w+)\\.', description: 'Match underscore-separated image type' }
-            ]
-        };
-        return suggestions[field] || [];
-    };
 
     const handlePushToDSA = async () => {
         const authStatus = dsaAuthStore.getStatus();
@@ -382,50 +328,44 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
                 )}
 
                 <div className="regex-modal-body">
-                    <div className="regex-tabs">
-                        <button
-                            key="primaryPattern"
-                            className={`regex-tab ${activeTab === 'primaryPattern' ? 'active' : ''}`}
-                            onClick={() => setActiveTab('primaryPattern')}
-                        >
-                            Primary Pattern
-                        </button>
-                        {Object.keys(rules.fallbackPatterns || {}).map(field => (
-                            <button
-                                key={field}
-                                className={`regex-tab ${activeTab === field ? 'active' : ''}`}
-                                onClick={() => setActiveTab(field)}
-                            >
-                                {field} (Fallback)
-                            </button>
-                        ))}
-                    </div>
-
                     <div className="regex-tab-content">
                         <div className="regex-field-config">
-                            {activeTab === 'primaryPattern' ? (
                                 <>
                                     <h3>{rules.primaryPattern.description}</h3>
                                     <p className="regex-example">{rules.primaryPattern.example}</p>
+
+                                    <div className="regex-schema-mapping-info">
+                                        <h4>📋 Schema Mapping</h4>
+                                        <p>The named groups in your regex will be mapped to the BDSA local schema:</p>
+                                        <ul>
+                                            <li><code>localCaseId</code> → BDSA Local Case ID</li>
+                                            <li><code>localRegionId</code> → BDSA Local Region ID</li>
+                                            <li><code>localStainID</code> → BDSA Local Stain ID</li>
+                                            <li><code>localImageType</code> → BDSA Local Image Type</li>
+                                        </ul>
+                                    </div>
 
                                     <div className="regex-input-group">
                                         <label>Primary Regex Pattern (with named groups):</label>
                                         <input
                                             type="text"
                                             value={rules.primaryPattern.pattern}
-                                            onChange={(e) => handleRuleChange('primaryPattern', 'pattern', e.target.value)}
-                                            placeholder="^(?&lt;localCaseId&gt;\d{8})\s+(?&lt;localRegionId&gt;\w+)\s+(?&lt;localStainID&gt;\w+)_(?&lt;localImageType&gt;.+?)(?:\.optimized)?\.tiff?$"
+                                            onChange={(e) => handleRuleChange('pattern', e.target.value)}
+                                            placeholder="^(?&lt;localCaseId&gt;\d{8})\s+(?&lt;localRegionId&gt;[A-Z])\s+(?&lt;localStainID&gt;\w+)_\w+_\w+\.\w+\.\w+$"
                                             className="regex-pattern-input"
                                         />
+                                        <small className="regex-input-help">
+                                            Use named groups like <code>(?&lt;localCaseId&gt;...)</code> to extract data that maps to BDSA schema fields
+                                        </small>
                                     </div>
 
                                     <div className="regex-suggestions">
                                         <h4>Suggested Primary Patterns:</h4>
                                         <div className="regex-suggestion">
-                                            <code>^(?&lt;localCaseId&gt;\d{8})\s+(?&lt;localRegionId&gt;\w+)\s+(?&lt;localStainID&gt;\w+)_(?&lt;localImageType&gt;.+?)(?:\.optimized)?\.tiff?$</code>
+                                            <code>^(?&lt;localCaseId&gt;\d{8})\s+(?&lt;localRegionId&gt;[A-Z])\s+(?&lt;localStainID&gt;\w+)_\w+_\w+\.\w+\.\w+$</code>
                                             <span>For format: 20232824 B TDP43_LabelArea_Image.optimized.tiff</span>
                                             <button
-                                                onClick={() => handleRuleChange('primaryPattern', 'pattern', '^(?<localCaseId>\\d{8})\\s+(?<localRegionId>\\w+)\\s+(?<localStainID>\\w+)_(?<localImageType>.+?)(?:\\.optimized)?\\.tiff?$')}
+                                                onClick={() => handleRuleChange('pattern', '^(?<localCaseId>\\d{8})\\s+(?<localRegionId>[A-Z])\\s+(?<localStainID>\\w+)_\\w+_\\w+\\.\\w+\\.\\w+$')}
                                                 className="regex-use-suggestion"
                                             >
                                                 Use
@@ -435,7 +375,7 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
                                             <code>^(?&lt;localCaseId&gt;\d+-\d+)-(?&lt;localRegionId&gt;\w+)_(?&lt;localStainID&gt;\w+)\.</code>
                                             <span>For format: 05-662-Temporal_AT8.czi</span>
                                             <button
-                                                onClick={() => handleRuleChange('primaryPattern', 'pattern', '^(?<localCaseId>\\d+-\\d+)-(?<localRegionId>\\w+)_(?<localStainID>\\w+)\\.')}
+                                                onClick={() => handleRuleChange('pattern', '^(?<localCaseId>\\d+-\\d+)-(?<localRegionId>\\w+)_(?<localStainID>\\w+)\\.')}
                                                 className="regex-use-suggestion"
                                             >
                                                 Use
@@ -443,39 +383,6 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
                                         </div>
                                     </div>
                                 </>
-                            ) : (
-                                <>
-                                    <h3>{rules.fallbackPatterns[activeTab].description}</h3>
-                                    <p className="regex-example">{rules.fallbackPatterns[activeTab].example}</p>
-
-                                    <div className="regex-input-group">
-                                        <label>Fallback Regex Pattern:</label>
-                                        <input
-                                            type="text"
-                                            value={rules.fallbackPatterns[activeTab].pattern}
-                                            onChange={(e) => handleRuleChange('fallbackPatterns', activeTab, 'pattern', e.target.value)}
-                                            placeholder="Enter regex pattern..."
-                                            className="regex-pattern-input"
-                                        />
-                                    </div>
-
-                                    <div className="regex-suggestions">
-                                        <h4>Suggested Patterns:</h4>
-                                        {getSuggestedPatterns(activeTab).map((suggestion, index) => (
-                                            <div key={index} className="regex-suggestion">
-                                                <code>{suggestion.pattern}</code>
-                                                <span>{suggestion.description}</span>
-                                                <button
-                                                    onClick={() => handleRuleChange('fallbackPatterns', activeTab, 'pattern', suggestion.pattern)}
-                                                    className="regex-use-suggestion"
-                                                >
-                                                    Use
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </>
-                            )}
                         </div>
 
                         <div className="regex-test-section">
@@ -494,14 +401,27 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
                                             <div className="regex-test-extractions">
                                                 {Object.keys(testResults[index].results).map(field => {
                                                     const result = testResults[index].results[field];
-                                                    return (
-                                                        <div key={field} className="regex-test-field">
-                                                            <span className="regex-field-name">{field}:</span>
-                                                            <span className={`regex-field-value ${result ? 'success' : 'empty'}`}>
-                                                                {result ? (result.error ? `Error: ${result.error}` : result) : 'No match'}
-                                                            </span>
-                                                        </div>
-                                                    );
+                                                    if (result && typeof result === 'object' && !result.error) {
+                                                        // Display individual named groups
+                                                        return Object.entries(result).map(([key, value]) => (
+                                                            <div key={`${field}-${key}`} className="regex-test-field">
+                                                                <span className="regex-field-name">{key}:</span>
+                                                                <span className="regex-field-value success">
+                                                                    {value || 'No match'}
+                                                                </span>
+                                                            </div>
+                                                        ));
+                                                    } else {
+                                                        // Fallback for simple results
+                                                        return (
+                                                            <div key={field} className="regex-test-field">
+                                                                <span className="regex-field-name">{field}:</span>
+                                                                <span className={`regex-field-value ${result ? 'success' : 'empty'}`}>
+                                                                    {result ? (result.error ? `Error: ${result.error}` : result) : 'No match'}
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    }
                                                 })}
                                             </div>
                                         </div>

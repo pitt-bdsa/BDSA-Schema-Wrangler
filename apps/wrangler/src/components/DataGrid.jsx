@@ -66,6 +66,9 @@ const DataGrid = ({
                         pagination={true}
                         paginationPageSize={50}
                         animateRows={true}
+                        enableRangeSelection={true}
+                        enableCellTextSelection={true}
+                        ensureDomOrder={true}
                         context={{
                             dataStore: dataStore
                         }}

@@ -58,6 +58,7 @@ class ColumnMapper {
 
         processedData.forEach((item, index) => {
             let itemUpdated = false;
+            let valueChanged = false;
             const fileName = item.name || item.dsa_name || '';
 
             // Ensure BDSA object exists
@@ -106,14 +107,40 @@ class ColumnMapper {
                                 const currentValue = item.BDSA.bdsaLocal?.[field];
                                 const currentSource = item.BDSA._dataSource?.[field];
 
-                                // Apply if field is empty or we're overriding regex values
-                                if (!currentValue || (currentSource === 'regex' && (markAsModified || forceOverride))) {
+                                // Apply if field is empty or we're overriding values when forceOverride is true
+                                const shouldApply = !currentValue || (forceOverride && currentSource !== 'manual' && currentSource !== 'column_mapping');
+                                
+                                // Debug logging for override logic
+                                if (index < 5) {
+                                    console.log(`🔍 Override logic for ${field}:`, {
+                                        currentValue,
+                                        currentSource,
+                                        forceOverride,
+                                        shouldApply,
+                                        condition1: !currentValue,
+                                        condition2: forceOverride,
+                                        condition3: currentSource !== 'manual',
+                                        condition4: currentSource !== 'column_mapping'
+                                    });
+                                }
+                                
+                                if (shouldApply) {
+                                    const fieldValueChanged = currentValue !== extractedValue;
+                                    
                                     item.BDSA.bdsaLocal[field] = extractedValue;
                                     item.BDSA._dataSource[field] = 'regex';
                                     item.BDSA._lastModified = new Date().toISOString();
                                     itemUpdated = true;
-
-                                    console.log(`✅ Extracted ${field} = ${extractedValue} from primary pattern`);
+                                    
+                                    // Track if any value actually changed for this item
+                                    if (fieldValueChanged) {
+                                        valueChanged = true;
+                                        console.log(`✅ Extracted ${field} = ${extractedValue} from primary pattern (value changed from ${currentValue})`);
+                                    } else {
+                                        console.log(`✅ Extracted ${field} = ${extractedValue} from primary pattern (value unchanged)`);
+                                    }
+                                } else {
+                                    console.log(`⏭️ Skipped ${field} (already has value from ${currentSource})`);
                                 }
                             }
                         });
@@ -144,16 +171,18 @@ class ColumnMapper {
 
                         // Apply regex if:
                         // 1. Field is empty (no current value), OR
-                        // 2. Field has value from regex AND (we're re-applying OR forceOverride is true)
-                        // When markAsModified=false, we still apply to empty fields but don't mark as modified
-                        // PROTECTED: Never override 'manual' edits or 'column_mapping' sources, even with forceOverride
-                        if (!currentValue || (currentSource === 'regex' && (markAsModified || forceOverride))) {
+                        // 2. We're overriding values when forceOverride is true (except manual/column_mapping)
+                        // PROTECTED: Never override 'manual' edits or 'column_mapping' sources
+                        const shouldApplyFallback = !currentValue || (forceOverride && currentSource !== 'manual' && currentSource !== 'column_mapping');
+                        
+                        if (shouldApplyFallback) {
                             try {
                                 const regex = new RegExp(rule.pattern);
                                 const match = fileName.match(regex);
 
                                 if (match) {
                                     const extractedValue = match[1] || match[0];
+                                    const fieldValueChanged = currentValue !== extractedValue;
 
                                     // Initialize nested structure if needed
                                     if (!item.BDSA.bdsaLocal) {
@@ -167,8 +196,14 @@ class ColumnMapper {
                                     item.BDSA._dataSource[field] = 'regex';
                                     item.BDSA._lastModified = new Date().toISOString();
                                     itemUpdated = true;
-
-                                    console.log(`✅ Extracted ${field} = ${extractedValue} from fallback pattern`);
+                                    
+                                    // Track if any value actually changed for this item
+                                    if (fieldValueChanged) {
+                                        valueChanged = true;
+                                        console.log(`✅ Extracted ${field} = ${extractedValue} from fallback pattern (value changed from ${currentValue})`);
+                                    } else {
+                                        console.log(`✅ Extracted ${field} = ${extractedValue} from fallback pattern (value unchanged)`);
+                                    }
                                 }
                             } catch (error) {
                                 console.error(`Fallback regex error for field ${field}:`, error);
@@ -179,14 +214,16 @@ class ColumnMapper {
             }
 
             if (itemUpdated) {
-                // Only mark as modified if this is user-initiated processing, not initial data loading
-                if (markAsModified) {
+                // Only mark as modified if this is user-initiated processing AND values actually changed
+                if (markAsModified && valueChanged) {
                     modifiedItems.add(item.id);
-                    console.log(`🔍 Added item ${item.id} to modifiedItems via regex. Total modified: ${modifiedItems.size}`);
+                    console.log(`🔍 Added item ${item.id} to modifiedItems via regex (value changed). Total modified: ${modifiedItems.size}`);
+                } else if (markAsModified && !valueChanged) {
+                    console.log(`🔍 Item ${item.id} updated via regex but no values changed, not marking as modified`);
                 }
                 extractedCount++;
                 if (index < 3) {
-                    console.log(`✅ Item ${index} updated via regex`);
+                    console.log(`✅ Item ${index} updated via regex (valueChanged: ${valueChanged})`);
                 }
             } else {
                 skippedCount++;
