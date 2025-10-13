@@ -6,30 +6,37 @@ import { syncRegexRulesToFolder, getRegexRulesFromFolder } from '../utils/dsaInt
 
 const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSet: initialSelectedRuleSet, sampleData }) => {
     const [rules, setRules] = useState({
-        localCaseId: {
+        primaryPattern: {
             pattern: '',
-            description: 'Extract case ID from filename',
-            example: '05-662-Temporal_AT8.czi → 05-662'
+            description: 'Single regex pattern with named groups',
+            example: '^(?<localCaseId>\\d{8})\\s+(?<localRegionId>\\w+)\\s+(?<localStainID>\\w+)_(?<localImageType>.+?)(?:\\.optimized)?\\.tiff?$'
         },
-        localStainID: {
-            pattern: '',
-            description: 'Extract stain ID from filename',
-            example: '05-662-Temporal_AT8.czi → AT8'
-        },
-        localRegionId: {
-            pattern: '',
-            description: 'Extract region ID from filename',
-            example: '05-662-Temporal_AT8.czi → Temporal'
-        },
-        localImageType: {
-            pattern: '',
-            description: 'Extract image type from filename',
-            example: '20232817 B HE_Default_Extended.tif → Default_Extended'
+        fallbackPatterns: {
+            localCaseId: {
+                pattern: '',
+                description: 'Extract case ID from filename',
+                example: '05-662-Temporal_AT8.czi → 05-662'
+            },
+            localStainID: {
+                pattern: '',
+                description: 'Extract stain ID from filename',
+                example: '05-662-Temporal_AT8.czi → AT8'
+            },
+            localRegionId: {
+                pattern: '',
+                description: 'Extract region ID from filename',
+                example: '05-662-Temporal_AT8.czi → Temporal'
+            },
+            localImageType: {
+                pattern: '',
+                description: 'Extract image type from filename',
+                example: '20232817 B HE_Default_Extended.tif → Default_Extended'
+            }
         }
     });
 
     const [testResults, setTestResults] = useState({});
-    const [activeTab, setActiveTab] = useState('localCaseId');
+    const [activeTab, setActiveTab] = useState('primaryPattern');
     const [selectedRuleSet, setSelectedRuleSet] = useState(initialSelectedRuleSet || '');
     const [showRuleSetSelector, setShowRuleSetSelector] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
@@ -47,14 +54,29 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
         }
     }, [initialSelectedRuleSet]);
 
-    const handleRuleChange = (field, property, value) => {
-        setRules(prev => ({
-            ...prev,
-            [field]: {
-                ...prev[field],
-                [property]: value
-            }
-        }));
+    const handleRuleChange = (parentField, childField, property, value) => {
+        if (parentField && childField) {
+            // Handle nested structure (fallbackPatterns.fieldName.property)
+            setRules(prev => ({
+                ...prev,
+                [parentField]: {
+                    ...prev[parentField],
+                    [childField]: {
+                        ...prev[parentField][childField],
+                        [property]: value
+                    }
+                }
+            }));
+        } else if (parentField) {
+            // Handle direct structure (primaryPattern.property)
+            setRules(prev => ({
+                ...prev,
+                [parentField]: {
+                    ...prev[parentField],
+                    [property]: value
+                }
+            }));
+        }
     };
 
     const testRegex = (pattern, testString) => {
@@ -119,7 +141,9 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
         }
 
         // Check if there are any rules to apply
-        const hasRules = Object.values(rules).some(rule => rule.pattern && rule.pattern.trim() !== '');
+        const hasPrimaryPattern = rules.primaryPattern?.pattern && rules.primaryPattern.pattern.trim() !== '';
+        const hasFallbackPatterns = Object.values(rules.fallbackPatterns || {}).some(rule => rule.pattern && rule.pattern.trim() !== '');
+        const hasRules = hasPrimaryPattern || hasFallbackPatterns;
 
         if (!hasRules) {
             alert('No regex patterns defined. Please add some patterns first.');
@@ -359,48 +383,99 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
 
                 <div className="regex-modal-body">
                     <div className="regex-tabs">
-                        {Object.keys(rules).map(field => (
+                        <button
+                            key="primaryPattern"
+                            className={`regex-tab ${activeTab === 'primaryPattern' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('primaryPattern')}
+                        >
+                            Primary Pattern
+                        </button>
+                        {Object.keys(rules.fallbackPatterns || {}).map(field => (
                             <button
                                 key={field}
                                 className={`regex-tab ${activeTab === field ? 'active' : ''}`}
                                 onClick={() => setActiveTab(field)}
                             >
-                                {field}
+                                {field} (Fallback)
                             </button>
                         ))}
                     </div>
 
                     <div className="regex-tab-content">
                         <div className="regex-field-config">
-                            <h3>{rules[activeTab].description}</h3>
-                            <p className="regex-example">{rules[activeTab].example}</p>
+                            {activeTab === 'primaryPattern' ? (
+                                <>
+                                    <h3>{rules.primaryPattern.description}</h3>
+                                    <p className="regex-example">{rules.primaryPattern.example}</p>
 
-                            <div className="regex-input-group">
-                                <label>Regex Pattern:</label>
-                                <input
-                                    type="text"
-                                    value={rules[activeTab].pattern}
-                                    onChange={(e) => handleRuleChange(activeTab, 'pattern', e.target.value)}
-                                    placeholder="Enter regex pattern..."
-                                    className="regex-pattern-input"
-                                />
-                            </div>
-
-                            <div className="regex-suggestions">
-                                <h4>Suggested Patterns:</h4>
-                                {getSuggestedPatterns(activeTab).map((suggestion, index) => (
-                                    <div key={index} className="regex-suggestion">
-                                        <code>{suggestion.pattern}</code>
-                                        <span>{suggestion.description}</span>
-                                        <button
-                                            onClick={() => handleRuleChange(activeTab, 'pattern', suggestion.pattern)}
-                                            className="regex-use-suggestion"
-                                        >
-                                            Use
-                                        </button>
+                                    <div className="regex-input-group">
+                                        <label>Primary Regex Pattern (with named groups):</label>
+                                        <input
+                                            type="text"
+                                            value={rules.primaryPattern.pattern}
+                                            onChange={(e) => handleRuleChange('primaryPattern', 'pattern', e.target.value)}
+                                            placeholder="^(?&lt;localCaseId&gt;\d{8})\s+(?&lt;localRegionId&gt;\w+)\s+(?&lt;localStainID&gt;\w+)_(?&lt;localImageType&gt;.+?)(?:\.optimized)?\.tiff?$"
+                                            className="regex-pattern-input"
+                                        />
                                     </div>
-                                ))}
-                            </div>
+
+                                    <div className="regex-suggestions">
+                                        <h4>Suggested Primary Patterns:</h4>
+                                        <div className="regex-suggestion">
+                                            <code>^(?&lt;localCaseId&gt;\d{8})\s+(?&lt;localRegionId&gt;\w+)\s+(?&lt;localStainID&gt;\w+)_(?&lt;localImageType&gt;.+?)(?:\.optimized)?\.tiff?$</code>
+                                            <span>For format: 20232824 B TDP43_LabelArea_Image.optimized.tiff</span>
+                                            <button
+                                                onClick={() => handleRuleChange('primaryPattern', 'pattern', '^(?<localCaseId>\\d{8})\\s+(?<localRegionId>\\w+)\\s+(?<localStainID>\\w+)_(?<localImageType>.+?)(?:\\.optimized)?\\.tiff?$')}
+                                                className="regex-use-suggestion"
+                                            >
+                                                Use
+                                            </button>
+                                        </div>
+                                        <div className="regex-suggestion">
+                                            <code>^(?&lt;localCaseId&gt;\d+-\d+)-(?&lt;localRegionId&gt;\w+)_(?&lt;localStainID&gt;\w+)\.</code>
+                                            <span>For format: 05-662-Temporal_AT8.czi</span>
+                                            <button
+                                                onClick={() => handleRuleChange('primaryPattern', 'pattern', '^(?<localCaseId>\\d+-\\d+)-(?<localRegionId>\\w+)_(?<localStainID>\\w+)\\.')}
+                                                className="regex-use-suggestion"
+                                            >
+                                                Use
+                                            </button>
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <h3>{rules.fallbackPatterns[activeTab].description}</h3>
+                                    <p className="regex-example">{rules.fallbackPatterns[activeTab].example}</p>
+
+                                    <div className="regex-input-group">
+                                        <label>Fallback Regex Pattern:</label>
+                                        <input
+                                            type="text"
+                                            value={rules.fallbackPatterns[activeTab].pattern}
+                                            onChange={(e) => handleRuleChange('fallbackPatterns', activeTab, 'pattern', e.target.value)}
+                                            placeholder="Enter regex pattern..."
+                                            className="regex-pattern-input"
+                                        />
+                                    </div>
+
+                                    <div className="regex-suggestions">
+                                        <h4>Suggested Patterns:</h4>
+                                        {getSuggestedPatterns(activeTab).map((suggestion, index) => (
+                                            <div key={index} className="regex-suggestion">
+                                                <code>{suggestion.pattern}</code>
+                                                <span>{suggestion.description}</span>
+                                                <button
+                                                    onClick={() => handleRuleChange('fallbackPatterns', activeTab, 'pattern', suggestion.pattern)}
+                                                    className="regex-use-suggestion"
+                                                >
+                                                    Use
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
                         </div>
 
                         <div className="regex-test-section">

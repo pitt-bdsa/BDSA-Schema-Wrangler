@@ -82,56 +82,101 @@ class ColumnMapper {
                 });
             }
 
-            // Apply regex rules for each field
-            Object.entries(regexRules).forEach(([field, rule]) => {
-                if (rule && rule.pattern && rule.pattern.trim() !== '') {
-                    // Only apply regex if field is not already populated
-                    const currentValue = item.BDSA.bdsaLocal?.[field];
-                    const currentSource = item.BDSA._dataSource?.[field];
+            // Try primary pattern with named groups first
+            let primaryMatch = null;
+            if (regexRules.primaryPattern && regexRules.primaryPattern.pattern && regexRules.primaryPattern.pattern.trim() !== '') {
+                try {
+                    const primaryRegex = new RegExp(regexRules.primaryPattern.pattern);
+                    primaryMatch = fileName.match(primaryRegex);
 
-                    // Debug: Log field processing for first few items
-                    if (index < 3) {
-                        console.log(`🔍 Processing field ${field}:`, {
-                            currentValue,
-                            currentSource,
-                            willApply: !currentValue || (currentSource === 'regex' && (markAsModified || forceOverride)),
-                            pattern: rule.pattern,
-                            forceOverride
+                    if (primaryMatch && primaryMatch.groups) {
+                        console.log(`🔍 Primary pattern matched for item ${index}:`, primaryMatch.groups);
+
+                        // Initialize nested structure if needed
+                        if (!item.BDSA.bdsaLocal) {
+                            item.BDSA.bdsaLocal = {};
+                        }
+                        if (!item.BDSA._dataSource) {
+                            item.BDSA._dataSource = {};
+                        }
+
+                        // Extract all fields from named groups
+                        Object.entries(primaryMatch.groups).forEach(([field, extractedValue]) => {
+                            if (extractedValue) {
+                                const currentValue = item.BDSA.bdsaLocal?.[field];
+                                const currentSource = item.BDSA._dataSource?.[field];
+
+                                // Apply if field is empty or we're overriding regex values
+                                if (!currentValue || (currentSource === 'regex' && (markAsModified || forceOverride))) {
+                                    item.BDSA.bdsaLocal[field] = extractedValue;
+                                    item.BDSA._dataSource[field] = 'regex';
+                                    item.BDSA._lastModified = new Date().toISOString();
+                                    itemUpdated = true;
+
+                                    console.log(`✅ Extracted ${field} = ${extractedValue} from primary pattern`);
+                                }
+                            }
                         });
                     }
+                } catch (error) {
+                    console.error('Primary pattern regex error:', error);
+                }
+            }
 
-                    // Apply regex if:
-                    // 1. Field is empty (no current value), OR
-                    // 2. Field has value from regex AND (we're re-applying OR forceOverride is true)
-                    // When markAsModified=false, we still apply to empty fields but don't mark as modified
-                    // PROTECTED: Never override 'manual' edits or 'column_mapping' sources, even with forceOverride
-                    if (!currentValue || (currentSource === 'regex' && (markAsModified || forceOverride))) {
-                        try {
-                            const regex = new RegExp(rule.pattern);
-                            const match = fileName.match(regex);
+            // If primary pattern didn't match, try fallback patterns
+            if (!primaryMatch && regexRules.fallbackPatterns) {
+                Object.entries(regexRules.fallbackPatterns).forEach(([field, rule]) => {
+                    if (rule && rule.pattern && rule.pattern.trim() !== '') {
+                        // Only apply regex if field is not already populated
+                        const currentValue = item.BDSA.bdsaLocal?.[field];
+                        const currentSource = item.BDSA._dataSource?.[field];
 
-                            if (match) {
-                                const extractedValue = match[1] || match[0];
+                        // Debug: Log field processing for first few items
+                        if (index < 3) {
+                            console.log(`🔍 Processing fallback field ${field}:`, {
+                                currentValue,
+                                currentSource,
+                                willApply: !currentValue || (currentSource === 'regex' && (markAsModified || forceOverride)),
+                                pattern: rule.pattern,
+                                forceOverride
+                            });
+                        }
 
-                                // Initialize nested structure if needed
-                                if (!item.BDSA.bdsaLocal) {
-                                    item.BDSA.bdsaLocal = {};
+                        // Apply regex if:
+                        // 1. Field is empty (no current value), OR
+                        // 2. Field has value from regex AND (we're re-applying OR forceOverride is true)
+                        // When markAsModified=false, we still apply to empty fields but don't mark as modified
+                        // PROTECTED: Never override 'manual' edits or 'column_mapping' sources, even with forceOverride
+                        if (!currentValue || (currentSource === 'regex' && (markAsModified || forceOverride))) {
+                            try {
+                                const regex = new RegExp(rule.pattern);
+                                const match = fileName.match(regex);
+
+                                if (match) {
+                                    const extractedValue = match[1] || match[0];
+
+                                    // Initialize nested structure if needed
+                                    if (!item.BDSA.bdsaLocal) {
+                                        item.BDSA.bdsaLocal = {};
+                                    }
+                                    if (!item.BDSA._dataSource) {
+                                        item.BDSA._dataSource = {};
+                                    }
+
+                                    item.BDSA.bdsaLocal[field] = extractedValue;
+                                    item.BDSA._dataSource[field] = 'regex';
+                                    item.BDSA._lastModified = new Date().toISOString();
+                                    itemUpdated = true;
+
+                                    console.log(`✅ Extracted ${field} = ${extractedValue} from fallback pattern`);
                                 }
-                                if (!item.BDSA._dataSource) {
-                                    item.BDSA._dataSource = {};
-                                }
-
-                                item.BDSA.bdsaLocal[field] = extractedValue;
-                                item.BDSA._dataSource[field] = 'regex';
-                                item.BDSA._lastModified = new Date().toISOString();
-                                itemUpdated = true;
+                            } catch (error) {
+                                console.error(`Fallback regex error for field ${field}:`, error);
                             }
-                        } catch (error) {
-                            console.error(`Regex error for field ${field}:`, error);
                         }
                     }
-                }
-            });
+                });
+            }
 
             if (itemUpdated) {
                 // Only mark as modified if this is user-initiated processing, not initial data loading
