@@ -779,7 +779,12 @@ class DataStore {
         this.caseProtocolMappings.clear();
 
         // Clear protocol store when loading new data
+        console.log('🧹 Clearing protocol store for new dataset...');
+        console.log('🧹 Before clear - Stain protocols:', protocolStore.stainProtocols.length);
+        console.log('🧹 Before clear - Region protocols:', protocolStore.regionProtocols.length);
         protocolStore.resetToDefaults('new_dataset');
+        console.log('🧹 After clear - Stain protocols:', protocolStore.stainProtocols.length);
+        console.log('🧹 After clear - Region protocols:', protocolStore.regionProtocols.length);
         console.log('🧹 Cleared protocols when loading new dataset - protocols are dataset-specific');
 
         // Clear sync results when loading new data (they're specific to the previous dataset)

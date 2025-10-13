@@ -31,5 +31,8 @@ export {
     getProtocolsFromFolder
 } from './DsaFolderMetadataSync.js';
 
+// Protocol Store Integration
+export { pullProtocolsFromDSA } from './ProtocolStoreIntegration.js';
+
 // Batch Processing
 export { DsaBatchProcessor } from './DsaBatchProcessor.js';

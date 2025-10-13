@@ -14,7 +14,7 @@ export const loadDsaData = async (dsaConfig, girderToken) => {
         console.log('🚀 loadDsaData: Starting DSA data fetch...');
 
         // Use the paginated approach for better performance and memory management
-        const rawItems = await fetchAllDsaItemsPaginated(dsaConfig, girderToken, 100);
+        const rawItems = await fetchAllDsaItemsPaginated(dsaConfig, girderToken, 500);
 
         console.log(`✅ loadDsaData: Successfully fetched ${rawItems.length} raw items`);
 
@@ -33,7 +33,7 @@ export const loadDsaData = async (dsaConfig, girderToken) => {
             success: true,
             data: transformedItems,
             itemCount: transformedItems.length,
-            hasMoreData: rawItems.length >= (100 * 100) // If we got 10,000+ items, assume there might be more
+            hasMoreData: rawItems.length < (10 * 500) // If we got less than 5,000 items, there might be more
         };
 
     } catch (error) {
@@ -115,15 +115,15 @@ export const fetchAllDsaItemsUnlimited = async (dsaConfig, girderToken) => {
  * Fetches all items using pagination
  * @param {Object} dsaConfig - DSA configuration object
  * @param {string} girderToken - Authentication token
- * @param {number} pageSize - Number of items per page (default 100)
+ * @param {number} pageSize - Number of items per page (default 500)
  * @returns {Promise<Array>} All items from the resource
  */
-export const fetchAllDsaItemsPaginated = async (dsaConfig, girderToken, pageSize = 100) => {
+export const fetchAllDsaItemsPaginated = async (dsaConfig, girderToken, pageSize = 500) => {
     const allItems = [];
     let offset = 0;
     let hasMore = true;
     let pageCount = 0;
-    const maxPages = 100; // Safety limit to prevent infinite loops
+    const maxPages = 10; // Limit to 5,000 items (10 pages × 500 items)
     const startTime = Date.now();
     const maxTime = 5 * 60 * 1000; // 5 minutes timeout
 
@@ -209,7 +209,7 @@ export const fetchAllDsaItemsPaginated = async (dsaConfig, girderToken, pageSize
     }
 
     if (pageCount >= maxPages) {
-        console.warn(`⚠️ Reached maximum page limit (${maxPages}). Stopping pagination.`);
+        console.warn(`⚠️ Reached maximum page limit (${maxPages} pages = 5,000 items). Stopping pagination.`);
         console.warn(`📊 Total items fetched: ${allItems.length}`);
     }
 

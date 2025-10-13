@@ -92,6 +92,7 @@ const InputDataTab = () => {
     const [loadMoreProgress, setLoadMoreProgress] = useState({ current: 0, total: 0 });
     const [modifiedItemsCount, setModifiedItemsCount] = useState(0);
     const [hasMoreData, setHasMoreData] = useState(true); // Track if there's more data to load
+    const [hasCheckedForMoreData, setHasCheckedForMoreData] = useState(false); // Track if we've determined there's no more data
     const [showFileFilterNotification, setShowFileFilterNotification] = useState(false);
     const [isNotificationFading, setIsNotificationFading] = useState(false);
 
@@ -522,6 +523,27 @@ const InputDataTab = () => {
                     console.warn('⚠️ Could not auto-pull column mappings:', mappingsError.message);
                     // Non-fatal error - continue with local column mappings
                 }
+
+                // Auto-pull protocols from DSA server if available
+                try {
+                    const { pullProtocolsFromDSA } = await import('../utils/dsaIntegration.js');
+                    const config = dsaAuthStore.getConfig();
+                    const protocolResult = await pullProtocolsFromDSA(
+                        config.baseUrl,
+                        config.resourceId,
+                        dsaAuthStore.getToken()
+                    );
+
+                    if (protocolResult.success) {
+                        console.log('✅ Auto-pulled protocols from DSA server for this collection');
+                        console.log(`📊 Pulled ${protocolResult.stainProtocols?.length || 0} stain protocols and ${protocolResult.regionProtocols?.length || 0} region protocols`);
+                    } else {
+                        console.log('ℹ️ No protocols found on DSA server for this collection');
+                    }
+                } catch (protocolError) {
+                    console.warn('⚠️ Could not auto-pull protocols:', protocolError.message);
+                    // Non-fatal error - continue with default protocols
+                }
             }
         } catch (error) {
             console.error('Error loading DSA data:', error);
@@ -566,6 +588,7 @@ const InputDataTab = () => {
                     // Fallback: If we got no new items, we've reached the end
                     if (newItemsCount === 0) {
                         setHasMoreData(false);
+                        setHasCheckedForMoreData(true);
                         console.log('🏁 No more data available - reached end of dataset');
                     }
                 }
@@ -1047,13 +1070,20 @@ const InputDataTab = () => {
 
             {/* Load More Data Button - Compact */}
             {(() => {
-                const shouldShow = dataStatus.processedData && dataStatus.processedData.length > 0 && dataStatus.dataSource === 'dsa' && !isLoadingMore && hasMoreData;
+                // Only show if we're certain there's more data and haven't determined there isn't
+                const shouldShow = dataStatus.processedData && 
+                                 dataStatus.processedData.length > 0 && 
+                                 dataStatus.dataSource === 'dsa' && 
+                                 !isLoadingMore && 
+                                 hasMoreData && 
+                                 !hasCheckedForMoreData;
                 console.log(`🔍 DEBUG: Load More button conditions:`, {
                     hasData: !!dataStatus.processedData,
                     dataLength: dataStatus.processedData?.length || 0,
                     isDSA: dataStatus.dataSource === 'dsa',
                     notLoadingMore: !isLoadingMore,
                     hasMoreData,
+                    hasCheckedForMoreData,
                     shouldShow
                 });
                 return shouldShow;
@@ -1070,9 +1100,11 @@ const InputDataTab = () => {
                             className="notification-btn" 
                             onClick={() => {
                                 console.log(`🔍 DEBUG: Current hasMoreData state: ${hasMoreData}`);
+                                console.log(`🔍 DEBUG: Current hasCheckedForMoreData state: ${hasCheckedForMoreData}`);
                                 console.log(`🔍 DEBUG: Current item count: ${dataStatus.processedData.length}`);
                                 console.log(`🔍 DEBUG: Data source: ${dataStatus.dataSource}`);
                                 console.log(`🔍 DEBUG: Loading more: ${isLoadingMore}`);
+                                console.log(`🔍 DEBUG: Should show bar: ${dataStatus.processedData && dataStatus.processedData.length > 0 && dataStatus.dataSource === 'dsa' && !isLoadingMore && hasMoreData && !hasCheckedForMoreData}`);
                             }}
                             style={{ marginLeft: '5px', fontSize: '10px', padding: '2px 6px' }}
                             title="Debug Load More State"
@@ -1082,8 +1114,9 @@ const InputDataTab = () => {
                         <button 
                             className="notification-btn" 
                             onClick={() => {
-                                console.log(`🔍 Manually setting hasMoreData to false`);
+                                console.log(`🔍 Manually marking as no more data available`);
                                 setHasMoreData(false);
+                                setHasCheckedForMoreData(true);
                             }}
                             style={{ marginLeft: '5px', fontSize: '10px', padding: '2px 6px', backgroundColor: '#dc3545' }}
                             title="Mark as No More Data"
