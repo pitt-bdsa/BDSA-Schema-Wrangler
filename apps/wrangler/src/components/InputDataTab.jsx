@@ -451,10 +451,12 @@ const InputDataTab = () => {
                     setHasMoreData(result.hasMoreData);
                     console.log(`🔍 DEBUG: hasMoreData set to: ${result.hasMoreData} (from API response)`);
                 } else {
-                    // Fallback: If we loaded a large number of items, assume we might have loaded everything
+                    // Fallback: Check if we got a full page of data to determine if there might be more
                     const itemCount = result.itemCount || 0;
-                    console.log(`🔍 DEBUG: Loaded ${itemCount} items, setting hasMoreData to ${itemCount < 1000} (fallback)`);
-                    setHasMoreData(itemCount < 1000); // Assume more data available if we loaded less than 1000 items
+                    // If we got exactly 100 items (page size), there might be more. If less, we've reached the end.
+                    const mightHaveMore = itemCount >= 100;
+                    console.log(`🔍 DEBUG: Loaded ${itemCount} items, setting hasMoreData to ${mightHaveMore} (fallback logic)`);
+                    setHasMoreData(mightHaveMore);
                 }
 
                 // Check for file filtering stats
@@ -1063,6 +1065,30 @@ const InputDataTab = () => {
                         </span>
                         <button className="notification-btn" onClick={handleLoadMoreData}>
                             Load More
+                        </button>
+                        <button 
+                            className="notification-btn" 
+                            onClick={() => {
+                                console.log(`🔍 DEBUG: Current hasMoreData state: ${hasMoreData}`);
+                                console.log(`🔍 DEBUG: Current item count: ${dataStatus.processedData.length}`);
+                                console.log(`🔍 DEBUG: Data source: ${dataStatus.dataSource}`);
+                                console.log(`🔍 DEBUG: Loading more: ${isLoadingMore}`);
+                            }}
+                            style={{ marginLeft: '5px', fontSize: '10px', padding: '2px 6px' }}
+                            title="Debug Load More State"
+                        >
+                            ?
+                        </button>
+                        <button 
+                            className="notification-btn" 
+                            onClick={() => {
+                                console.log(`🔍 Manually setting hasMoreData to false`);
+                                setHasMoreData(false);
+                            }}
+                            style={{ marginLeft: '5px', fontSize: '10px', padding: '2px 6px', backgroundColor: '#dc3545' }}
+                            title="Mark as No More Data"
+                        >
+                            ✕
                         </button>
                     </div>
                 )}

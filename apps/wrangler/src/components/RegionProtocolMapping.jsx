@@ -69,7 +69,7 @@ const RegionProtocolMapping = () => {
     const getAllRegionSlides = (caseData) => {
         if (!caseData || !caseData.slides) return [];
         return caseData.slides.filter(slide =>
-            slide.localRegionId // Show all slides that have a region type
+            slide.localRegionId || slide.BDSA?.bdsaLocal?.localRegionId // Check both locations
         );
     };
 
@@ -77,11 +77,14 @@ const RegionProtocolMapping = () => {
     const groupSlidesByRegionType = (slides) => {
         const groups = {};
         slides.forEach(slide => {
-            const regionType = slide.regionType;
-            if (!groups[regionType]) {
-                groups[regionType] = [];
+            // Get region type from the correct field
+            const regionType = slide.localRegionId || slide.BDSA?.bdsaLocal?.localRegionId;
+            if (regionType) {
+                if (!groups[regionType]) {
+                    groups[regionType] = [];
+                }
+                groups[regionType].push(slide);
             }
-            groups[regionType].push(slide);
         });
         return groups;
     };
