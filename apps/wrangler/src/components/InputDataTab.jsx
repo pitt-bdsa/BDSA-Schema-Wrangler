@@ -544,6 +544,7 @@ const InputDataTab = () => {
                     console.warn('⚠️ Could not auto-pull protocols:', protocolError.message);
                     // Non-fatal error - continue with default protocols
                 }
+
             }
         } catch (error) {
             console.error('Error loading DSA data:', error);
