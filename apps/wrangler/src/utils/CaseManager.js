@@ -115,7 +115,13 @@ class CaseManager {
                     }
                     item.BDSA._dataSource.bdsaCaseId = 'case_id_mapping';
 
-                    // Note: modifiedItems.add() is now handled automatically by the BDSA tracking proxy
+                    // Explicitly mark item as modified (fallback in case proxy doesn't work)
+                    const itemId = item.id || item._id || item.dsa_id;
+                    if (itemId) {
+                        dataStoreInstance.modifiedItems.add(itemId);
+                        console.log(`🔍 CaseManager: Added item ${itemId} to modifiedItems. Total modified: ${dataStoreInstance.modifiedItems.size}`);
+                    }
+                    
                     updatedCount++;
                 }
             }
@@ -125,7 +131,8 @@ class CaseManager {
             console.log(`Applied case ID mappings to ${updatedCount} data items`);
             console.log(`🔍 Added ${updatedCount} items to modifiedItems via case ID mappings. Total modified: ${dataStoreInstance.modifiedItems.size}`);
 
-            // Note: notify() is now handled automatically by the BDSA tracking proxy
+            // Notify listeners so UI updates with new modified count
+            dataStoreInstance.notify();
         }
     }
 }

@@ -485,7 +485,13 @@ class DataStore {
                     delete item.BDSA._dataSource.bdsaCaseId;
                 }
 
-                // Note: modifiedItems.add() is now handled automatically by the BDSA tracking proxy
+                // Explicitly mark item as modified (fallback in case proxy doesn't work)
+                const itemId = item.id || item._id || item.dsa_id;
+                if (itemId) {
+                    this.modifiedItems.add(itemId);
+                    console.log(`🔍 setCaseIdInData: Added item ${itemId} to modifiedItems. Total modified: ${this.modifiedItems.size}`);
+                }
+                
                 updatedCount++;
             }
         });

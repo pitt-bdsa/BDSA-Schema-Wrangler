@@ -116,7 +116,14 @@ const InputDataTab = () => {
             const newModifiedCount = dataStore.getModifiedItemsCount();
             console.log(`🔍 Updating modified items count: ${modifiedItemsCount} → ${newModifiedCount}`);
             console.log(`🔍 Current modifiedItems Set:`, Array.from(dataStore.modifiedItems));
-            setModifiedItemsCount(newModifiedCount);
+            console.log(`🔍 Current modifiedItems Set size:`, dataStore.modifiedItems.size);
+            console.log(`🔍 Setting modifiedItemsCount state to: ${newModifiedCount}`);
+            
+            // Force update if there's a mismatch
+            if (newModifiedCount !== modifiedItemsCount) {
+                console.log(`🔍 FORCE UPDATE: Count changed from ${modifiedItemsCount} to ${newModifiedCount}`);
+                setModifiedItemsCount(newModifiedCount);
+            }
 
             // Column loading is now handled in a separate useEffect
         });
@@ -130,6 +137,26 @@ const InputDataTab = () => {
             unsubscribeAuth();
         };
     }, []);
+
+    // Separate effect to watch for modifiedItems changes specifically
+    useEffect(() => {
+        const checkModifiedItems = () => {
+            const currentCount = dataStore.getModifiedItemsCount();
+            console.log(`🔍 MODIFIED ITEMS CHECK: Current count = ${currentCount}, State = ${modifiedItemsCount}`);
+            if (currentCount !== modifiedItemsCount) {
+                console.log(`🔍 MODIFIED ITEMS MISMATCH: Updating state from ${modifiedItemsCount} to ${currentCount}`);
+                setModifiedItemsCount(currentCount);
+            }
+        };
+
+        // Check immediately
+        checkModifiedItems();
+
+        // Set up interval to check periodically (as fallback)
+        const interval = setInterval(checkModifiedItems, 1000);
+
+        return () => clearInterval(interval);
+    }, [modifiedItemsCount]);
 
     // Note: hasMoreData is now managed by the API responses from loadDsaData and loadMoreDsaData
     // No need for heuristic-based logic here
@@ -940,7 +967,7 @@ const InputDataTab = () => {
                 </div>
             )}
 
-            {/* Status Legend with Update Count - Compact inline legend */}
+            {/* Status Legend with Update Count and Clear Button - Compact inline legend */}
             {dataStatus.processedData && dataStatus.processedData.length > 0 && (
                 <div className="status-legend">
                     <div className="legend-left">
@@ -958,13 +985,40 @@ const InputDataTab = () => {
                             Manual
                         </span>
                     </div>
-                    {modifiedItemsCount > 0 && (
-                        <div className="legend-right">
+                    <div className="legend-right">
+                        {console.log(`🔍 RENDER: modifiedItemsCount = ${modifiedItemsCount}, condition = ${modifiedItemsCount > 0}`)}
+                        {modifiedItemsCount > 0 && (
                             <span className="update-count-text">
                                 {modifiedItemsCount} of {dataStatus.processedData.length} items updated
                             </span>
-                        </div>
-                    )}
+                        )}
+                        <button
+                            onClick={() => {
+                                if (confirm('🗑️ Clear ALL data and start fresh?\n\nThis will delete all loaded data, localStorage, and modified items.')) {
+                                    localStorage.clear();
+                                    dataStore.clearData();
+                                    setCsvFile(null);
+                                    setAccessoryFile(null);
+                                    setAccessoryData(null);
+                                    setHasAppliedInitialRegex(false);
+                                    window.location.reload();
+                                }
+                            }}
+                            className="btn btn-danger"
+                            style={{
+                                fontSize: '12px',
+                                padding: '4px 8px',
+                                backgroundColor: '#dc3545',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                marginLeft: '10px'
+                            }}
+                        >
+                            🗑️ Clear ALL Data & Restart
+                        </button>
+                    </div>
                 </div>
             )}
 
@@ -1032,37 +1086,6 @@ const InputDataTab = () => {
                             ></div>
                         </div>
                     </div>
-                </div>
-            )}
-
-            {/* Clear Data Button */}
-            {dataStatus.processedData && dataStatus.processedData.length > 0 && (
-                <div style={{ marginBottom: '10px', textAlign: 'right' }}>
-                    <button
-                        onClick={() => {
-                            if (confirm('🗑️ Clear ALL data and start fresh?\n\nThis will delete all loaded data, localStorage, and modified items.')) {
-                                localStorage.clear();
-                                dataStore.clearData();
-                                setCsvFile(null);
-                                setAccessoryFile(null);
-                                setAccessoryData(null);
-                                setHasAppliedInitialRegex(false);
-                                window.location.reload();
-                            }
-                        }}
-                        className="btn btn-danger"
-                        style={{
-                            fontSize: '12px',
-                            padding: '6px 12px',
-                            backgroundColor: '#dc3545',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer'
-                        }}
-                    >
-                        🗑️ Clear ALL Data & Restart
-                    </button>
                 </div>
             )}
 
