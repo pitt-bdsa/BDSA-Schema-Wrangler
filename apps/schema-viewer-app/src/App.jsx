@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import SchemaViewer from './components/SchemaViewer';
 import FlattenedDataView from './components/FlattenedDataView';
+import CdeReferenceView from './components/CdeReferenceView';
 import './App.css';
 
 const App = () => {
@@ -11,7 +12,8 @@ const App = () => {
         { id: 'region', label: 'Region Schema', file: '/api/schemas/bdsa-schema', section: 'region' },
         { id: 'stain', label: 'Stain Schema', file: '/api/schemas/bdsa-schema', section: 'stain' },
         { id: 'bdsa', label: 'BDSA Schema', file: '/api/schemas/bdsa-schema', section: 'bdsa' },
-        { id: 'flattened', label: 'Flattened View', file: '/api/schemas/bdsa-schema', section: 'flattened' }
+        { id: 'flattened', label: 'Flattened View', file: '/api/schemas/bdsa-schema', section: 'flattened' },
+        { id: 'cde-reference', label: 'CDE Reference', file: '/api/schemas/bdsa-schema', section: 'cde-reference' }
     ];
 
     return (
@@ -50,6 +52,10 @@ const App = () => {
             <div className="schema-content">
                 {activeSchema === 'flattened' ? (
                     <FlattenedDataView
+                        schemaFile={schemas.find(s => s.id === activeSchema)?.file}
+                    />
+                ) : activeSchema === 'cde-reference' ? (
+                    <CdeReferenceView
                         schemaFile={schemas.find(s => s.id === activeSchema)?.file}
                     />
                 ) : (

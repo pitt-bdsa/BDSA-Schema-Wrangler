@@ -381,7 +381,7 @@
                         },
                         "Posterior Cingulate": {
                             "type": "array",
-                            "title": "Anterior Cingulate",
+                            "title": "Posterior Cingulate",
                             "items": {
                                 "type": "string",
                                 "enum": [

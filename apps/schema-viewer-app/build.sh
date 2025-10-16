@@ -31,10 +31,12 @@ if [ ! -d "$SCHEMA_SOURCE_DIR" ]; then
 fi
 
 echo -e "${YELLOW}📋 Checking schema files...${NC}"
-SCHEMA_FILES=("clinical-metadata.json" "region-metadata.json" "slide-level-metadata.json" "bdsa-schema.json")
+SCHEMA_FILES=("bdsa-schema.json")
 for file in "${SCHEMA_FILES[@]}"; do
     if [ ! -f "$SCHEMA_SOURCE_DIR/$file" ]; then
-        echo -e "${RED}❌ Warning: Schema file $file not found in $SCHEMA_SOURCE_DIR${NC}"
+        echo -e "${RED}❌ Error: Required schema file $file not found in $SCHEMA_SOURCE_DIR${NC}"
+        echo -e "${RED}   The BDSA schema viewer requires bdsa-schema.json to function.${NC}"
+        exit 1
     else
         echo -e "${GREEN}✅ Found: $file${NC}"
     fi
