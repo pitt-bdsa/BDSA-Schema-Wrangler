@@ -25,6 +25,7 @@
                     "TDP-43": {
                         "type": "object",
                         "title": "TDP-43",
+                        "abbreviation": "TDP",
                         "required": [
                             "phospho-specific"
                         ],
@@ -56,6 +57,7 @@
                     "aSyn": {
                         "type": "object",
                         "title": "Alpha Synuclein",
+                        "abbreviation": "aSyn",
                         "required": [
                             "phospho-specific"
                         ],
@@ -86,7 +88,8 @@
                     },
                     "HE": {
                         "type": "object",
-                        "title": "HE",
+                        "title": "Hematoxylin and Eosin",
+                        "abbreviation": "HE",
                         "properties": {
                             "dilution": {
                                 "type": "string",
@@ -106,7 +109,8 @@
                     },
                     "Silver": {
                         "type": "object",
-                        "title": "Silver",
+                        "title": "Silver Stain",
+                        "abbreviation": "Silver",
                         "required": [
                             "technique"
                         ],
@@ -138,11 +142,13 @@
                     },
                     "Thioflavin": {
                         "type": "object",
-                        "title": "Thioflavin"
+                        "title": "Thioflavin",
+                        "abbreviation": "ThioS"
                     },
                     "Tau": {
                         "type": "object",
                         "title": "Tau",
+                        "abbreviation": "Tau",
                         "required": [
                             "antibody"
                         ],
@@ -173,7 +179,8 @@
                     },
                     "aBeta": {
                         "type": "object",
-                        "title": "aBeta",
+                        "title": "Amyloid Beta",
+                        "abbreviation": "Aβ",
                         "required": [
                             "antibody"
                         ],
@@ -201,6 +208,7 @@
                     "LFB": {
                         "type": "object",
                         "title": "Luxol Fast Blue",
+                        "abbreviation": "LFB",
                         "properties": {
                             "dilution": {
                                 "type": "string",
@@ -220,7 +228,8 @@
                     },
                     "GFAP": {
                         "type": "object",
-                        "title": "GFAP",
+                        "title": "Glial Fibrillary Acidic Protein",
+                        "abbreviation": "GFAP",
                         "properties": {
                             "dilution": {
                                 "type": "string",
@@ -240,7 +249,8 @@
                     },
                     "IBA1": {
                         "type": "object",
-                        "title": "IBA1",
+                        "title": "Ionized Calcium-Binding Adapter Molecule 1",
+                        "abbreviation": "IBA1",
                         "properties": {
                             "dilution": {
                                 "type": "string",
@@ -260,7 +270,8 @@
                     },
                     "NeuN": {
                         "type": "object",
-                        "title": "NeuN",
+                        "title": "Neuronal Nuclei",
+                        "abbreviation": "NeuN",
                         "properties": {
                             "dilution": {
                                 "type": "string",
@@ -300,6 +311,7 @@
                         "Olfactory Bulb": {
                             "type": "array",
                             "title": "Olfactory Bulb",
+                            "abbreviation": "OB",
                             "items": {
                                 "type": "string",
                                 "enum": [
@@ -311,6 +323,7 @@
                         "Parietal Lobe": {
                             "type": "array",
                             "title": "Parietal Lobe",
+                            "abbreviation": "PL",
                             "items": {
                                 "type": "string",
                                 "enum": [
@@ -325,6 +338,7 @@
                         "Temporal Pole": {
                             "type": "array",
                             "title": "Temporal Pole",
+                            "abbreviation": "TP",
                             "items": {
                                 "type": "string"
                             },
@@ -333,6 +347,7 @@
                         "Frontal Lobe": {
                             "type": "array",
                             "title": "Frontal Lobe",
+                            "abbreviation": "FL",
                             "items": {
                                 "type": "string",
                                 "enum": [
@@ -345,6 +360,7 @@
                         "Temporal Lobe": {
                             "type": "array",
                             "title": "Temporal Lobe",
+                            "abbreviation": "TL",
                             "items": {
                                 "type": "string",
                                 "enum": [
@@ -357,6 +373,7 @@
                         "Hippocampus": {
                             "type": "array",
                             "title": "Hippocampus",
+                            "abbreviation": "HP",
                             "items": {
                                 "type": "string",
                                 "enum": [
@@ -371,6 +388,7 @@
                         "Anterior Cingulate": {
                             "type": "array",
                             "title": "Anterior Cingulate",
+                            "abbreviation": "ACg",
                             "items": {
                                 "type": "string",
                                 "enum": [
@@ -382,6 +400,7 @@
                         "Posterior Cingulate": {
                             "type": "array",
                             "title": "Posterior Cingulate",
+                            "abbreviation": "PCg",
                             "items": {
                                 "type": "string",
                                 "enum": [
@@ -393,6 +412,7 @@
                         "Amygdala": {
                             "type": "array",
                             "title": "Amygdala",
+                            "abbreviation": "Amy",
                             "items": {
                                 "type": "string",
                                 "enum": [
@@ -403,6 +423,7 @@
                         "Thalamus": {
                             "type": "array",
                             "title": "Thalamus",
+                            "abbreviation": "Thal",
                             "items": {
                                 "type": "string",
                                 "enum": [
@@ -417,6 +438,7 @@
                         "White Matter": {
                             "type": "array",
                             "title": "White Matter",
+                            "abbreviation": "WM",
                             "items": {
                                 "type": "string",
                                 "enum": [
@@ -430,6 +452,7 @@
                         "Midbrain": {
                             "type": "array",
                             "title": "Midbrain",
+                            "abbreviation": "MB",
                             "items": {
                                 "type": "string",
                                 "enum": [
@@ -443,6 +466,7 @@
                         "Pons": {
                             "type": "array",
                             "title": "Pons",
+                            "abbreviation": "Pons",
                             "items": {
                                 "type": "string",
                                 "enum": [
@@ -456,6 +480,7 @@
                         "Medulla": {
                             "type": "array",
                             "title": "Medulla",
+                            "abbreviation": "Med",
                             "items": {
                                 "type": "string",
                                 "enum": [
@@ -470,6 +495,7 @@
                         "Cerebellum": {
                             "type": "array",
                             "title": "Cerebellum",
+                            "abbreviation": "Cb",
                             "items": {
                                 "type": "string",
                                 "enum": [
@@ -482,6 +508,7 @@
                         "Basal Ganglia": {
                             "type": "array",
                             "title": "Basal Ganglia",
+                            "abbreviation": "BG",
                             "items": {
                                 "type": "string"
                             },
@@ -490,6 +517,7 @@
                         "Occipital Lobe": {
                             "type": "array",
                             "title": "Occipital Lobe",
+                            "abbreviation": "OL",
                             "items": {
                                 "type": "string"
                             },
@@ -498,6 +526,7 @@
                         "Primary Motor Cortex": {
                             "type": "array",
                             "title": "Primary Motor Cortex",
+                            "abbreviation": "M1",
                             "items": {
                                 "type": "string"
                             },
@@ -506,6 +535,7 @@
                         "Insula": {
                             "type": "array",
                             "title": "Insula",
+                            "abbreviation": "Ins",
                             "items": {
                                 "type": "string"
                             },
@@ -514,6 +544,7 @@
                         "Frontal Pole": {
                             "type": "array",
                             "title": "Frontal Pole",
+                            "abbreviation": "FP",
                             "items": {
                                 "type": "string"
                             },
@@ -522,6 +553,7 @@
                         "Spinal Cord": {
                             "type": "array",
                             "title": "Spinal Cord",
+                            "abbreviation": "SC",
                             "items": {
                                 "type": "string"
                             },
@@ -530,6 +562,7 @@
                         "Hypothalamus": {
                             "type": "array",
                             "title": "Hypothalamus",
+                            "abbreviation": "Hyp",
                             "items": {
                                 "type": "string"
                             },

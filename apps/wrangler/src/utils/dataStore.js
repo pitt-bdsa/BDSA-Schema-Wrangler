@@ -491,7 +491,7 @@ class DataStore {
                     this.modifiedItems.add(itemId);
                     console.log(`🔍 setCaseIdInData: Added item ${itemId} to modifiedItems. Total modified: ${this.modifiedItems.size}`);
                 }
-                
+
                 updatedCount++;
             }
         });
@@ -778,14 +778,10 @@ class DataStore {
         // This prevents confusion from protocols from previous datasets
         this.caseProtocolMappings.clear();
 
-        // Clear protocol store when loading new data
-        console.log('🧹 Clearing protocol store for new dataset...');
-        console.log('🧹 Before clear - Stain protocols:', protocolStore.stainProtocols.length);
-        console.log('🧹 Before clear - Region protocols:', protocolStore.regionProtocols.length);
-        protocolStore.resetToDefaults('new_dataset');
-        console.log('🧹 After clear - Stain protocols:', protocolStore.stainProtocols.length);
-        console.log('🧹 After clear - Region protocols:', protocolStore.regionProtocols.length);
-        console.log('🧹 Cleared protocols when loading new dataset - protocols are dataset-specific');
+        // Set the collection ID in protocol store to isolate protocols per collection
+        const collectionId = sourceInfo?.resourceId || sourceInfo?.collectionId || 'default';
+        console.log(`📂 Setting protocol store collection to: ${collectionId}`);
+        protocolStore.setCurrentCollection(collectionId);
 
         // Clear sync results when loading new data (they're specific to the previous dataset)
         this.lastSyncResults = null;

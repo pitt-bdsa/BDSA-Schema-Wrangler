@@ -624,6 +624,16 @@ const App = () => {
 
       result.createdFolders = folderStructure.createdFolders.map(f => f.name);
 
+      // Sync protocols to ensure they exist in target DSA
+      console.log('🔄 Syncing protocols to target DSA...');
+      const protocolSyncResult = await syncProtocolsToTarget();
+      if (protocolSyncResult.errors.length > 0) {
+        console.warn('⚠️ Some protocol sync errors occurred:', protocolSyncResult.errors);
+        result.errors.push(...protocolSyncResult.errors);
+      } else {
+        console.log('✅ Protocols synced successfully');
+      }
+
       // Create a map of case IDs to folder IDs for quick lookup
       const caseIdToFolderId = {};
       folderStructure.createdFolders.forEach(folder => {
@@ -731,6 +741,9 @@ const App = () => {
 
       result.processed = processedCount;
 
+      // Add protocol sync info to result
+      result.protocolSync = protocolSyncResult;
+
       setSyncProgress(prev => ({
         ...prev,
         status: 'completed',
@@ -738,6 +751,7 @@ const App = () => {
 
       setSyncResult(result);
       console.log(`🎉 Sync completed! Processed ${result.processed} items, skipped ${result.skippedDuplicates.length} duplicates`);
+      console.log(`📊 Protocol sync: ${protocolSyncResult.syncedProtocols.stain.length} stain protocols, ${protocolSyncResult.syncedProtocols.region.length} region protocols`);
     } catch (error) {
       setSyncProgress(prev => ({
         ...prev,
@@ -754,6 +768,142 @@ const App = () => {
       ...prev,
       status: 'idle',
     }));
+  };
+
+  // Function to sync protocols to target DSA
+  const syncProtocolsToTarget = async () => {
+    const result = {
+      success: true,
+      errors: [],
+      syncedProtocols: {
+        stain: [],
+        region: []
+      }
+    };
+
+    try {
+      // Collect all protocols referenced by the items to be synced
+      const itemsToProcess = metadataConfig.syncAllItems ? sourceItems : sourceItems.filter(item => modifiedItems.has(item._id));
+
+      const referencedStainProtocols = new Set();
+      const referencedRegionProtocols = new Set();
+
+      itemsToProcess.forEach(item => {
+        // Extract stain protocols
+        const stainProtocols = item.BDSA?.bdsaLocal?.bdsaStainProtocol || [];
+        stainProtocols.forEach(protocol => {
+          if (protocol && protocol.trim() !== '') {
+            referencedStainProtocols.add(protocol.trim());
+          }
+        });
+
+        // Extract region protocols
+        const regionProtocols = item.BDSA?.bdsaLocal?.bdsaRegionProtocol || [];
+        regionProtocols.forEach(protocol => {
+          if (protocol && protocol.trim() !== '') {
+            referencedRegionProtocols.add(protocol.trim());
+          }
+        });
+      });
+
+      console.log(`📊 Found ${referencedStainProtocols.size} unique stain protocols and ${referencedRegionProtocols.size} unique region protocols referenced by items`);
+
+      // Sync stain protocols to target DSA root
+      if (referencedStainProtocols.size > 0) {
+        try {
+          // Map protocol names/IDs to full protocol objects
+          const stainProtocolsArray = Array.from(referencedStainProtocols).map(protocolRef => {
+            // Check if this looks like a GUID (STAIN_xxxxx) or a name
+            const isGuid = /^STAIN_[a-z0-9]{6}$/.test(protocolRef);
+
+            return {
+              id: protocolRef,  // Use the reference as-is (could be GUID or name)
+              name: isGuid ? protocolRef : protocolRef,  // If GUID, name will be updated from source
+              description: `Stain protocol: ${protocolRef}`,
+              stainType: protocolRef,
+              type: 'stain',
+              _localModified: false,
+              _remoteVersion: null
+            };
+          });
+
+          const stainSyncResult = await dsaClient.addFolderMetadata(
+            config.targetResourceId,
+            {
+              bdsaProtocols: {
+                stainProtocols: stainProtocolsArray,
+                lastUpdated: new Date().toISOString(),
+                source: 'BDSA-Schema-Wrangler-Sync',
+                version: '1.0'
+              }
+            }
+          );
+
+          if (stainSyncResult.success) {
+            result.syncedProtocols.stain = stainProtocolsArray;
+            console.log(`✅ Synced ${stainProtocolsArray.length} stain protocols to target DSA`);
+          } else {
+            result.errors.push(`Failed to sync stain protocols: ${stainSyncResult.error || 'Unknown error'}`);
+          }
+        } catch (error) {
+          result.errors.push(`Error syncing stain protocols: ${error.message}`);
+        }
+      }
+
+      // Sync region protocols to target DSA root
+      if (referencedRegionProtocols.size > 0) {
+        try {
+          // Map protocol names/IDs to full protocol objects
+          const regionProtocolsArray = Array.from(referencedRegionProtocols).map(protocolRef => {
+            // Check if this looks like a GUID (REGION_xxxxx) or a name
+            const isGuid = /^REGION_[a-z0-9]{6}$/.test(protocolRef);
+
+            return {
+              id: protocolRef,  // Use the reference as-is (could be GUID or name)
+              name: isGuid ? protocolRef : protocolRef,  // If GUID, name will be updated from source
+              description: `Region protocol: ${protocolRef}`,
+              regionType: protocolRef,
+              type: 'region',
+              _localModified: false,
+              _remoteVersion: null
+            };
+          });
+
+          const regionSyncResult = await dsaClient.addFolderMetadata(
+            config.targetResourceId,
+            {
+              bdsaProtocols: {
+                regionProtocols: regionProtocolsArray,
+                lastUpdated: new Date().toISOString(),
+                source: 'BDSA-Schema-Wrangler-Sync',
+                version: '1.0'
+              }
+            }
+          );
+
+          if (regionSyncResult.success) {
+            result.syncedProtocols.region = regionProtocolsArray;
+            console.log(`✅ Synced ${regionProtocolsArray.length} region protocols to target DSA`);
+          } else {
+            result.errors.push(`Failed to sync region protocols: ${regionSyncResult.error || 'Unknown error'}`);
+          }
+        } catch (error) {
+          result.errors.push(`Error syncing region protocols: ${error.message}`);
+        }
+      }
+
+      // Check if we have any errors
+      if (result.errors.length > 0) {
+        result.success = false;
+      }
+
+    } catch (error) {
+      result.success = false;
+      result.errors.push(`Protocol sync failed: ${error.message}`);
+      console.error('Protocol sync error:', error);
+    }
+
+    return result;
   };
 
   // Update configured status when config changes
@@ -1030,6 +1180,12 @@ const App = () => {
               <p><strong>Processed:</strong> {syncResult.processed} items</p>
               <p><strong>Created Folders:</strong> {syncResult.createdFolders.length}</p>
               <p><strong>Copied Items:</strong> {syncResult.copiedItems.length}</p>
+              {syncResult.protocolSync && (
+                <>
+                  <p><strong>Stain Protocols Synced:</strong> {syncResult.protocolSync.syncedProtocols.stain.length}</p>
+                  <p><strong>Region Protocols Synced:</strong> {syncResult.protocolSync.syncedProtocols.region.length}</p>
+                </>
+              )}
               {syncResult.skippedDuplicates && syncResult.skippedDuplicates.length > 0 && (
                 <div>
                   <p><strong>Skipped Duplicates:</strong> {syncResult.skippedDuplicates.length}</p>

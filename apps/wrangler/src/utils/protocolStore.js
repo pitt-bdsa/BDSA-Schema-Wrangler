@@ -2,12 +2,30 @@
 // and preparation for future DSA server integration
 
 const STORAGE_KEYS = {
+    CURRENT_COLLECTION: 'bdsa_current_collection_id',
     STAIN_PROTOCOLS: 'bdsa_stain_protocols',
     REGION_PROTOCOLS: 'bdsa_region_protocols',
     LAST_SYNC: 'bdsa_protocols_last_sync',
     CONFLICTS: 'bdsa_protocols_conflicts',
     APPROVED_STAIN: 'bdsa_approved_stain_protocols',
     APPROVED_REGION: 'bdsa_approved_region_protocols'
+};
+
+// Get collection-specific storage key
+const getCollectionKey = (baseKey, collectionId) => {
+    if (!collectionId) return baseKey; // Fallback to global key
+    return `${baseKey}_${collectionId}`;
+};
+
+// Generate a GUID for protocols: {collectionId}_{randomChars}
+// e.g., "STAIN_a7f9c2", "REGION_3k8p1x"
+const generateProtocolGuid = (collectionId) => {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let randomPart = '';
+    for (let i = 0; i < 6; i++) {
+        randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return `${collectionId}_${randomPart}`;
 };
 
 // Default protocols
@@ -38,6 +56,7 @@ const DEFAULT_REGION_PROTOCOLS = [
 class ProtocolStore {
     constructor() {
         this.listeners = new Set();
+        this.currentCollectionId = this.loadCurrentCollectionId();
         this.stainProtocols = this.loadStainProtocols();
         this.regionProtocols = this.loadRegionProtocols();
         this.conflicts = this.loadConflicts();
@@ -47,52 +66,119 @@ class ProtocolStore {
         this.migrateProtocolIds();
     }
 
-    // Migrate existing protocols with timestamp-based IDs to use protocol names as IDs
+    // Load/Save current collection ID
+    loadCurrentCollectionId() {
+        try {
+            const stored = localStorage.getItem(STORAGE_KEYS.CURRENT_COLLECTION);
+            return stored ? JSON.parse(stored) : null;
+        } catch (error) {
+            console.error('Error loading current collection ID:', error);
+            return null;
+        }
+    }
+
+    saveCurrentCollectionId() {
+        try {
+            localStorage.setItem(STORAGE_KEYS.CURRENT_COLLECTION, JSON.stringify(this.currentCollectionId));
+        } catch (error) {
+            console.error('Error saving current collection ID:', error);
+        }
+    }
+
+    // Set the current collection and load its protocols
+    setCurrentCollection(collectionId) {
+        const previousCollectionId = this.currentCollectionId;
+
+        if (previousCollectionId === collectionId) {
+            console.log(`📂 Already on collection: ${collectionId}`);
+            return; // No change needed
+        }
+
+        console.log(`📂 Switching collections: ${previousCollectionId} → ${collectionId}`);
+
+        // Save current collection's protocols before switching
+        if (previousCollectionId) {
+            console.log(`💾 Saving protocols for collection: ${previousCollectionId}`);
+            this.saveStainProtocols();
+            this.saveRegionProtocols();
+            this.saveConflicts();
+            this.saveLastSync();
+            this.saveApprovedStainProtocols();
+            this.saveApprovedRegionProtocols();
+        }
+
+        // Update current collection
+        this.currentCollectionId = collectionId;
+        this.saveCurrentCollectionId();
+
+        // Load new collection's protocols (or defaults if none exist)
+        console.log(`📂 Loading protocols for collection: ${collectionId}`);
+        this.stainProtocols = this.loadStainProtocols();
+        this.regionProtocols = this.loadRegionProtocols();
+        this.conflicts = this.loadConflicts();
+        this.lastSync = this.loadLastSync();
+        this.approvedStainProtocols = this.loadApprovedStainProtocols();
+        this.approvedRegionProtocols = this.loadApprovedRegionProtocols();
+
+        console.log(`✅ Collection switched to: ${collectionId}`, {
+            stainProtocols: this.stainProtocols.length,
+            regionProtocols: this.regionProtocols.length
+        });
+
+        this.notify();
+    }
+
+    // Migrate existing protocols to use GUID-based IDs
     migrateProtocolIds() {
         let migrated = false;
+        const idMapping = {
+            stain: new Map(),  // Maps old ID -> new GUID
+            region: new Map()
+        };
 
-        // Migrate stain protocols
+        // Migrate stain protocols: Convert name-based or timestamp IDs to GUIDs
         this.stainProtocols.forEach(protocol => {
-            if (protocol.name && this.isTimestampId(protocol.id)) {
-                // Check if a protocol with this name already exists
-                const existingProtocol = this.stainProtocols.find(p => p.id === protocol.name);
-                if (!existingProtocol) {
-                    protocol.id = protocol.name;
-                    migrated = true;
-                } else {
-                    // Remove duplicate protocol with timestamp ID
-                    const index = this.stainProtocols.indexOf(protocol);
-                    if (index > -1) {
-                        this.stainProtocols.splice(index, 1);
-                        migrated = true;
-                    }
-                }
+            const needsMigration = !protocol.id.startsWith('STAIN_') && protocol.id !== 'ignore';
+
+            if (needsMigration) {
+                const oldId = protocol.id;
+                const newGuid = generateProtocolGuid('STAIN');
+                protocol.id = newGuid;
+                idMapping.stain.set(oldId, newGuid);
+                migrated = true;
+                console.log(`🔄 Migrated stain protocol "${protocol.name}": ${oldId} -> ${newGuid}`);
             }
         });
 
-        // Migrate region protocols
+        // Migrate region protocols: Convert name-based or timestamp IDs to GUIDs
         this.regionProtocols.forEach(protocol => {
-            if (protocol.name && this.isTimestampId(protocol.id)) {
-                // Check if a protocol with this name already exists
-                const existingProtocol = this.regionProtocols.find(p => p.id === protocol.name);
-                if (!existingProtocol) {
-                    protocol.id = protocol.name;
-                    migrated = true;
-                } else {
-                    // Remove duplicate protocol with timestamp ID
-                    const index = this.regionProtocols.indexOf(protocol);
-                    if (index > -1) {
-                        this.regionProtocols.splice(index, 1);
-                        migrated = true;
-                    }
-                }
+            const needsMigration = !protocol.id.startsWith('REGION_') && protocol.id !== 'ignore';
+
+            if (needsMigration) {
+                const oldId = protocol.id;
+                const newGuid = generateProtocolGuid('REGION');
+                protocol.id = newGuid;
+                idMapping.region.set(oldId, newGuid);
+                migrated = true;
+                console.log(`🔄 Migrated region protocol "${protocol.name}": ${oldId} -> ${newGuid}`);
             }
         });
 
         if (migrated) {
             this.saveStainProtocols();
             this.saveRegionProtocols();
-            console.log('🔄 Migrated protocol IDs to use protocol names instead of timestamps');
+
+            // Store the ID mapping for reference (useful for updating item references)
+            localStorage.setItem('bdsa_protocol_id_migration', JSON.stringify({
+                stain: Array.from(idMapping.stain.entries()),
+                region: Array.from(idMapping.region.entries()),
+                migratedAt: new Date().toISOString()
+            }));
+
+            console.log('✅ Migrated protocol IDs to use GUID format', {
+                stainMigrations: idMapping.stain.size,
+                regionMigrations: idMapping.region.size
+            });
         }
     }
 
@@ -112,10 +198,11 @@ class ProtocolStore {
         this.listeners.forEach(listener => listener());
     }
 
-    // Local Storage Management
+    // Local Storage Management (collection-aware)
     loadStainProtocols() {
         try {
-            const stored = localStorage.getItem(STORAGE_KEYS.STAIN_PROTOCOLS);
+            const key = getCollectionKey(STORAGE_KEYS.STAIN_PROTOCOLS, this.currentCollectionId);
+            const stored = localStorage.getItem(key);
             return stored ? JSON.parse(stored) : [...DEFAULT_STAIN_PROTOCOLS];
         } catch (error) {
             console.error('Error loading stain protocols:', error);
@@ -125,7 +212,8 @@ class ProtocolStore {
 
     loadRegionProtocols() {
         try {
-            const stored = localStorage.getItem(STORAGE_KEYS.REGION_PROTOCOLS);
+            const key = getCollectionKey(STORAGE_KEYS.REGION_PROTOCOLS, this.currentCollectionId);
+            const stored = localStorage.getItem(key);
             return stored ? JSON.parse(stored) : [...DEFAULT_REGION_PROTOCOLS];
         } catch (error) {
             console.error('Error loading region protocols:', error);
@@ -135,7 +223,8 @@ class ProtocolStore {
 
     loadConflicts() {
         try {
-            const stored = localStorage.getItem(STORAGE_KEYS.CONFLICTS);
+            const key = getCollectionKey(STORAGE_KEYS.CONFLICTS, this.currentCollectionId);
+            const stored = localStorage.getItem(key);
             return stored ? JSON.parse(stored) : [];
         } catch (error) {
             console.error('Error loading conflicts:', error);
@@ -145,7 +234,8 @@ class ProtocolStore {
 
     loadLastSync() {
         try {
-            const stored = localStorage.getItem(STORAGE_KEYS.LAST_SYNC);
+            const key = getCollectionKey(STORAGE_KEYS.LAST_SYNC, this.currentCollectionId);
+            const stored = localStorage.getItem(key);
             return stored ? new Date(stored) : null;
         } catch (error) {
             console.error('Error loading last sync:', error);
@@ -155,7 +245,8 @@ class ProtocolStore {
 
     saveStainProtocols() {
         try {
-            localStorage.setItem(STORAGE_KEYS.STAIN_PROTOCOLS, JSON.stringify(this.stainProtocols));
+            const key = getCollectionKey(STORAGE_KEYS.STAIN_PROTOCOLS, this.currentCollectionId);
+            localStorage.setItem(key, JSON.stringify(this.stainProtocols));
         } catch (error) {
             console.error('Error saving stain protocols:', error);
         }
@@ -163,7 +254,8 @@ class ProtocolStore {
 
     saveRegionProtocols() {
         try {
-            localStorage.setItem(STORAGE_KEYS.REGION_PROTOCOLS, JSON.stringify(this.regionProtocols));
+            const key = getCollectionKey(STORAGE_KEYS.REGION_PROTOCOLS, this.currentCollectionId);
+            localStorage.setItem(key, JSON.stringify(this.regionProtocols));
         } catch (error) {
             console.error('Error saving region protocols:', error);
         }
@@ -171,7 +263,8 @@ class ProtocolStore {
 
     saveConflicts() {
         try {
-            localStorage.setItem(STORAGE_KEYS.CONFLICTS, JSON.stringify(this.conflicts));
+            const key = getCollectionKey(STORAGE_KEYS.CONFLICTS, this.currentCollectionId);
+            localStorage.setItem(key, JSON.stringify(this.conflicts));
         } catch (error) {
             console.error('Error saving conflicts:', error);
         }
@@ -179,7 +272,8 @@ class ProtocolStore {
 
     saveLastSync() {
         try {
-            localStorage.setItem(STORAGE_KEYS.LAST_SYNC, this.lastSync?.toISOString() || '');
+            const key = getCollectionKey(STORAGE_KEYS.LAST_SYNC, this.currentCollectionId);
+            localStorage.setItem(key, this.lastSync?.toISOString() || '');
         } catch (error) {
             console.error('Error saving last sync:', error);
         }
@@ -187,7 +281,8 @@ class ProtocolStore {
 
     loadApprovedStainProtocols() {
         try {
-            const stored = localStorage.getItem(STORAGE_KEYS.APPROVED_STAIN);
+            const key = getCollectionKey(STORAGE_KEYS.APPROVED_STAIN, this.currentCollectionId);
+            const stored = localStorage.getItem(key);
             return stored ? new Set(JSON.parse(stored)) : new Set();
         } catch (error) {
             console.error('Error loading approved stain protocols:', error);
@@ -197,7 +292,8 @@ class ProtocolStore {
 
     loadApprovedRegionProtocols() {
         try {
-            const stored = localStorage.getItem(STORAGE_KEYS.APPROVED_REGION);
+            const key = getCollectionKey(STORAGE_KEYS.APPROVED_REGION, this.currentCollectionId);
+            const stored = localStorage.getItem(key);
             return stored ? new Set(JSON.parse(stored)) : new Set();
         } catch (error) {
             console.error('Error loading approved region protocols:', error);
@@ -207,7 +303,8 @@ class ProtocolStore {
 
     saveApprovedStainProtocols() {
         try {
-            localStorage.setItem(STORAGE_KEYS.APPROVED_STAIN, JSON.stringify(Array.from(this.approvedStainProtocols)));
+            const key = getCollectionKey(STORAGE_KEYS.APPROVED_STAIN, this.currentCollectionId);
+            localStorage.setItem(key, JSON.stringify(Array.from(this.approvedStainProtocols)));
         } catch (error) {
             console.error('Error saving approved stain protocols:', error);
         }
@@ -215,7 +312,8 @@ class ProtocolStore {
 
     saveApprovedRegionProtocols() {
         try {
-            localStorage.setItem(STORAGE_KEYS.APPROVED_REGION, JSON.stringify(Array.from(this.approvedRegionProtocols)));
+            const key = getCollectionKey(STORAGE_KEYS.APPROVED_REGION, this.currentCollectionId);
+            localStorage.setItem(key, JSON.stringify(Array.from(this.approvedRegionProtocols)));
         } catch (error) {
             console.error('Error saving approved region protocols:', error);
         }
@@ -223,33 +321,44 @@ class ProtocolStore {
 
     // Protocol Management
     addStainProtocol(protocol) {
-        // Require a name for the protocol - this should be the primary identifier
+        // Require a name for the protocol
         if (!protocol.name || protocol.name.trim() === '') {
             throw new Error('Protocol name is required');
         }
 
-        // Use the protocol name as the ID, ensuring uniqueness
-        const protocolId = protocol.name.trim();
-
-        // Check if a protocol with this ID already exists
-        const existingIndex = this.stainProtocols.findIndex(p => p.id === protocolId);
-        if (existingIndex !== -1) {
-            // Update existing protocol instead of creating duplicate
-            this.stainProtocols[existingIndex] = {
-                ...this.stainProtocols[existingIndex],
-                ...protocol,
-                id: protocolId,
-                _localModified: true,
-                _remoteVersion: null
-            };
-            this.saveStainProtocols();
-            this.notify();
-            return this.stainProtocols[existingIndex];
+        // If updating an existing protocol (has an ID), preserve the ID
+        if (protocol.id) {
+            const existingIndex = this.stainProtocols.findIndex(p => p.id === protocol.id);
+            if (existingIndex !== -1) {
+                // Update existing protocol, preserving the ID
+                this.stainProtocols[existingIndex] = {
+                    ...this.stainProtocols[existingIndex],
+                    ...protocol,
+                    id: protocol.id, // Keep the original ID
+                    _localModified: true,
+                    _remoteVersion: null
+                };
+                this.saveStainProtocols();
+                this.notify();
+                return this.stainProtocols[existingIndex];
+            }
         }
+
+        // Check for duplicate names (warn but allow)
+        const duplicateName = this.stainProtocols.find(p =>
+            p.name.trim().toLowerCase() === protocol.name.trim().toLowerCase()
+        );
+        if (duplicateName) {
+            console.warn(`⚠️ Protocol with name "${protocol.name}" already exists with ID "${duplicateName.id}"`);
+        }
+
+        // Generate a new GUID for new protocols
+        const protocolId = generateProtocolGuid('STAIN');
 
         const newProtocol = {
             ...protocol,
             id: protocolId,
+            name: protocol.name.trim(),
             _localModified: true,
             _remoteVersion: null
         };
@@ -260,33 +369,44 @@ class ProtocolStore {
     }
 
     addRegionProtocol(protocol) {
-        // Require a name for the protocol - this should be the primary identifier
+        // Require a name for the protocol
         if (!protocol.name || protocol.name.trim() === '') {
             throw new Error('Protocol name is required');
         }
 
-        // Use the protocol name as the ID, ensuring uniqueness
-        const protocolId = protocol.name.trim();
-
-        // Check if a protocol with this ID already exists
-        const existingIndex = this.regionProtocols.findIndex(p => p.id === protocolId);
-        if (existingIndex !== -1) {
-            // Update existing protocol instead of creating duplicate
-            this.regionProtocols[existingIndex] = {
-                ...this.regionProtocols[existingIndex],
-                ...protocol,
-                id: protocolId,
-                _localModified: true,
-                _remoteVersion: null
-            };
-            this.saveRegionProtocols();
-            this.notify();
-            return this.regionProtocols[existingIndex];
+        // If updating an existing protocol (has an ID), preserve the ID
+        if (protocol.id) {
+            const existingIndex = this.regionProtocols.findIndex(p => p.id === protocol.id);
+            if (existingIndex !== -1) {
+                // Update existing protocol, preserving the ID
+                this.regionProtocols[existingIndex] = {
+                    ...this.regionProtocols[existingIndex],
+                    ...protocol,
+                    id: protocol.id, // Keep the original ID
+                    _localModified: true,
+                    _remoteVersion: null
+                };
+                this.saveRegionProtocols();
+                this.notify();
+                return this.regionProtocols[existingIndex];
+            }
         }
+
+        // Check for duplicate names (warn but allow)
+        const duplicateName = this.regionProtocols.find(p =>
+            p.name.trim().toLowerCase() === protocol.name.trim().toLowerCase()
+        );
+        if (duplicateName) {
+            console.warn(`⚠️ Protocol with name "${protocol.name}" already exists with ID "${duplicateName.id}"`);
+        }
+
+        // Generate a new GUID for new protocols
+        const protocolId = generateProtocolGuid('REGION');
 
         const newProtocol = {
             ...protocol,
             id: protocolId,
+            name: protocol.name.trim(),
             _localModified: true,
             _remoteVersion: null
         };
@@ -348,6 +468,32 @@ class ProtocolStore {
             return true;
         }
         return false;
+    }
+
+    // Helper methods to find protocols by name (for backward compatibility)
+    getStainProtocolByName(name) {
+        if (!name) return null;
+        return this.stainProtocols.find(p =>
+            p.name.trim().toLowerCase() === name.trim().toLowerCase()
+        ) || null;
+    }
+
+    getRegionProtocolByName(name) {
+        if (!name) return null;
+        return this.regionProtocols.find(p =>
+            p.name.trim().toLowerCase() === name.trim().toLowerCase()
+        ) || null;
+    }
+
+    // Get protocol ID by name (useful for migrations and lookups)
+    getStainProtocolIdByName(name) {
+        const protocol = this.getStainProtocolByName(name);
+        return protocol ? protocol.id : null;
+    }
+
+    getRegionProtocolIdByName(name) {
+        const protocol = this.getRegionProtocolByName(name);
+        return protocol ? protocol.id : null;
     }
 
     // Conflict Management (for future DSA integration)
@@ -596,18 +742,34 @@ class ProtocolStore {
     }
 
     resetToDefaults(reason = 'manual') {
+        console.log(`🧹 Resetting protocols to defaults. Reason: ${reason}`);
+
         this.stainProtocols = [...DEFAULT_STAIN_PROTOCOLS];
         this.regionProtocols = [...DEFAULT_REGION_PROTOCOLS];
         this.conflicts = [];
         this.lastSync = null;
+
+        // Clear approved protocols as well when resetting
+        this.approvedStainProtocols = [];
+        this.approvedRegionProtocols = [];
+
+        // Save all cleared state to localStorage
         this.saveStainProtocols();
         this.saveRegionProtocols();
         this.saveConflicts();
         this.saveLastSync();
+        this.saveApprovedStainProtocols();
+        this.saveApprovedRegionProtocols();
 
         // Store reason for clearing (useful for UI notifications)
         this.lastResetReason = reason;
         this.saveLastResetReason();
+
+        console.log(`✅ Protocols reset to defaults:`, {
+            stainProtocols: this.stainProtocols.length,
+            regionProtocols: this.regionProtocols.length,
+            reason
+        });
 
         this.notify();
     }
