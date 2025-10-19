@@ -193,6 +193,12 @@ const StainProtocolMapping = () => {
         return suggestion.suggested === protocolName ? suggestion.confidence : 0;
     };
 
+    // Helper function to get protocol name from ID
+    const getProtocolName = (protocolId) => {
+        const protocol = availableProtocols.find(p => p.id === protocolId);
+        return protocol ? protocol.name : protocolId; // Fallback to ID if not found
+    };
+
     // Auto-apply suggestions for the current case
     const handleAutoApplySuggestions = () => {
         const currentCase = cases[currentCaseIndex];
@@ -513,11 +519,11 @@ const StainProtocolMapping = () => {
                                                     const isFullyApplied = count === slides.length;
                                                     return (
                                                         <span key={idx} className={`protocol-chip group-chip ${isFullyApplied ? 'fully-applied' : 'partially-applied'}`}>
-                                                            {protocol} ({count}/{slides.length})
+                                                            {getProtocolName(protocol)} ({count}/{slides.length})
                                                             <button
                                                                 className="remove-protocol-btn"
                                                                 onClick={() => handleRemoveStainProtocol(slides, protocol)}
-                                                                title={`Remove ${protocol} from all slides`}
+                                                                title={`Remove ${getProtocolName(protocol)} from all slides`}
                                                             >
                                                                 ×
                                                             </button>
@@ -544,7 +550,7 @@ const StainProtocolMapping = () => {
                                                         <button
                                                             key={protocol.id}
                                                             className={`add-protocol-btn ${isPartiallyApplied ? 'partially-applied' : ''} ${isSuggested ? 'suggested' : ''}`}
-                                                            onClick={() => handleApplyStainProtocol(slides, protocol.name)}
+                                                            onClick={() => handleApplyStainProtocol(slides, protocol.id)}
                                                             title={isSuggested
                                                                 ? `⭐ SUGGESTED: ${protocol.name} (${Math.round(confidence * 100)}% confidence) - ${getSuggestionForStainType(stainType).reason}`
                                                                 : isPartiallyApplied
@@ -589,11 +595,11 @@ const StainProtocolMapping = () => {
                                                                     <div className="protocol-tags">
                                                                         {slide.bdsaStainProtocol.map((protocol, idx) => (
                                                                             <span key={idx} className="protocol-tag">
-                                                                                {protocol}
+                                                                                {getProtocolName(protocol)}
                                                                                 <button
                                                                                     className="remove-protocol-btn"
                                                                                     onClick={() => handleRemoveStainProtocol([slide], protocol)}
-                                                                                    title={`Remove ${protocol}`}
+                                                                                    title={`Remove ${getProtocolName(protocol)}`}
                                                                                 >
                                                                                     ×
                                                                                 </button>
@@ -612,7 +618,7 @@ const StainProtocolMapping = () => {
                                                                             <button
                                                                                 key={protocol.id}
                                                                                 className="apply-protocol-btn"
-                                                                                onClick={() => handleApplyStainProtocol([slide], protocol.name)}
+                                                                                onClick={() => handleApplyStainProtocol([slide], protocol.id)}
                                                                                 title={`Apply ${protocol.name}`}
                                                                             >
                                                                                 + {protocol.name}

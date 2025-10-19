@@ -439,6 +439,10 @@ const CaseManagementTab = () => {
 
     // Sync case ID mappings to DSA server
     const handleSyncCaseIdMappingsToDSA = async () => {
+        console.log('🔍 PUSH BUTTON CLICKED - Starting push operation');
+        console.log('🔍 Current dataStatus:', dataStatus);
+        console.log('🔍 Case ID mappings from dataStore:', dataStore.caseIdMappings);
+
         const authStatus = dsaAuthStore.getStatus();
 
         if (!authStatus.isAuthenticated) {
@@ -463,10 +467,26 @@ const CaseManagementTab = () => {
                 token: dsaAuthStore.token
             };
 
-            // Get current case ID mappings
-            const caseIdMappings = dataStatus.caseIdMappings || {};
+            // Get current case ID mappings from the same source as the UI
+            // (Read directly from processedData items, not from dataStatus.caseIdMappings)
+            const caseIdMappings = {};
+            dataStatus.processedData?.forEach((item) => {
+                const localCaseId = item.BDSA?.bdsaLocal?.localCaseId;
+                const bdsaCaseId = item.BDSA?.bdsaLocal?.bdsaCaseId;
+                if (localCaseId && bdsaCaseId) {
+                    caseIdMappings[localCaseId] = bdsaCaseId;
+                }
+            });
+
+            console.log('🔍 PUSH DEBUG - Current case ID mappings:', {
+                caseIdMappings,
+                keys: Object.keys(caseIdMappings),
+                length: Object.keys(caseIdMappings).length,
+                dataStatus: dataStatus
+            });
 
             if (Object.keys(caseIdMappings).length === 0) {
+                console.log('❌ PUSH FAILED - No case ID mappings found');
                 alert('No case ID mappings to sync. Please generate some BDSA case IDs first.');
                 return;
             }
@@ -510,6 +530,25 @@ const CaseManagementTab = () => {
                 token: dsaAuthStore.token
             };
 
+            console.log('🔍 PULL DEBUG - DSA Configuration:', {
+                baseUrl: dsaConfig.baseUrl,
+                resourceId: dsaConfig.resourceId,
+                currentCollectionId: dataStatus.dataSourceInfo?.resourceId || dataStatus.dataSourceInfo?.collectionId,
+                dataSourceInfo: dataStatus.dataSourceInfo,
+                currentDataLength: dataStatus.processedData?.length
+            });
+
+            // Check localStorage for cached case ID mappings
+            const cachedCaseIdMappings = localStorage.getItem('bdsa_case_id_mappings');
+            const cachedDataStore = localStorage.getItem('bdsa_data_store');
+
+            console.log('🔍 PULL DEBUG - localStorage cache check:', {
+                hasCachedCaseIdMappings: !!cachedCaseIdMappings,
+                cachedCaseIdMappings: cachedCaseIdMappings ? JSON.parse(cachedCaseIdMappings) : null,
+                hasCachedDataStore: !!cachedDataStore,
+                cachedDataStoreKeys: cachedDataStore ? Object.keys(JSON.parse(cachedDataStore)) : null
+            });
+
             // Confirm before overwriting local mappings
             const confirmMessage = 'This will overwrite your local case ID mappings with the versions from the DSA server. Continue?';
             if (!window.confirm(confirmMessage)) {
@@ -520,21 +559,52 @@ const CaseManagementTab = () => {
             const result = await protocolStore.pullFromDSA(dsaConfig);
 
             if (result.success) {
+                console.log('🔍 Pull result from protocolStore:', {
+                    result,
+                    caseIdMappings: result.caseIdMappings,
+                    hasMappings: result.caseIdMappings?.mappings
+                });
+
                 if (result.caseIdMappings && result.caseIdMappings.mappings) {
+                    console.log('🔍 PULL DEBUG - Processing pulled mappings:', {
+                        totalMappings: result.caseIdMappings.mappings.length,
+                        firstFewMappings: result.caseIdMappings.mappings.slice(0, 3)
+                    });
+
                     // Convert the pulled mappings to the local format
                     const newMappings = {};
+
+                    // Count institution IDs to find the most common one
+                    const institutionIdCounts = {};
+                    result.caseIdMappings.mappings.forEach(mapping => {
+                        if (mapping.bdsaCaseId) {
+                            const match = mapping.bdsaCaseId.match(/BDSA-(\d{3})-/);
+                            if (match) {
+                                const instId = match[1];
+                                institutionIdCounts[instId] = (institutionIdCounts[instId] || 0) + 1;
+                            }
+                        }
+                    });
+
+                    // Find the most common institution ID
                     let extractedInstitutionId = null;
+                    let maxCount = 0;
+                    for (const [instId, count] of Object.entries(institutionIdCounts)) {
+                        if (count > maxCount) {
+                            maxCount = count;
+                            extractedInstitutionId = instId;
+                        }
+                    }
+
+                    console.log('🔍 PULL DEBUG - Institution ID analysis:', {
+                        institutionIdCounts,
+                        extractedInstitutionId,
+                        maxCount,
+                        totalMappings: result.caseIdMappings.mappings.length
+                    });
 
                     result.caseIdMappings.mappings.forEach(mapping => {
                         newMappings[mapping.localCaseId] = mapping.bdsaCaseId;
-
-                        // Extract institution ID from BDSA Case ID if not already set
-                        if (!extractedInstitutionId && mapping.bdsaCaseId) {
-                            const match = mapping.bdsaCaseId.match(/BDSA-(\d{3})-/);
-                            if (match) {
-                                extractedInstitutionId = match[1];
-                            }
-                        }
                     });
 
                     // Update local case ID mappings

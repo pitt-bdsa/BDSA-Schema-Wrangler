@@ -4,6 +4,44 @@
  */
 
 /**
+ * Resolves protocol references (GUIDs or names) to protocol NAMES for DSA storage
+ * GUIDs are used internally for tracking, but DSA stores human-readable names
+ * @param {Array<string>} protocolRefs - Array of protocol references (GUIDs or names)
+ * @param {string} protocolType - 'stain' or 'region'
+ * @param {Object} protocolStore - Protocol store instance
+ * @returns {Array<string>} Array of protocol names
+ */
+const resolveProtocolToNames = (protocolRefs, protocolType, protocolStore) => {
+    if (!Array.isArray(protocolRefs) || protocolRefs.length === 0) {
+        return [];
+    }
+
+    return protocolRefs.map(ref => {
+        // Check if this looks like a GUID (STAIN_xxxxx or REGION_xxxxx)
+        const isGuid = /^(STAIN|REGION)_[a-z0-9]{6}$/.test(ref);
+
+        if (isGuid) {
+            // Resolve GUID to name
+            const protocols = protocolType === 'stain'
+                ? protocolStore.stainProtocols
+                : protocolStore.regionProtocols;
+            const protocol = protocols.find(p => p.id === ref);
+
+            if (protocol) {
+                console.log(`✅ Resolved protocol GUID ${ref} → ${protocol.name}`);
+                return protocol.name;
+            } else {
+                console.warn(`⚠️ Protocol GUID ${ref} not found in ${protocolType} protocols, using as-is`);
+                return ref; // Fallback to GUID if not found
+            }
+        } else {
+            // Already a name, use as-is
+            return ref;
+        }
+    });
+};
+
+/**
  * Adds/updates specific metadata fields for a single DSA item using the add metadata endpoint
  * This only updates the specified metadata fields without replacing the entire metadata object
  * @param {string} baseUrl - DSA base URL
@@ -206,8 +244,15 @@ export const syncItemBdsaMetadata = async (baseUrl, item, girderToken, columnMap
         const localStainID = item.BDSA?.bdsaLocal?.localStainID || item[columnMapping.localStainID] || '';
         const localRegionId = item.BDSA?.bdsaLocal?.localRegionId || item[columnMapping.localRegionId] || '';
         const bdsaCaseId = item.BDSA?.bdsaLocal?.bdsaCaseId || '';
-        const bdsaStainProtocol = item.BDSA?.bdsaLocal?.bdsaStainProtocol || [];
-        const bdsaRegionProtocol = item.BDSA?.bdsaLocal?.bdsaRegionProtocol || [];
+
+        // Get protocol references (may be GUIDs or names)
+        const bdsaStainProtocolRefs = item.BDSA?.bdsaLocal?.bdsaStainProtocol || [];
+        const bdsaRegionProtocolRefs = item.BDSA?.bdsaLocal?.bdsaRegionProtocol || [];
+
+        // Resolve protocol references to NAMES for DSA storage (GUIDs are internal only)
+        const { default: protocolStore } = await import('./protocolStore.js');
+        const bdsaStainProtocol = resolveProtocolToNames(bdsaStainProtocolRefs, 'stain', protocolStore);
+        const bdsaRegionProtocol = resolveProtocolToNames(bdsaRegionProtocolRefs, 'region', protocolStore);
 
         console.log(`🔍 SYNC VALUES - Item ${itemId}:`, {
             localCaseId,

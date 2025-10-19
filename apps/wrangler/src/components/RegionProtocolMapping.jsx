@@ -160,6 +160,8 @@ const RegionProtocolMapping = () => {
             dataStore.addProtocolMapping(currentCase.bdsaId, slide.id, protocolId, 'region', batchMode);
         });
 
+        console.log(`✅ Using protocol ID (GUID) for storage: ${protocolId}`);
+
         console.log(`✅ Applied protocol ${protocolId} to ${slides.length} slides`);
     };
 
@@ -197,6 +199,12 @@ const RegionProtocolMapping = () => {
     const getSuggestionConfidence = (protocolName, regionType) => {
         const suggestion = getSuggestionForRegionType(regionType);
         return suggestion.suggested === protocolName ? suggestion.confidence : 0;
+    };
+
+    // Helper function to get protocol name from ID
+    const getProtocolName = (protocolId) => {
+        const protocol = availableProtocols.find(p => p.id === protocolId);
+        return protocol ? protocol.name : protocolId; // Fallback to ID if not found
     };
 
     // Auto-apply suggestions for the current case
@@ -490,11 +498,11 @@ const RegionProtocolMapping = () => {
                                                     const isFullyApplied = count === slides.length;
                                                     return (
                                                         <span key={idx} className={`protocol-chip group-chip ${isFullyApplied ? 'fully-applied' : 'partially-applied'}`}>
-                                                            {protocol} ({count}/{slides.length})
+                                                            {getProtocolName(protocol)} ({count}/{slides.length})
                                                             <button
                                                                 className="remove-protocol-btn"
                                                                 onClick={() => handleRemoveRegionProtocol(slides, protocol)}
-                                                                title={`Remove ${protocol} from all slides`}
+                                                                title={`Remove ${getProtocolName(protocol)} from all slides`}
                                                             >
                                                                 ×
                                                             </button>
@@ -521,7 +529,7 @@ const RegionProtocolMapping = () => {
                                                         <button
                                                             key={protocol.id}
                                                             className={`add-protocol-btn ${isPartiallyApplied ? 'partially-applied' : ''} ${isSuggested ? 'suggested' : ''}`}
-                                                            onClick={() => handleApplyRegionProtocol(slides, protocol.name)}
+                                                            onClick={() => handleApplyRegionProtocol(slides, protocol.id)}
                                                             title={isSuggested
                                                                 ? `⭐ SUGGESTED: ${protocol.name} (${Math.round(confidence * 100)}% confidence) - ${getSuggestionForRegionType(regionType).reason}`
                                                                 : isPartiallyApplied
@@ -566,11 +574,11 @@ const RegionProtocolMapping = () => {
                                                                     <div className="protocol-tags">
                                                                         {slide.bdsaRegionProtocol.map((protocol, idx) => (
                                                                             <span key={idx} className="protocol-tag">
-                                                                                {protocol}
+                                                                                {getProtocolName(protocol)}
                                                                                 <button
                                                                                     className="remove-protocol-btn"
                                                                                     onClick={() => handleRemoveRegionProtocol([slide], protocol)}
-                                                                                    title={`Remove ${protocol}`}
+                                                                                    title={`Remove ${getProtocolName(protocol)}`}
                                                                                 >
                                                                                     ×
                                                                                 </button>
@@ -589,7 +597,7 @@ const RegionProtocolMapping = () => {
                                                                             <button
                                                                                 key={protocol.id}
                                                                                 className="apply-protocol-btn"
-                                                                                onClick={() => handleApplyRegionProtocol([slide], protocol.name)}
+                                                                                onClick={() => handleApplyRegionProtocol([slide], protocol.id)}
                                                                                 title={`Apply ${protocol.name}`}
                                                                             >
                                                                                 + {protocol.name}

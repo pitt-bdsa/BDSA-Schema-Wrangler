@@ -106,25 +106,6 @@
     font-weight: 500;
 }
 
-.association-badge.approved {
-    background: #e8f5e9;
-    color: #2e7d32;
-    border: 1px solid #a5d6a7;
-}
-
-.association-badge.not-approved {
-    background: #fff3e0;
-    color: #e65100;
-    border: 1px solid #ffcc80;
-}
-
-.protocol-card.approved {
-    border-left: 4px solid #4caf50;
-}
-
-.protocol-card.not-approved {
-    border-left: 4px solid #ff9800;
-}
 
 .protocol-actions {
     display: flex;
@@ -132,8 +113,7 @@
 }
 
 .edit-button,
-.delete-button,
-.association-button {
+.delete-button {
     background: none;
     border: none;
     padding: 6px;
@@ -141,22 +121,6 @@
     cursor: pointer;
     font-size: 1.2rem;
     transition: background-color 0.2s ease;
-}
-
-.association-button.associate {
-    color: #4caf50;
-}
-
-.association-button.associate:hover {
-    background-color: #e8f5e9;
-}
-
-.association-button.disassociate {
-    color: #ff9800;
-}
-
-.association-button.disassociate:hover {
-    background-color: #fff3e0;
 }
 
 .edit-button:hover {

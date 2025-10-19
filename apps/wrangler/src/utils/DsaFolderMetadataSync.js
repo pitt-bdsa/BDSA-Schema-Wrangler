@@ -486,7 +486,7 @@ export const getCaseIdMappingsFromFolder = async (baseUrl, folderId, girderToken
             'Girder-Token': girderToken
         };
 
-        console.log('Retrieving folder metadata for case ID mappings:', {
+        console.log('🔍 PULL DEBUG - Retrieving folder metadata for case ID mappings:', {
             folderId,
             apiUrl,
             headers: { ...headers, 'Girder-Token': '[REDACTED]' }
@@ -514,15 +514,34 @@ export const getCaseIdMappingsFromFolder = async (baseUrl, folderId, girderToken
         const caseIdMappings = result.meta?.bdsaCaseIdMappings || null;
 
         if (caseIdMappings) {
-            console.log('Successfully retrieved case ID mappings from folder:', folderId);
+            // Check for mixed institution IDs in the retrieved data
+            const institutionIds = new Set();
+            caseIdMappings.mappings?.forEach(mapping => {
+                if (mapping.bdsaCaseId) {
+                    const match = mapping.bdsaCaseId.match(/BDSA-(\d{3})-/);
+                    if (match) {
+                        institutionIds.add(match[1]);
+                    }
+                }
+            });
+            
+            console.log('🔍 PULL DEBUG - Successfully retrieved case ID mappings from folder:', {
+                folderId,
+                totalMappings: caseIdMappings.totalMappings,
+                institutionId: caseIdMappings.institutionId,
+                foundInstitutionIds: Array.from(institutionIds),
+                hasMixedInstitutions: institutionIds.size > 1,
+                mappings: caseIdMappings.mappings?.slice(0, 5), // Show first 5 mappings
+                allMappings: caseIdMappings.mappings
+            });
         } else {
-            console.log('No case ID mappings found in folder metadata:', folderId);
+            console.log('🔍 PULL DEBUG - No case ID mappings found in folder metadata:', folderId);
         }
 
         return {
             success: true,
             folderId,
-            caseIdMappings
+            caseIdMappings: caseIdMappings || null
         };
     } catch (error) {
         console.error('Error retrieving case ID mappings from folder:', error);

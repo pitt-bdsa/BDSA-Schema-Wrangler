@@ -6,9 +6,7 @@ const STORAGE_KEYS = {
     STAIN_PROTOCOLS: 'bdsa_stain_protocols',
     REGION_PROTOCOLS: 'bdsa_region_protocols',
     LAST_SYNC: 'bdsa_protocols_last_sync',
-    CONFLICTS: 'bdsa_protocols_conflicts',
-    APPROVED_STAIN: 'bdsa_approved_stain_protocols',
-    APPROVED_REGION: 'bdsa_approved_region_protocols'
+    CONFLICTS: 'bdsa_protocols_conflicts'
 };
 
 // Get collection-specific storage key
@@ -61,8 +59,6 @@ class ProtocolStore {
         this.regionProtocols = this.loadRegionProtocols();
         this.conflicts = this.loadConflicts();
         this.lastSync = this.loadLastSync();
-        this.approvedStainProtocols = this.loadApprovedStainProtocols();
-        this.approvedRegionProtocols = this.loadApprovedRegionProtocols();
         this.migrateProtocolIds();
     }
 
@@ -103,8 +99,6 @@ class ProtocolStore {
             this.saveRegionProtocols();
             this.saveConflicts();
             this.saveLastSync();
-            this.saveApprovedStainProtocols();
-            this.saveApprovedRegionProtocols();
         }
 
         // Update current collection
@@ -117,8 +111,6 @@ class ProtocolStore {
         this.regionProtocols = this.loadRegionProtocols();
         this.conflicts = this.loadConflicts();
         this.lastSync = this.loadLastSync();
-        this.approvedStainProtocols = this.loadApprovedStainProtocols();
-        this.approvedRegionProtocols = this.loadApprovedRegionProtocols();
 
         console.log(`✅ Collection switched to: ${collectionId}`, {
             stainProtocols: this.stainProtocols.length,
@@ -279,45 +271,7 @@ class ProtocolStore {
         }
     }
 
-    loadApprovedStainProtocols() {
-        try {
-            const key = getCollectionKey(STORAGE_KEYS.APPROVED_STAIN, this.currentCollectionId);
-            const stored = localStorage.getItem(key);
-            return stored ? new Set(JSON.parse(stored)) : new Set();
-        } catch (error) {
-            console.error('Error loading approved stain protocols:', error);
-            return new Set();
-        }
-    }
 
-    loadApprovedRegionProtocols() {
-        try {
-            const key = getCollectionKey(STORAGE_KEYS.APPROVED_REGION, this.currentCollectionId);
-            const stored = localStorage.getItem(key);
-            return stored ? new Set(JSON.parse(stored)) : new Set();
-        } catch (error) {
-            console.error('Error loading approved region protocols:', error);
-            return new Set();
-        }
-    }
-
-    saveApprovedStainProtocols() {
-        try {
-            const key = getCollectionKey(STORAGE_KEYS.APPROVED_STAIN, this.currentCollectionId);
-            localStorage.setItem(key, JSON.stringify(Array.from(this.approvedStainProtocols)));
-        } catch (error) {
-            console.error('Error saving approved stain protocols:', error);
-        }
-    }
-
-    saveApprovedRegionProtocols() {
-        try {
-            const key = getCollectionKey(STORAGE_KEYS.APPROVED_REGION, this.currentCollectionId);
-            localStorage.setItem(key, JSON.stringify(Array.from(this.approvedRegionProtocols)));
-        } catch (error) {
-            console.error('Error saving approved region protocols:', error);
-        }
-    }
 
     // Protocol Management
     addStainProtocol(protocol) {
@@ -570,6 +524,13 @@ class ProtocolStore {
 
             // Push case ID mappings if provided
             if (caseIdMappings) {
+                console.log('🔍 PUSH SYNC - About to sync case ID mappings:', {
+                    caseIdMappings,
+                    keys: Object.keys(caseIdMappings),
+                    length: Object.keys(caseIdMappings).length,
+                    institutionId
+                });
+
                 const caseIdResult = await syncCaseIdMappingsToFolder(
                     dsaConfig.baseUrl,
                     dsaConfig.resourceId,
@@ -578,12 +539,16 @@ class ProtocolStore {
                     institutionId
                 );
 
+                console.log('🔍 PUSH SYNC - Case ID sync result:', caseIdResult);
+
                 if (!caseIdResult.success) {
                     console.warn(`Failed to push case ID mappings to DSA: ${caseIdResult.error}`);
                     // Don't throw here - protocols sync succeeded
                 } else {
                     results.caseIdMappings = caseIdResult;
                 }
+            } else {
+                console.log('🔍 PUSH SYNC - No case ID mappings provided');
             }
 
             // Clear local modification flags since we've successfully synced
@@ -667,6 +632,11 @@ class ProtocolStore {
             if (!caseIdResult.success) {
                 console.warn(`Failed to pull case ID mappings from DSA: ${caseIdResult.error}`);
             } else {
+                console.log('🔍 Retrieved case ID mappings from DSA:', {
+                    caseIdResult,
+                    mappings: caseIdResult.caseIdMappings?.mappings,
+                    totalMappings: caseIdResult.caseIdMappings?.totalMappings
+                });
                 results.caseIdMappings = caseIdResult;
             }
 
@@ -749,17 +719,12 @@ class ProtocolStore {
         this.conflicts = [];
         this.lastSync = null;
 
-        // Clear approved protocols as well when resetting
-        this.approvedStainProtocols = [];
-        this.approvedRegionProtocols = [];
 
         // Save all cleared state to localStorage
         this.saveStainProtocols();
         this.saveRegionProtocols();
         this.saveConflicts();
         this.saveLastSync();
-        this.saveApprovedStainProtocols();
-        this.saveApprovedRegionProtocols();
 
         // Store reason for clearing (useful for UI notifications)
         this.lastResetReason = reason;
@@ -792,59 +757,6 @@ class ProtocolStore {
         }
     }
 
-    // Approved Protocol Management
-    isStainProtocolApproved(protocolId) {
-        return this.approvedStainProtocols.has(protocolId);
-    }
-
-    isRegionProtocolApproved(protocolId) {
-        return this.approvedRegionProtocols.has(protocolId);
-    }
-
-    associateStainProtocol(protocolId) {
-        this.approvedStainProtocols.add(protocolId);
-        this.saveApprovedStainProtocols();
-        this.notify();
-        console.log(`✅ Associated stain protocol "${protocolId}" with current collection`);
-    }
-
-    disassociateStainProtocol(protocolId) {
-        this.approvedStainProtocols.delete(protocolId);
-        this.saveApprovedStainProtocols();
-        this.notify();
-        console.log(`⚠️ Disassociated stain protocol "${protocolId}" from current collection`);
-    }
-
-    associateRegionProtocol(protocolId) {
-        this.approvedRegionProtocols.add(protocolId);
-        this.saveApprovedRegionProtocols();
-        this.notify();
-        console.log(`✅ Associated region protocol "${protocolId}" with current collection`);
-    }
-
-    disassociateRegionProtocol(protocolId) {
-        this.approvedRegionProtocols.delete(protocolId);
-        this.saveApprovedRegionProtocols();
-        this.notify();
-        console.log(`⚠️ Disassociated region protocol "${protocolId}" from current collection`);
-    }
-
-    updateApprovedProtocolsFromDSA(approvedStainIds, approvedRegionIds) {
-        // Update approved protocols from DSA server
-        this.approvedStainProtocols = new Set(approvedStainIds || []);
-        this.approvedRegionProtocols = new Set(approvedRegionIds || []);
-        this.saveApprovedStainProtocols();
-        this.saveApprovedRegionProtocols();
-        this.notify();
-        console.log(`✅ Updated approved protocols from DSA: ${approvedStainIds.length} stain, ${approvedRegionIds.length} region`);
-    }
-
-    getApprovedProtocols() {
-        return {
-            stain: Array.from(this.approvedStainProtocols),
-            region: Array.from(this.approvedRegionProtocols)
-        };
-    }
 
     exportProtocols() {
         return {
