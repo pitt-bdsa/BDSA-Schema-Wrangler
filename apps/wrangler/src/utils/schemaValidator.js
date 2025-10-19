@@ -134,7 +134,7 @@ class SchemaValidator {
     }
 
     getHemisphereOptions() {
-        return this.regionSchema?.hemisphere?.enum || ['left', 'right'];
+        return this.regionSchema?.hemisphere?.enum || ['left', 'right', 'unknown', 'n/a'];
     }
 
     getSliceOrientationOptions() {
@@ -226,14 +226,7 @@ class SchemaValidator {
         if (protocol.regionType && this.regionSchema && this.regionSchema.regions && this.regionSchema.regions.properties && this.regionSchema.regions.properties[protocol.regionType]) {
             const regionDef = this.regionSchema.regions.properties[protocol.regionType];
 
-            // Check enum values for sub-regions (legacy single-select)
-            if (protocol.subRegion && regionDef.items && regionDef.items.enum) {
-                if (!regionDef.items.enum.includes(protocol.subRegion)) {
-                    errors.subRegion = `Sub-region must be one of: ${regionDef.items.enum.join(', ')}`;
-                }
-            }
-
-            // Check enum values for landmarks (new multi-select)
+            // Check enum values for landmarks (multi-select)
             if (protocol.landmarks && Array.isArray(protocol.landmarks) && regionDef.items && regionDef.items.enum) {
                 const invalidLandmarks = protocol.landmarks.filter(landmark => !regionDef.items.enum.includes(landmark));
                 if (invalidLandmarks.length > 0) {

@@ -174,11 +174,6 @@ class ProtocolStore {
         }
     }
 
-    // Helper function to check if an ID is a timestamp
-    isTimestampId(id) {
-        // Check if the ID is a numeric string that looks like a timestamp
-        return /^\d{13}$/.test(id) || /^\d{10}$/.test(id);
-    }
 
     // Event system for UI updates
     subscribe(listener) {
@@ -726,9 +721,6 @@ class ProtocolStore {
         this.saveConflicts();
         this.saveLastSync();
 
-        // Store reason for clearing (useful for UI notifications)
-        this.lastResetReason = reason;
-        this.saveLastResetReason();
 
         console.log(`✅ Protocols reset to defaults:`, {
             stainProtocols: this.stainProtocols.length,
@@ -739,23 +731,6 @@ class ProtocolStore {
         this.notify();
     }
 
-    saveLastResetReason() {
-        try {
-            localStorage.setItem('protocolStore_lastResetReason', JSON.stringify(this.lastResetReason));
-        } catch (error) {
-            console.warn('Failed to save last reset reason:', error);
-        }
-    }
-
-    getLastResetReason() {
-        try {
-            const saved = localStorage.getItem('protocolStore_lastResetReason');
-            return saved ? JSON.parse(saved) : null;
-        } catch (error) {
-            console.warn('Failed to load last reset reason:', error);
-            return null;
-        }
-    }
 
 
     exportProtocols() {

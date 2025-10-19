@@ -55,122 +55,7 @@ export const syncProtocolsToFolder = async (baseUrl, folderId, girderToken, stai
     }
 };
 
-/**
- * Syncs approved protocols list to DSA folder metadata
- * @param {string} baseUrl - DSA base URL
- * @param {string} folderId - DSA folder ID
- * @param {string} girderToken - Authentication token
- * @param {Array} approvedStainProtocols - Array of approved stain protocol IDs
- * @param {Array} approvedRegionProtocols - Array of approved region protocol IDs
- * @returns {Promise<Object>} Sync result
- */
-export const syncApprovedProtocolsToFolder = async (baseUrl, folderId, girderToken, approvedStainProtocols, approvedRegionProtocols) => {
-    try {
-        if (!baseUrl || !folderId || !girderToken) {
-            throw new Error('Missing required parameters: baseUrl, folderId, or girderToken');
-        }
 
-        // Prepare the metadata structure for approved protocols
-        const approvedProtocolsMetadata = {
-            bdsaApprovedProtocols: {
-                stainProtocols: approvedStainProtocols || [],
-                regionProtocols: approvedRegionProtocols || [],
-                lastUpdated: new Date().toISOString(),
-                source: 'BDSA-Schema-Wrangler',
-                version: '1.0'
-            }
-        };
-
-        console.log('Syncing approved protocols to folder metadata:', {
-            folderId,
-            approvedStainCount: approvedStainProtocols?.length || 0,
-            approvedRegionCount: approvedRegionProtocols?.length || 0,
-            metadata: approvedProtocolsMetadata
-        });
-
-        const result = await addFolderMetadata(baseUrl, folderId, girderToken, approvedProtocolsMetadata);
-
-        if (result.success) {
-            console.log('Successfully synced approved protocols to folder:', folderId);
-        }
-
-        return result;
-    } catch (error) {
-        console.error('Error syncing approved protocols to folder:', error);
-        return {
-            success: false,
-            folderId,
-            error: error.message
-        };
-    }
-};
-
-/**
- * Retrieves approved protocols list from DSA folder metadata
- * @param {string} baseUrl - DSA base URL
- * @param {string} folderId - DSA folder ID
- * @param {string} girderToken - Authentication token
- * @returns {Promise<Object>} Retrieved approved protocols or null if not found
- */
-export const getApprovedProtocolsFromFolder = async (baseUrl, folderId, girderToken) => {
-    try {
-        if (!baseUrl || !folderId || !girderToken) {
-            throw new Error('Missing required parameters: baseUrl, folderId, or girderToken');
-        }
-
-        const apiUrl = `${baseUrl}/api/v1/folder/${folderId}`;
-        const headers = {
-            'Girder-Token': girderToken
-        };
-
-        console.log('Retrieving folder metadata for approved protocols:', {
-            folderId,
-            apiUrl,
-            headers: { ...headers, 'Girder-Token': '[REDACTED]' }
-        });
-
-        const response = await fetch(apiUrl, {
-            method: 'GET',
-            headers: headers
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Failed to retrieve folder metadata:', {
-                status: response.status,
-                statusText: response.statusText,
-                folderId,
-                response: errorText
-            });
-            throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
-        }
-
-        const result = await response.json();
-
-        // Extract approved protocols from metadata
-        const approvedProtocols = result.meta?.bdsaApprovedProtocols || null;
-
-        if (approvedProtocols) {
-            console.log('Successfully retrieved approved protocols from folder:', folderId);
-        } else {
-            console.log('No approved protocols found in folder metadata:', folderId);
-        }
-
-        return {
-            success: true,
-            folderId,
-            approvedProtocols
-        };
-    } catch (error) {
-        console.error('Error retrieving approved protocols from folder:', error);
-        return {
-            success: false,
-            folderId,
-            error: error.message,
-            approvedProtocols: null
-        };
-    }
-};
 
 /**
  * Syncs BDSA case ID mappings to DSA folder metadata
@@ -524,7 +409,7 @@ export const getCaseIdMappingsFromFolder = async (baseUrl, folderId, girderToken
                     }
                 }
             });
-            
+
             console.log('🔍 PULL DEBUG - Successfully retrieved case ID mappings from folder:', {
                 folderId,
                 totalMappings: caseIdMappings.totalMappings,

@@ -20,8 +20,6 @@ export { addItemMetadata, updateItemMetadata, addFolderMetadata, syncItemBdsaMet
 // Folder Metadata Sync
 export {
     syncProtocolsToFolder,
-    syncApprovedProtocolsToFolder,
-    getApprovedProtocolsFromFolder,
     syncCaseIdMappingsToFolder,
     syncRegexRulesToFolder,
     getRegexRulesFromFolder,

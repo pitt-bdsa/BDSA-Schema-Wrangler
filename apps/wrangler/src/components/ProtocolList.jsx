@@ -35,9 +35,6 @@ const ProtocolList = ({ protocols, type, onEdit, onDelete, onAdd }) => {
                     {protocol.regionType && protocol.regionType !== 'ignore' && (
                         <p><strong>Region Type:</strong> {protocol.regionType}</p>
                     )}
-                    {protocol.subRegion && (
-                        <p><strong>Sub-Region:</strong> {protocol.subRegion}</p>
-                    )}
                     {protocol.landmarks && protocol.landmarks.length > 0 && (
                         <p><strong>Landmarks:</strong> {protocol.landmarks.join(', ')}</p>
                     )}

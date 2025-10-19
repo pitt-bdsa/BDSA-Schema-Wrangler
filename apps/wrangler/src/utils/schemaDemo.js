@@ -72,9 +72,9 @@ export const demonstrateSchemaUsage = async () => {
         const firstRegionType = regionTypes[0].value;
         console.log(`5. Details for "${firstRegionType}" region type:`);
 
-        const subRegions = schemaValidator.getSubRegionOptions(firstRegionType);
-        if (subRegions.length > 0) {
-            console.log(`   Sub-regions: ${subRegions.slice(0, 3).join(', ')}${subRegions.length > 3 ? '...' : ''}`);
+        const landmarks = schemaValidator.getLandmarkOptions(firstRegionType);
+        if (landmarks.length > 0) {
+            console.log(`   Landmarks: ${landmarks.slice(0, 3).join(', ')}${landmarks.length > 3 ? '...' : ''}`);
         }
         console.log('');
     }

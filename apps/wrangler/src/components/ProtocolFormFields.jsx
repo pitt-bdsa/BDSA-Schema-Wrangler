@@ -131,23 +131,6 @@ const ProtocolFormFields = ({
                 {/* DEBUG: regionType = ${formData.regionType}, condition = ${formData.regionType && formData.regionType !== 'ignore'} */}
                 {formData.regionType && formData.regionType !== 'ignore' && (
                     <>
-                        <div className="form-group">
-                            <label htmlFor="subRegion">Sub-region</label>
-                            <select
-                                id="subRegion"
-                                value={formData.subRegion}
-                                onChange={(e) => onFieldChange('subRegion', e.target.value)}
-                                className={errors.subRegion ? 'error' : ''}
-                            >
-                                <option value="">Select sub-region</option>
-                                {schemaValidator.getSubRegionOptions(formData.regionType).map(option => (
-                                    <option key={option.value} value={option.value}>
-                                        {option.label}
-                                    </option>
-                                ))}
-                            </select>
-                            {errors.subRegion && <span className="error-message">{errors.subRegion}</span>}
-                        </div>
 
                         <div className="form-group">
                             <label htmlFor="hemisphere">Hemisphere</label>

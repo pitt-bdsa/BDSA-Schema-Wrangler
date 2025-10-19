@@ -539,10 +539,10 @@ const StainProtocolMapping = () => {
                                         <label>Add Stain Protocol:</label>
                                         <div className="available-protocols">
                                             {availableProtocols
-                                                .filter(protocol => !fullyAppliedProtocols.includes(protocol.name))
+                                                .filter(protocol => !fullyAppliedProtocols.includes(protocol.id))
                                                 .map(protocol => {
-                                                    const isPartiallyApplied = allGroupProtocols.includes(protocol.name);
-                                                    const currentCount = protocolCounts[protocol.name] || 0;
+                                                    const isPartiallyApplied = allGroupProtocols.includes(protocol.id);
+                                                    const currentCount = protocolCounts[protocol.id] || 0;
                                                     const isSuggested = isProtocolSuggested(protocol.name, stainType);
                                                     const confidence = getSuggestionConfidence(protocol.name, stainType);
 
@@ -613,7 +613,7 @@ const StainProtocolMapping = () => {
                                                             <td className="actions-cell">
                                                                 <div className="slide-actions">
                                                                     {availableProtocols
-                                                                        .filter(protocol => !(slide.bdsaStainProtocol || []).includes(protocol.name))
+                                                                        .filter(protocol => !(slide.bdsaStainProtocol || []).includes(protocol.id))
                                                                         .map(protocol => (
                                                                             <button
                                                                                 key={protocol.id}

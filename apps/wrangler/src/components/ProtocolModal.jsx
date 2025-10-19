@@ -14,7 +14,6 @@ const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
         dilution: '',
         vendor: '',
         regionType: '',
-        subRegion: '',
         landmarks: [],
         hemisphere: '',
         sliceOrientation: '',
@@ -45,7 +44,6 @@ const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
                 dilution: protocol.dilution || '',
                 vendor: protocol.vendor || '',
                 regionType: protocol.regionType || '',
-                subRegion: protocol.subRegion || '',
                 landmarks: protocol.landmarks || [],
                 hemisphere: protocol.hemisphere || '',
                 sliceOrientation: protocol.sliceOrientation || '',
@@ -248,11 +246,10 @@ const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
                                 ...formData,
                                 regionType: e.target.value,
                                 // Clear dependent fields when region type changes
-                                subRegion: '',
                                 landmarks: []
                             };
                             setFormData(newFormData);
-                            setErrors(prev => ({ ...prev, regionType: '', subRegion: '' }));
+                            setErrors(prev => ({ ...prev, regionType: '' }));
                             validateForm(newFormData);
                         }}
                         className={errors.regionType ? 'error' : ''}
@@ -269,26 +266,7 @@ const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
 
                 {formData.regionType && formData.regionType !== 'ignore' && (
                     <>
-                        {/* Sub-Region field - only show if schema defines it */}
-                        {schemaValidator.getSubRegionOptions(formData.regionType).length > 0 && (
-                            <div className="form-group">
-                                <label htmlFor="subRegion">Sub-Region</label>
-                                <select
-                                    id="subRegion"
-                                    value={formData.subRegion}
-                                    onChange={(e) => handleFieldChange('subRegion', e.target.value)}
-                                    className={errors.subRegion ? 'error' : ''}
-                                >
-                                    <option value="">Select sub-region</option>
-                                    {schemaValidator.getSubRegionOptions(formData.regionType).map(subRegion => (
-                                        <option key={subRegion} value={subRegion}>{subRegion}</option>
-                                    ))}
-                                </select>
-                                {errors.subRegion && <span className="error-message">{errors.subRegion}</span>}
-                            </div>
-                        )}
-
-                        {/* Landmarks field - multi-select for non-mutually exclusive landmarks */}
+                        {/* Landmarks field - multi-select for sub-regions/landmarks */}
                         {schemaValidator.getLandmarkOptions(formData.regionType).length > 0 && (
                             <div className="form-group">
                                 <label htmlFor="landmarks">Landmarks (Multiple Selection)</label>
