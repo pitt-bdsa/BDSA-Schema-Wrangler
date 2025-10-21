@@ -555,9 +555,13 @@
                             "title": "Spinal Cord",
                             "abbreviation": "SpnCd",
                             "items": {
-                                "type": "string"
-                            },
-                            "maxItems": 0
+                                "type": "string",
+                                "enum": [
+                                    "Lower",
+                                    "Middle",
+                                    "Upper"
+                                ]
+                            }
                         },
                         "Hypothalamus": {
                             "type": "array",

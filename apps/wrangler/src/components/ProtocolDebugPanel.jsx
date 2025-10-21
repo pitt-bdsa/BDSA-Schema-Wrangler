@@ -13,6 +13,14 @@ const ProtocolDebugPanel = () => {
 
     useEffect(() => {
         loadProtocolData();
+
+        // Subscribe to dataStore changes to auto-refresh when data changes
+        const unsubscribe = dataStore.subscribe(() => {
+            console.log('🔄 ProtocolDebugPanel received data update, refreshing...');
+            loadProtocolData();
+        });
+
+        return unsubscribe;
     }, []);
 
     const loadProtocolData = () => {

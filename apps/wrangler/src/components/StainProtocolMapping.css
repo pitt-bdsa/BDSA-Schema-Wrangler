@@ -301,9 +301,9 @@
     align-items: center;
     background: #28a745;
     color: white;
-    padding: 2px 6px;
+    padding: 3px 6px;
     border-radius: 12px;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 500;
     max-width: 200px;
     /* Prevent chips from getting too wide */
@@ -345,12 +345,12 @@
     background: none;
     border: none;
     color: white;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: bold;
     margin-left: 4px;
     padding: 0;
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
     cursor: pointer;
     display: flex;
@@ -372,23 +372,27 @@
 .available-protocols {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 8px;
+    gap: 8px;
+    margin-top: 12px;
+    margin-bottom: 12px;
 }
 
 .add-protocol-btn {
     background: #6c757d;
     color: white;
     border: none;
-    padding: 4px 8px;
+    padding: 5px 10px;
     border-radius: 12px;
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 3px;
+    margin: 1px;
+    position: relative;
+    z-index: 1;
 }
 
 .add-protocol-btn:hover {
@@ -692,9 +696,9 @@
     background: #6c757d;
     color: white;
     border: none;
-    padding: 4px 8px;
+    padding: 6px 10px;
     border-radius: 4px;
-    font-size: 11px;
+    font-size: 13px;
     cursor: pointer;
     transition: background-color 0.2s;
 }
@@ -707,4 +711,24 @@
     font-size: 11px;
     color: #666;
     font-style: italic;
+}
+
+/* Tooltip positioning fixes */
+.add-protocol-btn[title]:hover {
+    z-index: 10;
+}
+
+.protocol-chip[title]:hover {
+    z-index: 10;
+}
+
+/* Ensure proper spacing for tooltips */
+.available-protocols {
+    position: relative;
+    z-index: 1;
+}
+
+.protocol-chips {
+    position: relative;
+    z-index: 1;
 }

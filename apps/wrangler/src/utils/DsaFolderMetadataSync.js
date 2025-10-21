@@ -20,28 +20,118 @@ export const syncProtocolsToFolder = async (baseUrl, folderId, girderToken, stai
             throw new Error('Missing required parameters: baseUrl, folderId, or girderToken');
         }
 
+        console.log('🔄 MERGE SYNC - Starting protocols merge:', {
+            folderId,
+            newStainCount: stainProtocols?.length || 0,
+            newRegionCount: regionProtocols?.length || 0
+        });
+
+        // CRITICAL: Fetch existing protocols first to avoid overwriting
+        const existingProtocols = await getProtocolsFromFolder(baseUrl, folderId, girderToken);
+
+        let mergedStainProtocols = stainProtocols || [];
+        let mergedRegionProtocols = regionProtocols || [];
+        let stainAddedCount = 0;
+        let regionAddedCount = 0;
+        let stainSkippedCount = 0;
+        let regionSkippedCount = 0;
+
+        if (existingProtocols.success && existingProtocols.protocols) {
+            console.log('🔄 MERGE SYNC - Found existing protocols:', {
+                existingStainCount: existingProtocols.protocols.stainProtocols?.length || 0,
+                existingRegionCount: existingProtocols.protocols.regionProtocols?.length || 0
+            });
+
+            // Merge stain protocols
+            if (stainProtocols && stainProtocols.length > 0) {
+                const existingStainIds = new Set((existingProtocols.protocols.stainProtocols || []).map(p => p.id));
+                const newStainProtocols = stainProtocols.filter(protocol => {
+                    if (existingStainIds.has(protocol.id)) {
+                        console.log(`⏭️ SKIP - Stain protocol already exists: ${protocol.name} (${protocol.id})`);
+                        stainSkippedCount++;
+                        return false;
+                    } else {
+                        console.log(`✅ ADD - New stain protocol: ${protocol.name} (${protocol.id})`);
+                        stainAddedCount++;
+                        return true;
+                    }
+                });
+
+                mergedStainProtocols = [
+                    ...(existingProtocols.protocols.stainProtocols || []),
+                    ...newStainProtocols
+                ];
+            } else {
+                mergedStainProtocols = existingProtocols.protocols.stainProtocols || [];
+            }
+
+            // Merge region protocols
+            if (regionProtocols && regionProtocols.length > 0) {
+                const existingRegionIds = new Set((existingProtocols.protocols.regionProtocols || []).map(p => p.id));
+                const newRegionProtocols = regionProtocols.filter(protocol => {
+                    if (existingRegionIds.has(protocol.id)) {
+                        console.log(`⏭️ SKIP - Region protocol already exists: ${protocol.name} (${protocol.id})`);
+                        regionSkippedCount++;
+                        return false;
+                    } else {
+                        console.log(`✅ ADD - New region protocol: ${protocol.name} (${protocol.id})`);
+                        regionAddedCount++;
+                        return true;
+                    }
+                });
+
+                mergedRegionProtocols = [
+                    ...(existingProtocols.protocols.regionProtocols || []),
+                    ...newRegionProtocols
+                ];
+            } else {
+                mergedRegionProtocols = existingProtocols.protocols.regionProtocols || [];
+            }
+
+        } else {
+            console.log('🔄 MERGE SYNC - No existing protocols found, using new protocols only');
+            stainAddedCount = stainProtocols?.length || 0;
+            regionAddedCount = regionProtocols?.length || 0;
+        }
+
+        console.log('🔄 MERGE SYNC - Protocol merge results:', {
+            totalStainProtocols: mergedStainProtocols.length,
+            totalRegionProtocols: mergedRegionProtocols.length,
+            stainAdded: stainAddedCount,
+            regionAdded: regionAddedCount,
+            stainSkipped: stainSkippedCount,
+            regionSkipped: regionSkippedCount
+        });
+
         // Prepare the metadata structure for protocols
         const protocolsMetadata = {
             bdsaProtocols: {
-                stainProtocols: stainProtocols || [],
-                regionProtocols: regionProtocols || [],
+                stainProtocols: mergedStainProtocols,
+                regionProtocols: mergedRegionProtocols,
                 lastUpdated: new Date().toISOString(),
                 source: 'BDSA-Schema-Wrangler',
-                version: '1.0'
+                version: '1.0',
+                mergeStats: {
+                    stainAdded: stainAddedCount,
+                    regionAdded: regionAddedCount,
+                    stainSkipped: stainSkippedCount,
+                    regionSkipped: regionSkippedCount
+                }
             }
         };
 
-        console.log('Syncing protocols to folder metadata:', {
+        console.log('Syncing merged protocols to folder metadata:', {
             folderId,
-            stainProtocolCount: stainProtocols?.length || 0,
-            regionProtocolCount: regionProtocols?.length || 0,
-            metadata: protocolsMetadata
+            totalStainCount: mergedStainProtocols.length,
+            totalRegionCount: mergedRegionProtocols.length,
+            mergeStats: protocolsMetadata.bdsaProtocols.mergeStats
         });
 
         const result = await addFolderMetadata(baseUrl, folderId, girderToken, protocolsMetadata);
 
         if (result.success) {
-            console.log('Successfully synced protocols to folder:', folderId);
+            console.log('Successfully synced merged protocols to folder:', folderId);
+            result.mergeStats = protocolsMetadata.bdsaProtocols.mergeStats;
         }
 
         return result;
@@ -73,42 +163,131 @@ export const syncCaseIdMappingsToFolder = async (baseUrl, folderId, girderToken,
         }
 
         // Convert caseIdMappings to a serializable format
-        let mappingsArray = [];
+        let newMappingsArray = [];
         if (caseIdMappings instanceof Map) {
-            mappingsArray = Array.from(caseIdMappings.entries()).map(([localId, bdsaId]) => ({
+            newMappingsArray = Array.from(caseIdMappings.entries()).map(([localId, bdsaId]) => ({
                 localCaseId: localId,
                 bdsaCaseId: bdsaId
             }));
         } else if (typeof caseIdMappings === 'object' && caseIdMappings !== null) {
-            mappingsArray = Object.entries(caseIdMappings).map(([localId, bdsaId]) => ({
+            newMappingsArray = Object.entries(caseIdMappings).map(([localId, bdsaId]) => ({
                 localCaseId: localId,
                 bdsaCaseId: bdsaId
             }));
         }
 
+        console.log('🔄 MERGE SYNC - Starting case ID mappings merge:', {
+            folderId,
+            institutionId,
+            newMappingsCount: newMappingsArray.length,
+            newMappings: newMappingsArray
+        });
+
+        // CRITICAL: Fetch existing mappings first to avoid overwriting
+        const existingMappings = await getCaseIdMappingsFromFolder(baseUrl, folderId, girderToken);
+
+        let mergedMappings = [];
+        let conflicts = [];
+        let addedCount = 0;
+        let updatedCount = 0;
+        let skippedCount = 0;
+
+        if (existingMappings.success && existingMappings.mappings) {
+            console.log('🔄 MERGE SYNC - Found existing mappings:', {
+                existingCount: existingMappings.mappings.length,
+                existingMappings: existingMappings.mappings
+            });
+
+            // Create a map of existing mappings for quick lookup
+            const existingMap = new Map();
+            existingMappings.mappings.forEach(mapping => {
+                existingMap.set(mapping.localCaseId, mapping.bdsaCaseId);
+            });
+
+            // Merge new mappings with existing ones
+            newMappingsArray.forEach(newMapping => {
+                const existingBdsaId = existingMap.get(newMapping.localCaseId);
+
+                if (existingBdsaId) {
+                    if (existingBdsaId === newMapping.bdsaCaseId) {
+                        // Same mapping exists - skip
+                        console.log(`⏭️ SKIP - Mapping already exists: ${newMapping.localCaseId} -> ${newMapping.bdsaCaseId}`);
+                        skippedCount++;
+                    } else {
+                        // Conflict - different BDSA Case ID for same local ID
+                        console.warn(`⚠️ CONFLICT - Different BDSA Case ID for ${newMapping.localCaseId}: existing=${existingBdsaId}, new=${newMapping.bdsaCaseId}`);
+                        conflicts.push({
+                            localCaseId: newMapping.localCaseId,
+                            existingBdsaId,
+                            newBdsaId: newMapping.bdsaCaseId
+                        });
+                        // For now, keep the existing mapping (don't overwrite)
+                        skippedCount++;
+                    }
+                } else {
+                    // New mapping - add it
+                    console.log(`✅ ADD - New mapping: ${newMapping.localCaseId} -> ${newMapping.bdsaCaseId}`);
+                    mergedMappings.push(newMapping);
+                    addedCount++;
+                }
+            });
+
+            // Add all existing mappings that weren't updated
+            existingMappings.mappings.forEach(existingMapping => {
+                const wasUpdated = newMappingsArray.some(newMapping =>
+                    newMapping.localCaseId === existingMapping.localCaseId
+                );
+                if (!wasUpdated) {
+                    mergedMappings.push(existingMapping);
+                }
+            });
+
+        } else {
+            console.log('🔄 MERGE SYNC - No existing mappings found, using new mappings only');
+            mergedMappings = newMappingsArray;
+            addedCount = newMappingsArray.length;
+        }
+
+        console.log('🔄 MERGE SYNC - Merge results:', {
+            totalMappings: mergedMappings.length,
+            addedCount,
+            updatedCount,
+            skippedCount,
+            conflictsCount: conflicts.length,
+            conflicts
+        });
+
         // Prepare the metadata structure for case ID mappings
         const caseIdMetadata = {
             bdsaCaseIdMappings: {
                 institutionId: institutionId || '001',
-                mappings: mappingsArray,
+                mappings: mergedMappings,
                 lastUpdated: new Date().toISOString(),
                 source: 'BDSA-Schema-Wrangler',
                 version: '1.0',
-                totalMappings: mappingsArray.length
+                totalMappings: mergedMappings.length,
+                mergeStats: {
+                    added: addedCount,
+                    updated: updatedCount,
+                    skipped: skippedCount,
+                    conflicts: conflicts.length
+                }
             }
         };
 
-        console.log('Syncing case ID mappings to folder metadata:', {
+        console.log('Syncing merged case ID mappings to folder metadata:', {
             folderId,
             institutionId,
-            mappingCount: mappingsArray.length,
-            metadata: caseIdMetadata
+            totalMappings: mergedMappings.length,
+            mergeStats: caseIdMetadata.bdsaCaseIdMappings.mergeStats
         });
 
         const result = await addFolderMetadata(baseUrl, folderId, girderToken, caseIdMetadata);
 
         if (result.success) {
-            console.log('Successfully synced case ID mappings to folder:', folderId);
+            console.log('Successfully synced merged case ID mappings to folder:', folderId);
+            result.mergeStats = caseIdMetadata.bdsaCaseIdMappings.mergeStats;
+            result.conflicts = conflicts;
         }
 
         return result;

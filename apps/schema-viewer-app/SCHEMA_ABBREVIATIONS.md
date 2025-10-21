@@ -43,7 +43,7 @@ Standard abbreviations have been added to all stain types and brain regions in t
 | Primary Motor Cortex | M1 | `Primary Motor Cortex` |
 | Insula | Ins | `Insula` |
 | Frontal Pole | FP | `Frontal Pole` |
-| Spinal Cord | SC | `Spinal Cord` |
+| Spinal Cord | SC | `Spinal Cord` (Lower, Middle, Upper) |
 | Hypothalamus | Hyp | `Hypothalamus` |
 
 ## Schema Structure

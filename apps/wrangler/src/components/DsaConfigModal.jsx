@@ -13,6 +13,7 @@ const DsaConfigModal = ({ onSave, onClose }) => {
 
     // Folder browser state
     const [showFolderBrowser, setShowFolderBrowser] = useState(false);
+    const [showMetadataFolderBrowser, setShowMetadataFolderBrowser] = useState(false);
     const [dsaClient, setDsaClient] = useState(null);
 
     useEffect(() => {
@@ -55,7 +56,16 @@ const DsaConfigModal = ({ onSave, onClose }) => {
             wasNormalized = originalValue !== processedValue;
         }
 
-        setConfig(prev => ({ ...prev, [field]: processedValue }));
+        setConfig(prev => {
+            const newConfig = { ...prev, [field]: processedValue };
+
+            // Auto-populate metadataSyncTargetFolder with resourceId when resourceId changes and metadataSyncTargetFolder is blank
+            if (field === 'resourceId' && !prev.metadataSyncTargetFolder.trim()) {
+                newConfig.metadataSyncTargetFolder = processedValue;
+            }
+
+            return newConfig;
+        });
 
         // Show normalization indicator
         if (field === 'baseUrl') {
@@ -147,8 +157,25 @@ const DsaConfigModal = ({ onSave, onClose }) => {
         setShowFolderBrowser(true);
     };
 
+    const openMetadataFolderBrowser = () => {
+        if (!config.baseUrl.trim()) {
+            setErrors(prev => ({ ...prev, baseUrl: 'Please enter a DSA server URL first' }));
+            return;
+        }
+
+        // Create DSA client
+        const client = new DSAClient(config.baseUrl, dsaAuthStore.token);
+        setDsaClient(client);
+        setShowMetadataFolderBrowser(true);
+    };
+
     const closeFolderBrowser = () => {
         setShowFolderBrowser(false);
+        setDsaClient(null);
+    };
+
+    const closeMetadataFolderBrowser = () => {
+        setShowMetadataFolderBrowser(false);
         setDsaClient(null);
     };
 
@@ -160,6 +187,15 @@ const DsaConfigModal = ({ onSave, onClose }) => {
             resourceType: resource.type
         }));
         closeFolderBrowser();
+    };
+
+    const handleMetadataResourceSelect = (resource) => {
+        console.log('Selected metadata resource:', resource);
+        setConfig(prev => ({
+            ...prev,
+            metadataSyncTargetFolder: resource._id
+        }));
+        closeMetadataFolderBrowser();
     };
 
     // Form is valid if base URL is provided and no validation errors
@@ -225,6 +261,35 @@ const DsaConfigModal = ({ onSave, onClose }) => {
                                 The ID of the DSA resource (folder or collection) you want to access
                                 <br />
                                 <small>💡 You can save the configuration now and select a resource later using the Browse button</small>
+                            </div>
+                        </div>
+
+                        <div className="form-group">
+                            <label htmlFor="metadataSyncTargetFolder">Metadata Sync Target Folder</label>
+                            <div className="input-with-button">
+                                <input
+                                    type="text"
+                                    id="metadataSyncTargetFolder"
+                                    value={config.metadataSyncTargetFolder}
+                                    onChange={(e) => handleFieldChange('metadataSyncTargetFolder', e.target.value)}
+                                    placeholder="e.g., 507f1f77bcf86cd799439011"
+                                    className={errors.metadataSyncTargetFolder ? 'error' : ''}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={openMetadataFolderBrowser}
+                                    className="browse-button"
+                                    disabled={!config.baseUrl.trim()}
+                                    title={!config.baseUrl.trim() ? 'Enter DSA server URL first' : 'Browse DSA folders and collections for metadata sync'}
+                                >
+                                    Browse
+                                </button>
+                            </div>
+                            {errors.metadataSyncTargetFolder && <div className="error-message">{errors.metadataSyncTargetFolder}</div>}
+                            <div className="field-help">
+                                The ID of the DSA folder where metadata will be synced (if blank, will use the same folder as the main data pull)
+                                <br />
+                                <small>💡 You can save the configuration now and select a metadata target folder later using the Browse button</small>
                             </div>
                         </div>
 
@@ -324,6 +389,15 @@ const DsaConfigModal = ({ onSave, onClose }) => {
                 dsaClient={dsaClient}
                 onSelectResource={handleResourceSelect}
                 title="Select DSA Resource"
+            />
+
+            {/* DSA Metadata Folder Browser Modal */}
+            <DSAFolderBrowserModal
+                isOpen={showMetadataFolderBrowser}
+                onClose={closeMetadataFolderBrowser}
+                dsaClient={dsaClient}
+                onSelectResource={handleMetadataResourceSelect}
+                title="Select Metadata Sync Target Folder"
             />
         </>
     );

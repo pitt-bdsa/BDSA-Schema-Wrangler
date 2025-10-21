@@ -39,7 +39,8 @@ class DsaAuthStore {
                 resourceId: '',
                 resourceType: 'folder',
                 fetchStrategy: 'unlimited',
-                pageSize: 100
+                pageSize: 100,
+                metadataSyncTargetFolder: ''
             };
         } catch (error) {
             console.error('Error loading DSA config:', error);
@@ -48,7 +49,8 @@ class DsaAuthStore {
                 resourceId: '',
                 resourceType: 'folder',
                 fetchStrategy: 'unlimited',
-                pageSize: 100
+                pageSize: 100,
+                metadataSyncTargetFolder: ''
             };
         }
     }

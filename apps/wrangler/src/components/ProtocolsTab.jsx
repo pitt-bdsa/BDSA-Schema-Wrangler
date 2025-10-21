@@ -112,6 +112,7 @@ const ProtocolsTab = () => {
             const dsaConfig = {
                 baseUrl: config.baseUrl,
                 resourceId: config.resourceId,
+                metadataSyncTargetFolder: config.metadataSyncTargetFolder,
                 token: dsaAuthStore.getToken()
             };
 
@@ -155,6 +156,7 @@ const ProtocolsTab = () => {
             const dsaConfig = {
                 baseUrl: config.baseUrl,
                 resourceId: config.resourceId,
+                metadataSyncTargetFolder: config.metadataSyncTargetFolder,
                 token: dsaAuthStore.getToken()
             };
 
@@ -205,6 +207,7 @@ const ProtocolsTab = () => {
             const dsaConfig = {
                 baseUrl: config.baseUrl,
                 resourceId: config.resourceId,
+                metadataSyncTargetFolder: config.metadataSyncTargetFolder,
                 token: dsaAuthStore.getToken()
             };
 

@@ -299,9 +299,14 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
             await dsaAuthStore.testConnection();
 
             const config = dsaAuthStore.getConfig();
+            // Use metadataSyncTargetFolder if set, otherwise fall back to resourceId
+            const metadataTargetFolder = config.metadataSyncTargetFolder && config.metadataSyncTargetFolder.trim()
+                ? config.metadataSyncTargetFolder.trim()
+                : config.resourceId;
+
             const result = await syncRegexRulesToFolder(
                 config.baseUrl,
-                config.resourceId,
+                metadataTargetFolder,
                 dsaAuthStore.getToken(),
                 rules,
                 selectedRuleSet
@@ -337,9 +342,14 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
             await dsaAuthStore.testConnection();
 
             const config = dsaAuthStore.getConfig();
+            // Use metadataSyncTargetFolder if set, otherwise fall back to resourceId
+            const metadataTargetFolder = config.metadataSyncTargetFolder && config.metadataSyncTargetFolder.trim()
+                ? config.metadataSyncTargetFolder.trim()
+                : config.resourceId;
+
             const result = await getRegexRulesFromFolder(
                 config.baseUrl,
-                config.resourceId,
+                metadataTargetFolder,
                 dsaAuthStore.getToken()
             );
 

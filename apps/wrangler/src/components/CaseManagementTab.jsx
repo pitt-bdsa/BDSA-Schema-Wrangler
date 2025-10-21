@@ -49,6 +49,22 @@ const CaseManagementTab = () => {
 
     // Protocol mapping functions are now handled by the ProtocolMapping component
 
+    // Create a dependency that tracks actual BDSA Case ID values in the data
+    const bdsaCaseIdHash = useMemo(() => {
+        if (!dataStatus.processedData || dataStatus.processedData.length === 0) {
+            return '';
+        }
+
+        // Create a hash of all BDSA Case IDs to detect changes
+        const bdsaCaseIds = dataStatus.processedData
+            .map(row => row.BDSA?.bdsaLocal?.bdsaCaseId || '')
+            .filter(id => id)
+            .sort()
+            .join('|');
+
+        return bdsaCaseIds;
+    }, [dataStatus.processedData]);
+
     // Get unique case IDs from the data (memoized for stability)
     const getUniqueCaseIds = useMemo(() => {
         return () => {
@@ -121,7 +137,7 @@ const CaseManagementTab = () => {
 
             return allCases;
         };
-    }, [dataStatus.processedData, sortField, sortDirection]);
+    }, [dataStatus.processedData, sortField, sortDirection, bdsaCaseIdHash]);
 
     // Detect duplicate BDSA Case IDs
     const duplicateBdsaCaseIds = useMemo(() => {
@@ -284,7 +300,7 @@ const CaseManagementTab = () => {
             localConflictCount,
             bdsaConflictCount
         };
-    }, [dataStatus.processedData, dataStatus.caseIdConflicts, dataStatus.bdsaCaseIdConflicts]);
+    }, [dataStatus.processedData, dataStatus.caseIdConflicts, dataStatus.bdsaCaseIdConflicts, dataStatus.caseIdMappings, bdsaCaseIdHash]);
 
     // Generate sequential BDSA Case ID (alias for generateCaseId)
     const generateCaseId = (localCaseId) => {
@@ -464,6 +480,7 @@ const CaseManagementTab = () => {
             const dsaConfig = {
                 baseUrl: config.baseUrl,
                 resourceId: config.resourceId,
+                metadataSyncTargetFolder: config.metadataSyncTargetFolder,
                 token: dsaAuthStore.token
             };
 
@@ -527,6 +544,7 @@ const CaseManagementTab = () => {
             const dsaConfig = {
                 baseUrl: config.baseUrl,
                 resourceId: config.resourceId,
+                metadataSyncTargetFolder: config.metadataSyncTargetFolder,
                 token: dsaAuthStore.token
             };
 

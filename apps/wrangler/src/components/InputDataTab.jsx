@@ -469,9 +469,14 @@ const InputDataTab = () => {
                 try {
                     const { getRegexRulesFromFolder } = await import('../utils/dsaIntegration.js');
                     const config = dsaAuthStore.getConfig();
+                    // Use metadataSyncTargetFolder if set, otherwise fall back to resourceId
+                    const metadataTargetFolder = config.metadataSyncTargetFolder && config.metadataSyncTargetFolder.trim()
+                        ? config.metadataSyncTargetFolder.trim()
+                        : config.resourceId;
+
                     const regexResult = await getRegexRulesFromFolder(
                         config.baseUrl,
-                        config.resourceId,
+                        metadataTargetFolder,
                         dsaAuthStore.getToken()
                     );
 
@@ -502,7 +507,7 @@ const InputDataTab = () => {
                     const config = dsaAuthStore.getConfig();
                     const mappingsResult = await getColumnMappingsFromFolder(
                         config.baseUrl,
-                        config.resourceId,
+                        metadataTargetFolder,
                         dsaAuthStore.getToken()
                     );
 
@@ -530,7 +535,7 @@ const InputDataTab = () => {
                     const config = dsaAuthStore.getConfig();
                     const protocolResult = await pullProtocolsFromDSA(
                         config.baseUrl,
-                        config.resourceId,
+                        metadataTargetFolder,
                         dsaAuthStore.getToken()
                     );
 

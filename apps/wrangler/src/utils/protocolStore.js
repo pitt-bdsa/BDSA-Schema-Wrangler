@@ -483,6 +483,14 @@ class ProtocolStore {
         return this.conflicts.filter(c => !c.resolved);
     }
 
+    // Helper method to get metadata target folder (uses metadataSyncTargetFolder if set, otherwise falls back to resourceId)
+    getMetadataTargetFolder(dsaConfig) {
+        const config = dsaConfig;
+        return config.metadataSyncTargetFolder && config.metadataSyncTargetFolder.trim()
+            ? config.metadataSyncTargetFolder.trim()
+            : config.resourceId;
+    }
+
     // DSA Integration Methods
     async syncWithDSA(dsaConfig, caseIdMappings = null, institutionId = null) {
         try {
@@ -490,9 +498,13 @@ class ProtocolStore {
                 throw new Error('DSA configuration incomplete. Missing baseUrl, resourceId, or token.');
             }
 
+            // Get the metadata target folder (uses metadataSyncTargetFolder if set, otherwise resourceId)
+            const metadataTargetFolder = this.getMetadataTargetFolder(dsaConfig);
+
             console.log('Starting DSA sync for protocols and case ID mappings...', {
                 baseUrl: dsaConfig.baseUrl,
                 resourceId: dsaConfig.resourceId,
+                metadataTargetFolder,
                 stainCount: this.stainProtocols.length,
                 regionCount: this.regionProtocols.length,
                 hasCaseIdMappings: !!caseIdMappings,
@@ -507,10 +519,10 @@ class ProtocolStore {
                 caseIdMappings: null
             };
 
-            // Push local protocols to DSA folder
+            // Push local protocols to DSA folder (using metadata target folder)
             const protocolsResult = await syncProtocolsToFolder(
                 dsaConfig.baseUrl,
-                dsaConfig.resourceId,
+                metadataTargetFolder,
                 dsaConfig.token,
                 this.stainProtocols,
                 this.regionProtocols
@@ -532,7 +544,7 @@ class ProtocolStore {
 
                 const caseIdResult = await syncCaseIdMappingsToFolder(
                     dsaConfig.baseUrl,
-                    dsaConfig.resourceId,
+                    metadataTargetFolder,
                     dsaConfig.token,
                     caseIdMappings,
                     institutionId
@@ -596,9 +608,13 @@ class ProtocolStore {
                 throw new Error('DSA configuration incomplete. Missing baseUrl, resourceId, or token.');
             }
 
+            // Get the metadata target folder (uses metadataSyncTargetFolder if set, otherwise resourceId)
+            const metadataTargetFolder = this.getMetadataTargetFolder(dsaConfig);
+
             console.log('Pulling protocols and case ID mappings from DSA folder...', {
                 baseUrl: dsaConfig.baseUrl,
-                resourceId: dsaConfig.resourceId
+                resourceId: dsaConfig.resourceId,
+                metadataTargetFolder
             });
 
             // Import the DSA integration functions
@@ -609,10 +625,10 @@ class ProtocolStore {
                 caseIdMappings: null
             };
 
-            // Retrieve protocols from DSA folder
+            // Retrieve protocols from DSA folder (using metadata target folder)
             const protocolsResult = await getProtocolsFromFolder(
                 dsaConfig.baseUrl,
-                dsaConfig.resourceId,
+                metadataTargetFolder,
                 dsaConfig.token
             );
 
@@ -621,10 +637,10 @@ class ProtocolStore {
             }
             results.protocols = protocolsResult;
 
-            // Retrieve case ID mappings from DSA folder
+            // Retrieve case ID mappings from DSA folder (using metadata target folder)
             const caseIdResult = await getCaseIdMappingsFromFolder(
                 dsaConfig.baseUrl,
-                dsaConfig.resourceId,
+                metadataTargetFolder,
                 dsaConfig.token
             );
 

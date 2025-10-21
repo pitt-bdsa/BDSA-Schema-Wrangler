@@ -65,9 +65,14 @@ const BdsaMappingModal = ({ isOpen, onClose, onSave, currentMappings, availableC
             await dsaAuthStore.testConnection();
 
             const config = dsaAuthStore.getConfig();
+            // Use metadataSyncTargetFolder if set, otherwise fall back to resourceId
+            const metadataTargetFolder = config.metadataSyncTargetFolder && config.metadataSyncTargetFolder.trim()
+                ? config.metadataSyncTargetFolder.trim()
+                : config.resourceId;
+
             const result = await syncColumnMappingsToFolder(
                 config.baseUrl,
-                config.resourceId,
+                metadataTargetFolder,
                 dsaAuthStore.getToken(),
                 mappings
             );
@@ -102,9 +107,14 @@ const BdsaMappingModal = ({ isOpen, onClose, onSave, currentMappings, availableC
             await dsaAuthStore.testConnection();
 
             const config = dsaAuthStore.getConfig();
+            // Use metadataSyncTargetFolder if set, otherwise fall back to resourceId
+            const metadataTargetFolder = config.metadataSyncTargetFolder && config.metadataSyncTargetFolder.trim()
+                ? config.metadataSyncTargetFolder.trim()
+                : config.resourceId;
+
             const result = await getColumnMappingsFromFolder(
                 config.baseUrl,
-                config.resourceId,
+                metadataTargetFolder,
                 dsaAuthStore.getToken()
             );
 

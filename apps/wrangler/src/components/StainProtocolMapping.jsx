@@ -162,6 +162,9 @@ const StainProtocolMapping = () => {
         });
 
         console.log(`✅ Applied protocol ${protocolName} (${protocolId}) to ${slides.length} slides`);
+
+        // Force a re-render by updating the data status
+        setDataStatus(dataStore.getStatus());
     };
 
     const handleRemoveStainProtocol = (slides, protocolToRemove) => {
@@ -178,6 +181,9 @@ const StainProtocolMapping = () => {
         });
 
         console.log(`✅ Removed protocol ${protocolToRemove} from ${slides.length} slides`);
+
+        // Force a re-render by updating the data status
+        setDataStatus(dataStore.getStatus());
     };
 
     // Get suggestion for a specific stain type
@@ -538,7 +544,24 @@ const StainProtocolMapping = () => {
 
                             // Helper function to convert protocol names to GUIDs for comparison
                             const getProtocolGuid = (protocolName) => {
-                                const protocol = availableProtocols.find(p => p.name === protocolName);
+                                // Try exact match first
+                                let protocol = availableProtocols.find(p => p.name === protocolName);
+
+                                // If no exact match, try case-insensitive match
+                                if (!protocol) {
+                                    protocol = availableProtocols.find(p =>
+                                        p.name.toLowerCase() === protocolName.toLowerCase()
+                                    );
+                                }
+
+                                // If still no match, try partial match (protocol name might be truncated)
+                                if (!protocol) {
+                                    protocol = availableProtocols.find(p =>
+                                        p.name.toLowerCase().startsWith(protocolName.toLowerCase()) ||
+                                        protocolName.toLowerCase().startsWith(p.name.toLowerCase())
+                                    );
+                                }
+
                                 return protocol ? protocol.id : protocolName;
                             };
 
@@ -596,7 +619,7 @@ const StainProtocolMapping = () => {
                                         <label>Add Stain Protocol:</label>
                                         <div className="available-protocols">
                                             {availableProtocols
-                                                .filter(protocol => !fullyAppliedGuids.includes(protocol.id))
+                                                .filter(protocol => !allGroupGuids.includes(protocol.id))
                                                 .map(protocol => {
                                                     const isPartiallyApplied = allGroupGuids.includes(protocol.id);
                                                     const currentCount = protocolCounts[protocol.name] || 0;

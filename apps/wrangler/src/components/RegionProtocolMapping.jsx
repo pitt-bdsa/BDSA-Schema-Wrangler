@@ -165,6 +165,9 @@ const RegionProtocolMapping = () => {
         });
 
         console.log(`✅ Applied protocol ${protocolName} (${protocolId}) to ${slides.length} slides`);
+
+        // Force a re-render by updating the data status
+        setDataStatus(dataStore.getStatus());
     };
 
     const handleRemoveRegionProtocol = (slides, protocolToRemove) => {
@@ -184,6 +187,9 @@ const RegionProtocolMapping = () => {
         });
 
         console.log(`✅ Removed protocol ${protocolToRemove} from ${slides.length} slides`);
+
+        // Force a re-render by updating the data status
+        setDataStatus(dataStore.getStatus());
     };
 
     // Get suggestion for a specific region type
@@ -500,8 +506,8 @@ const RegionProtocolMapping = () => {
                     <div className="stain-groups">
                         {Object.entries(regionGroups).map(([regionType, slides]) => {
                             const isExpanded = expandedGroups.has(regionType);
-                            const mappedCount = slides.filter(s => s.regionProtocols && s.regionProtocols.length > 0).length;
-                            const unmappedCount = slides.filter(s => !s.regionProtocols || s.regionProtocols.length === 0).length;
+                            const mappedCount = slides.filter(s => s.bdsaRegionProtocol && s.bdsaRegionProtocol.length > 0).length;
+                            const unmappedCount = slides.filter(s => !s.bdsaRegionProtocol || s.bdsaRegionProtocol.length === 0).length;
 
                             // Find all protocols that are applied to any slide in this group with counts
                             const protocolCounts = {};
@@ -518,13 +524,31 @@ const RegionProtocolMapping = () => {
 
                             // Helper function to convert protocol names to GUIDs for comparison
                             const getProtocolGuid = (protocolName) => {
-                                const protocol = availableProtocols.find(p => p.name === protocolName);
+                                // Try exact match first
+                                let protocol = availableProtocols.find(p => p.name === protocolName);
+
+                                // If no exact match, try case-insensitive match
+                                if (!protocol) {
+                                    protocol = availableProtocols.find(p =>
+                                        p.name.toLowerCase() === protocolName.toLowerCase()
+                                    );
+                                }
+
+                                // If still no match, try partial match (protocol name might be truncated)
+                                if (!protocol) {
+                                    protocol = availableProtocols.find(p =>
+                                        p.name.toLowerCase().startsWith(protocolName.toLowerCase()) ||
+                                        protocolName.toLowerCase().startsWith(p.name.toLowerCase())
+                                    );
+                                }
+
                                 return protocol ? protocol.id : protocolName;
                             };
 
                             // Convert fully applied protocol names to GUIDs for filtering
                             const fullyAppliedGuids = fullyAppliedProtocols.map(getProtocolGuid);
                             const allGroupGuids = allGroupProtocols.map(getProtocolGuid);
+
 
                             return (
                                 <div key={regionType} className="stain-group">
@@ -573,7 +597,7 @@ const RegionProtocolMapping = () => {
                                         <label>Add Region Protocol:</label>
                                         <div className="available-protocols">
                                             {availableProtocols
-                                                .filter(protocol => !fullyAppliedGuids.includes(protocol.id))
+                                                .filter(protocol => !allGroupGuids.includes(protocol.id))
                                                 .map(protocol => {
                                                     const isPartiallyApplied = allGroupGuids.includes(protocol.id);
                                                     const currentCount = protocolCounts[protocol.name] || 0;
