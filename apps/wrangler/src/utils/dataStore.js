@@ -805,6 +805,7 @@ class DataStore {
 
         // Clear protocols when loading new data (they're specific to the previous dataset)
         // This prevents confusion from protocols from previous datasets
+        console.log(`🧹 Clearing protocol mappings (${this.caseProtocolMappings.size} items) to prevent cross-collection contamination`);
         this.caseProtocolMappings.clear();
 
         // Clear DSA-specific cached data when switching collections

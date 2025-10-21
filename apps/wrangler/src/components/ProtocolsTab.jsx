@@ -53,17 +53,20 @@ const ProtocolsTab = () => {
         setShowModal(true);
     };
 
-    const handleDeleteProtocol = (id, type) => {
+    const handleDeleteProtocol = async (id, type) => {
         if (window.confirm('Are you sure you want to delete this protocol?')) {
             if (type === 'stain') {
                 protocolStore.deleteStainProtocol(id);
             } else {
                 protocolStore.deleteRegionProtocol(id);
             }
+
+            // Auto-sync to DSA server after protocol deletion
+            await handleAutoSyncToDSA();
         }
     };
 
-    const handleSaveProtocol = (protocolData) => {
+    const handleSaveProtocol = async (protocolData) => {
         if (editingProtocol) {
             // Update existing protocol
             if (activeSubTab === 'stain') {
@@ -79,6 +82,10 @@ const ProtocolsTab = () => {
                 protocolStore.addRegionProtocol(protocolData);
             }
         }
+
+        // Auto-sync to DSA server after protocol changes
+        await handleAutoSyncToDSA();
+
         setShowModal(false);
         setEditingProtocol(null);
     };
@@ -86,6 +93,43 @@ const ProtocolsTab = () => {
     const handleCloseModal = () => {
         setShowModal(false);
         setEditingProtocol(null);
+    };
+
+    const handleAutoSyncToDSA = async () => {
+        const authStatus = dsaAuthStore.getStatus();
+
+        // Only auto-sync if authenticated and configured
+        if (!authStatus.isAuthenticated || !authStatus.isConfigured) {
+            console.log('🔄 Auto-sync skipped: Not authenticated or configured with DSA');
+            return;
+        }
+
+        try {
+            console.log('🔄 Auto-syncing protocols to DSA server...');
+
+            // Get DSA configuration
+            const config = dsaAuthStore.getConfig();
+            const dsaConfig = {
+                baseUrl: config.baseUrl,
+                resourceId: config.resourceId,
+                token: dsaAuthStore.getToken()
+            };
+
+            // Sync protocols to DSA folder
+            const result = await protocolStore.syncWithDSA(dsaConfig);
+
+            if (result.success) {
+                console.log('✅ Auto-sync successful:', {
+                    stainProtocols: result.pushed?.stainProtocols || 0,
+                    regionProtocols: result.pushed?.regionProtocols || 0
+                });
+            } else {
+                console.warn('⚠️ Auto-sync failed:', result.error);
+            }
+        } catch (error) {
+            console.warn('⚠️ Auto-sync error:', error.message);
+            // Don't show error to user for auto-sync - it's background operation
+        }
     };
 
     const handleSyncWithDSA = async () => {

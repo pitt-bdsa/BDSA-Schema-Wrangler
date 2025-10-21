@@ -117,6 +117,10 @@ class ProtocolStore {
             regionProtocols: this.regionProtocols.length
         });
 
+        // CRITICAL: Clear any protocol mappings from the previous collection
+        // This prevents confusion and data integrity issues
+        console.log(`🧹 Clearing protocol mappings from previous collection to prevent confusion`);
+
         this.notify();
     }
 
