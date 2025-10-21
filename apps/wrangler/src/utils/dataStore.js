@@ -450,6 +450,35 @@ class DataStore {
     }
 
     /**
+     * Clear all collection-specific data when switching collections
+     * This ensures no data from the previous collection contaminates the new one
+     */
+    clearCollectionData() {
+        console.log('🧹 Clearing all collection-specific data');
+
+        // Clear all mappings and caches
+        this.caseIdMappings.clear();
+        this.caseIdConflicts.clear();
+        this.bdsaCaseIdConflicts.clear();
+        this.caseProtocolMappings.clear();
+        this.modifiedItems.clear();
+
+        // Clear DSA-specific data
+        this.girderToken = null;
+        this.dsaConfig = null;
+
+        // Clear sync state
+        this.syncInProgress = false;
+        this.syncCancelled = false;
+        this.syncStatus = 'offline';
+        this.syncProgress = null;
+        this.lastSyncResults = null;
+
+        console.log('✅ All collection-specific data cleared');
+        this.notify();
+    }
+
+    /**
      * Set a case ID directly in the data items (single source of truth approach)
      * @param {string} localCaseId - The local case ID to update
      * @param {string|null} bdsaCaseId - The BDSA case ID to set, or null to clear
@@ -777,6 +806,15 @@ class DataStore {
         // Clear protocols when loading new data (they're specific to the previous dataset)
         // This prevents confusion from protocols from previous datasets
         this.caseProtocolMappings.clear();
+
+        // Clear DSA-specific cached data when switching collections
+        if (source === 'dsa') {
+            console.log('🧹 Clearing DSA-specific cached data for new collection');
+            // Clear any DSA-specific mappings or cached data
+            this.girderToken = null;
+            this.dsaConfig = null;
+            // Note: columnMappings are preserved as they're user-configured
+        }
 
         // Set the collection ID in protocol store to isolate protocols per collection
         const collectionId = sourceInfo?.resourceId || sourceInfo?.collectionId || 'default';

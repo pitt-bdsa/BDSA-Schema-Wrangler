@@ -25,7 +25,9 @@ export const loadDsaData = async (dsaConfig, girderToken) => {
 
         // Transform the data to import existing meta.BDSA metadata and apply filtering
         console.log('🔄 Transforming DSA data to import existing metadata...');
+        console.log('🚀🚀🚀 FETCHER DEBUG: About to call transformDsaData with', rawItems.length, 'raw items');
         const transformedItems = transformDsaData(rawItems);
+        console.log('🚀🚀🚀 FETCHER DEBUG: transformDsaData returned', transformedItems.length, 'transformed items');
 
         console.log(`✅ loadDsaData: Successfully transformed ${transformedItems.length} items (imported existing metadata)`);
 

@@ -155,14 +155,16 @@ const RegionProtocolMapping = () => {
         const currentCase = targetCase || cases[currentCaseIndex];
         if (!currentCase) return;
 
-        // Apply protocol to each slide
+        // Convert GUID to name for storage (data stores names, not GUIDs)
+        const protocol = availableProtocols.find(p => p.id === protocolId);
+        const protocolName = protocol ? protocol.name : protocolId;
+
+        // Apply protocol to each slide using the NAME
         slides.forEach(slide => {
-            dataStore.addProtocolMapping(currentCase.bdsaId, slide.id, protocolId, 'region', batchMode);
+            dataStore.addProtocolMapping(currentCase.bdsaId, slide.id, protocolName, 'region', batchMode);
         });
 
-        console.log(`✅ Using protocol ID (GUID) for storage: ${protocolId}`);
-
-        console.log(`✅ Applied protocol ${protocolId} to ${slides.length} slides`);
+        console.log(`✅ Applied protocol ${protocolName} (${protocolId}) to ${slides.length} slides`);
     };
 
     const handleRemoveRegionProtocol = (slides, protocolToRemove) => {
@@ -205,6 +207,49 @@ const RegionProtocolMapping = () => {
     const getProtocolName = (protocolId) => {
         const protocol = availableProtocols.find(p => p.id === protocolId);
         return protocol ? protocol.name : protocolId; // Fallback to ID if not found
+    };
+
+    // Helper function to get full protocol info for tooltips
+    const getProtocolInfo = (protocolId) => {
+        const protocol = availableProtocols.find(p => p.id === protocolId);
+        if (protocol) {
+            return {
+                name: protocol.name,
+                id: protocol.id,
+                description: protocol.description || '',
+                abbreviation: protocol.abbreviation || ''
+            };
+        }
+        return {
+            name: protocolId,
+            id: protocolId,
+            description: '',
+            abbreviation: ''
+        };
+    };
+
+    // Helper function to create tooltip text
+    const getProtocolTooltip = (protocolId) => {
+        const info = getProtocolInfo(protocolId);
+        const parts = [];
+
+        // Add full name
+        parts.push(`Name: ${info.name}`);
+
+        // Add GUID
+        parts.push(`GUID: ${info.id}`);
+
+        // Add abbreviation if different from name
+        if (info.abbreviation && info.abbreviation !== info.name) {
+            parts.push(`Abbreviation: ${info.abbreviation}`);
+        }
+
+        // Add description if available
+        if (info.description) {
+            parts.push(`Description: ${info.description}`);
+        }
+
+        return parts.join('\n');
     };
 
     // Auto-apply suggestions for the current case
@@ -471,6 +516,16 @@ const RegionProtocolMapping = () => {
                                 protocolCounts[protocol] === slides.length
                             );
 
+                            // Helper function to convert protocol names to GUIDs for comparison
+                            const getProtocolGuid = (protocolName) => {
+                                const protocol = availableProtocols.find(p => p.name === protocolName);
+                                return protocol ? protocol.id : protocolName;
+                            };
+
+                            // Convert fully applied protocol names to GUIDs for filtering
+                            const fullyAppliedGuids = fullyAppliedProtocols.map(getProtocolGuid);
+                            const allGroupGuids = allGroupProtocols.map(getProtocolGuid);
+
                             return (
                                 <div key={regionType} className="stain-group">
                                     <div
@@ -498,7 +553,7 @@ const RegionProtocolMapping = () => {
                                                     const isFullyApplied = count === slides.length;
                                                     return (
                                                         <span key={idx} className={`protocol-chip group-chip ${isFullyApplied ? 'fully-applied' : 'partially-applied'}`}>
-                                                            {getProtocolName(protocol)} ({count}/{slides.length})
+                                                            <span title={getProtocolTooltip(protocol)}>{getProtocolName(protocol)} ({count}/{slides.length})</span>
                                                             <button
                                                                 className="remove-protocol-btn"
                                                                 onClick={() => handleRemoveRegionProtocol(slides, protocol)}
@@ -518,10 +573,10 @@ const RegionProtocolMapping = () => {
                                         <label>Add Region Protocol:</label>
                                         <div className="available-protocols">
                                             {availableProtocols
-                                                .filter(protocol => !fullyAppliedProtocols.includes(protocol.id))
+                                                .filter(protocol => !fullyAppliedGuids.includes(protocol.id))
                                                 .map(protocol => {
-                                                    const isPartiallyApplied = allGroupProtocols.includes(protocol.id);
-                                                    const currentCount = protocolCounts[protocol.id] || 0;
+                                                    const isPartiallyApplied = allGroupGuids.includes(protocol.id);
+                                                    const currentCount = protocolCounts[protocol.name] || 0;
                                                     const isSuggested = isProtocolSuggested(protocol.name, regionType);
                                                     const confidence = getSuggestionConfidence(protocol.name, regionType);
 
@@ -573,7 +628,7 @@ const RegionProtocolMapping = () => {
                                                                 {slide.bdsaRegionProtocol && slide.bdsaRegionProtocol.length > 0 ? (
                                                                     <div className="protocol-tags">
                                                                         {slide.bdsaRegionProtocol.map((protocol, idx) => (
-                                                                            <span key={idx} className="protocol-tag">
+                                                                            <span key={idx} className="protocol-tag" title={getProtocolTooltip(protocol)}>
                                                                                 {getProtocolName(protocol)}
                                                                                 <button
                                                                                     className="remove-protocol-btn"

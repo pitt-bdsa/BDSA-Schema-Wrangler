@@ -6,7 +6,7 @@ class DsaLoader {
     }
 
     async loadDsaData(dsaAuthStore, dataStoreInstance) {
-        console.log('🚀 DEBUG - loadDsaData called');
+        console.log('🚀🚀🚀 LOADER DEBUG - DsaLoader.loadDsaData called - this should trigger DSA API fetch');
         try {
             const authStatus = dsaAuthStore.getStatus();
             if (!authStatus.isAuthenticated) {
@@ -37,7 +37,31 @@ class DsaLoader {
             }
 
             console.log(`📊 DataStore: Setting processedData to ${result.data.length} items`);
+            console.log('🚀🚀🚀 LOADER DEBUG: Data is already transformed, bypassing transformDsaData');
+
+            // Debug: Check if data has flattened fields before initializeBdsaStructure
+            if (result.data.length > 0) {
+                const firstItem = result.data[0];
+                const metaNpClinicalKeys = Object.keys(firstItem).filter(key => key.startsWith('meta.npClinical.'));
+                console.log('🔍 LOADER DEBUG: Before initializeBdsaStructure - meta.npClinical keys:', metaNpClinicalKeys.slice(0, 5));
+                console.log('🔍 LOADER DEBUG: Sample values:', {
+                    'meta.npClinical.Age at Death/Bx': firstItem['meta.npClinical.Age at Death/Bx'],
+                    'meta.npClinical.ApoE': firstItem['meta.npClinical.ApoE']
+                });
+            }
+
             dataStoreInstance.processedData = dataStoreInstance.initializeBdsaStructure(result.data);
+
+            // Debug: Check if data still has flattened fields after initializeBdsaStructure
+            if (dataStoreInstance.processedData.length > 0) {
+                const firstItem = dataStoreInstance.processedData[0];
+                const metaNpClinicalKeys = Object.keys(firstItem).filter(key => key.startsWith('meta.npClinical.'));
+                console.log('🔍 LOADER DEBUG: After initializeBdsaStructure - meta.npClinical keys:', metaNpClinicalKeys.slice(0, 5));
+                console.log('🔍 LOADER DEBUG: Sample values:', {
+                    'meta.npClinical.Age at Death/Bx': firstItem['meta.npClinical.Age at Death/Bx'],
+                    'meta.npClinical.ApoE': firstItem['meta.npClinical.ApoE']
+                });
+            }
             dataStoreInstance.dataSource = 'dsa';
             dataStoreInstance.dataSourceInfo = {
                 baseUrl: config.baseUrl,

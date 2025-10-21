@@ -119,7 +119,7 @@ const InputDataTab = () => {
             console.log(`🔍 Current modifiedItems Set:`, Array.from(dataStore.modifiedItems));
             console.log(`🔍 Current modifiedItems Set size:`, dataStore.modifiedItems.size);
             console.log(`🔍 Setting modifiedItemsCount state to: ${newModifiedCount}`);
-            
+
             // Force update if there's a mismatch
             if (newModifiedCount !== modifiedItemsCount) {
                 console.log(`🔍 FORCE UPDATE: Count changed from ${modifiedItemsCount} to ${newModifiedCount}`);
@@ -920,11 +920,11 @@ const InputDataTab = () => {
         const orderedColumns = [];
         const remainingColumns = [...allColumns];
 
-        console.log('🔍 Column generation debug:', {
-            allColumns: allColumns.map(col => col.field),
-            columnOrder: columnOrder,
-            preferredOrder: preferredOrder
-        });
+        // console.log('🔍 Column generation debug:', {
+        //     allColumns: allColumns.map(col => col.field),
+        //     columnOrder: columnOrder,
+        //     preferredOrder: preferredOrder
+        // });
 
         // If we have a saved column order, use it (this takes precedence)
         if (columnOrder.length > 0) {
@@ -967,10 +967,10 @@ const InputDataTab = () => {
         // Insert status column at the beginning
         const columnDefs = [statusColumn, ...orderedColumns];
 
-        console.log('🔍 Generated column definitions:', {
-            count: columnDefs.length,
-            sampleColumns: columnDefs.slice(0, 5).map(col => col.field)
-        });
+        // console.log('🔍 Generated column definitions:', {
+        //     count: columnDefs.length,
+        //     sampleColumns: columnDefs.slice(0, 5).map(col => col.field)
+        // });
 
         return columnDefs;
     };
@@ -1012,7 +1012,7 @@ const InputDataTab = () => {
                         </span>
                     </div>
                     <div className="legend-right">
-                        {console.log(`🔍 RENDER: modifiedItemsCount = ${modifiedItemsCount}, condition = ${modifiedItemsCount > 0}`)}
+                        {/* {console.log(`🔍 RENDER: modifiedItemsCount = ${modifiedItemsCount}, condition = ${modifiedItemsCount > 0}`)} */}
                         {modifiedItemsCount > 0 && (
                             <span className="update-count-text">
                                 {modifiedItemsCount} of {dataStatus.processedData.length} items updated
@@ -1072,12 +1072,12 @@ const InputDataTab = () => {
             {/* Load More Data Button - Compact */}
             {(() => {
                 // Only show if we're certain there's more data and haven't determined there isn't
-                const shouldShow = dataStatus.processedData && 
-                                 dataStatus.processedData.length > 0 && 
-                                 dataStatus.dataSource === 'dsa' && 
-                                 !isLoadingMore && 
-                                 hasMoreData && 
-                                 !hasCheckedForMoreData;
+                const shouldShow = dataStatus.processedData &&
+                    dataStatus.processedData.length > 0 &&
+                    dataStatus.dataSource === 'dsa' &&
+                    !isLoadingMore &&
+                    hasMoreData &&
+                    !hasCheckedForMoreData;
                 console.log(`🔍 DEBUG: Load More button conditions:`, {
                     hasData: !!dataStatus.processedData,
                     dataLength: dataStatus.processedData?.length || 0,
@@ -1097,8 +1097,8 @@ const InputDataTab = () => {
                         <button className="notification-btn" onClick={handleLoadMoreData}>
                             Load More
                         </button>
-                        <button 
-                            className="notification-btn" 
+                        <button
+                            className="notification-btn"
                             onClick={() => {
                                 console.log(`🔍 DEBUG: Current hasMoreData state: ${hasMoreData}`);
                                 console.log(`🔍 DEBUG: Current hasCheckedForMoreData state: ${hasCheckedForMoreData}`);
@@ -1112,8 +1112,8 @@ const InputDataTab = () => {
                         >
                             ?
                         </button>
-                        <button 
-                            className="notification-btn" 
+                        <button
+                            className="notification-btn"
                             onClick={() => {
                                 console.log(`🔍 Manually marking as no more data available`);
                                 setHasMoreData(false);

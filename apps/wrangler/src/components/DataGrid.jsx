@@ -18,15 +18,53 @@ const DataGrid = ({
     return (
         <div>
             {(() => {
-                console.log('🔄 Rendering data grid with status:', {
-                    hasData: dataStatus.processedData && dataStatus.processedData.length > 0,
-                    dataLength: dataStatus.processedData ? dataStatus.processedData.length : 0,
-                    dataSource: dataStatus.dataSource,
-                    isLoading: dataStatus.isLoading,
-                    isServerSidePagination,
-                    dataType: typeof dataStatus.processedData,
-                    isArray: Array.isArray(dataStatus.processedData)
-                });
+                // Debug: Log the actual data being passed to AG Grid
+                if (dataStatus.processedData && dataStatus.processedData.length > 0) {
+                    console.log('🔍 GRID DEBUG: First 3 rows of data being passed to AG Grid:');
+                    dataStatus.processedData.slice(0, 3).forEach((row, index) => {
+                        console.log(`Row ${index}:`, {
+                            name: row.name,
+                            'meta.npClinical.Age at Death/Bx': row['meta.npClinical.Age at Death/Bx'],
+                            'meta.npClinical.ApoE': row['meta.npClinical.ApoE'],
+                            'meta.npClinical.Case Number': row['meta.npClinical.Case Number'],
+                            allMetaNpClinicalKeys: Object.keys(row).filter(key => key.startsWith('meta.npClinical.')).slice(0, 5)
+                        });
+                    });
+                }
+
+                // Debug: Log the AG Grid column definitions
+                if (dataStatus.columnDefs && dataStatus.columnDefs.length > 0) {
+                    const metaNpClinicalColumns = dataStatus.columnDefs.filter(col => col.field && col.field.startsWith('meta.npClinical.'));
+                    console.log('🔍 GRID DEBUG: AG Grid column definitions for meta.npClinical fields:');
+                    metaNpClinicalColumns.slice(0, 5).forEach(col => {
+                        console.log(`Column: ${col.field}`, {
+                            field: col.field,
+                            headerName: col.headerName,
+                            hide: col.hide,
+                            editable: col.editable
+                        });
+                    });
+                }
+
+                // Debug: Test how AG Grid would access the data
+                if (dataStatus.processedData && dataStatus.processedData.length > 0) {
+                    const firstRow = dataStatus.processedData[0];
+                    console.log('🔍 GRID DEBUG: Testing data access patterns:');
+                    console.log('Direct access:', firstRow['meta.npClinical.Age at Death/Bx']);
+                    console.log('Nested access attempt:', firstRow.meta?.npClinical?.['Age at Death/Bx']);
+                    console.log('Has meta object:', !!firstRow.meta);
+                    console.log('Has meta.npClinical object:', !!firstRow.meta?.npClinical);
+                }
+
+                // console.log('🔄 Rendering data grid with status:', {
+                //     hasData: dataStatus.processedData && dataStatus.processedData.length > 0,
+                //     dataLength: dataStatus.processedData ? dataStatus.processedData.length : 0,
+                //     dataSource: dataStatus.dataSource,
+                //     isLoading: dataStatus.isLoading,
+                //     isServerSidePagination,
+                //     dataType: typeof dataStatus.processedData,
+                //     isArray: Array.isArray(dataStatus.processedData)
+                // });
 
                 // Check if we have valid data
                 const hasValidData = dataStatus.processedData &&

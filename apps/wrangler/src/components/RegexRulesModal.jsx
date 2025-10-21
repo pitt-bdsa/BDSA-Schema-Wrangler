@@ -6,11 +6,35 @@ import { syncRegexRulesToFolder, getRegexRulesFromFolder } from '../utils/dsaInt
 
 const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSet: initialSelectedRuleSet, sampleData }) => {
     const [rules, setRules] = useState({
-        primaryPattern: {
-            pattern: '',
-            description: 'Single regex pattern with named groups',
-            example: '^(?<localCaseId>\\d{8})\\s+(?<localRegionId>[A-Z])\\s+(?<localStainID>\\w+)_\\w+_\\w+\\.\\w+\\.\\w+$'
-        }
+        patterns: [
+            {
+                id: 'pattern-1',
+                name: 'Underscore Format',
+                pattern: '^(?<localCaseId>\\d+)_(?<regionNumber>\\d+)_(?<localStainID>[A-Za-z0-9_-]+)_(?<slideNumber>\\d+)$',
+                description: 'Format: 550058_2_Sil_1.mrxs',
+                example: '550058_2_Sil_1.mrxs',
+                priority: 1,
+                enabled: true
+            },
+            {
+                id: 'pattern-2',
+                name: 'Space Format',
+                pattern: '^(?<localCaseId>\\d+)\\s+(?<localRegionId>\\w+)\\s+(?<localStainID>\\w+)_(?<imageType>\\w+)$',
+                description: 'Format: 20232824 B TDP43_LabelArea_Image.optimized.tiff',
+                example: '20232824 B TDP43_LabelArea_Image.optimized.tiff',
+                priority: 2,
+                enabled: true
+            },
+            {
+                id: 'pattern-3',
+                name: 'Extended Format',
+                pattern: '^(?<localCaseId>\\d+)\\s+(?<localRegionId>\\w+)\\s+(?<localStainID>\\w+)_(?<imageType>\\w+)_(?<extendedType>\\w+)$',
+                description: 'Format: 20243819 H PTDP43_Default_Extended.optimized.tiff',
+                example: '20243819 H PTDP43_Default_Extended.optimized.tiff',
+                priority: 3,
+                enabled: true
+            }
+        ]
     });
 
     const [testResults, setTestResults] = useState({});
@@ -21,7 +45,12 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
 
     useEffect(() => {
         if (currentRules) {
-            setRules(currentRules);
+            // Ensure currentRules has a patterns array
+            const rulesWithPatterns = {
+                ...currentRules,
+                patterns: currentRules.patterns || []
+            };
+            setRules(rulesWithPatterns);
         }
     }, [currentRules]);
 
@@ -39,6 +68,62 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
                 [property]: value
             }
         }));
+    };
+
+    // Pattern management functions
+    const addPattern = () => {
+        const newPattern = {
+            id: `pattern-${Date.now()}`,
+            name: 'New Pattern',
+            pattern: '',
+            description: 'Enter pattern description',
+            example: 'example.filename',
+            priority: rules.patterns.length + 1,
+            enabled: true
+        };
+
+        setRules(prev => ({
+            ...prev,
+            patterns: [...prev.patterns, newPattern]
+        }));
+    };
+
+    const updatePattern = (patternId, field, value) => {
+        setRules(prev => ({
+            ...prev,
+            patterns: prev.patterns.map(pattern =>
+                pattern.id === patternId
+                    ? { ...pattern, [field]: value }
+                    : pattern
+            )
+        }));
+    };
+
+    const deletePattern = (patternId) => {
+        setRules(prev => ({
+            ...prev,
+            patterns: prev.patterns.filter(pattern => pattern.id !== patternId)
+        }));
+    };
+
+    const movePattern = (patternId, direction) => {
+        setRules(prev => {
+            const patterns = [...prev.patterns];
+            const index = patterns.findIndex(p => p.id === patternId);
+
+            if (direction === 'up' && index > 0) {
+                [patterns[index], patterns[index - 1]] = [patterns[index - 1], patterns[index]];
+            } else if (direction === 'down' && index < patterns.length - 1) {
+                [patterns[index], patterns[index + 1]] = [patterns[index + 1], patterns[index]];
+            }
+
+            // Update priorities
+            patterns.forEach((pattern, idx) => {
+                pattern.priority = idx + 1;
+            });
+
+            return { ...prev, patterns };
+        });
     };
 
     const testRegex = (pattern, testString) => {
@@ -155,7 +240,7 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
                 forceOverride,
                 checkboxChecked: forceOverride
             });
-            
+
             const result = dataStore.applyRegexRules(rules, forceOverride, forceOverride);
 
             console.log('🔍 REGEX application result:', result);
@@ -330,141 +415,197 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
                 <div className="regex-modal-body">
                     <div className="regex-tab-content">
                         <div className="regex-field-config">
-                                <>
-                                    <h3>{rules.primaryPattern.description}</h3>
-                                    <p className="regex-example">{rules.primaryPattern.example}</p>
+                            <div className="pattern-management-header">
+                                <h3>📝 Regex Pattern Management</h3>
+                                <p>Manage multiple regex patterns with fallback priority. Patterns are tested in order until one matches.</p>
 
-                                    <div className="regex-schema-mapping-info">
-                                        <h4>📋 Schema Mapping</h4>
-                                        <p>The named groups in your regex will be mapped to the BDSA local schema:</p>
-                                        <ul>
-                                            <li><code>localCaseId</code> → BDSA Local Case ID</li>
-                                            <li><code>localRegionId</code> → BDSA Local Region ID</li>
-                                            <li><code>localStainID</code> → BDSA Local Stain ID</li>
-                                            <li><code>localImageType</code> → BDSA Local Image Type</li>
-                                        </ul>
-                                    </div>
-
-                                    <div className="regex-input-group">
-                                        <label>Primary Regex Pattern (with named groups):</label>
-                                        <input
-                                            type="text"
-                                            value={rules.primaryPattern.pattern}
-                                            onChange={(e) => handleRuleChange('pattern', e.target.value)}
-                                            placeholder="^(?&lt;localCaseId&gt;\d{8})\s+(?&lt;localRegionId&gt;[A-Z])\s+(?&lt;localStainID&gt;\w+)_\w+_\w+\.\w+\.\w+$"
-                                            className="regex-pattern-input"
-                                        />
-                                        <small className="regex-input-help">
-                                            Use named groups like <code>(?&lt;localCaseId&gt;...)</code> to extract data that maps to BDSA schema fields
-                                        </small>
-                                    </div>
-
-                                    <div className="regex-suggestions">
-                                        <h4>Suggested Primary Patterns:</h4>
-                                        <div className="regex-suggestion">
-                                            <code>^(?&lt;localCaseId&gt;\d{8})\s+(?&lt;localRegionId&gt;[A-Z])\s+(?&lt;localStainID&gt;\w+)_\w+_\w+\.\w+\.\w+$</code>
-                                            <span>For format: 20232824 B TDP43_LabelArea_Image.optimized.tiff</span>
-                                            <button
-                                                onClick={() => handleRuleChange('pattern', '^(?<localCaseId>\\d{8})\\s+(?<localRegionId>[A-Z])\\s+(?<localStainID>\\w+)_\\w+_\\w+\\.\\w+\\.\\w+$')}
-                                                className="regex-use-suggestion"
-                                            >
-                                                Use
-                                            </button>
-                                        </div>
-                                        <div className="regex-suggestion">
-                                            <code>^(?&lt;localCaseId&gt;\d+-\d+)-(?&lt;localRegionId&gt;\w+)_(?&lt;localStainID&gt;\w+)\.</code>
-                                            <span>For format: 05-662-Temporal_AT8.czi</span>
-                                            <button
-                                                onClick={() => handleRuleChange('pattern', '^(?<localCaseId>\\d+-\\d+)-(?<localRegionId>\\w+)_(?<localStainID>\\w+)\\.')}
-                                                className="regex-use-suggestion"
-                                            >
-                                                Use
-                                            </button>
-                                        </div>
-                                    </div>
-                                </>
-                        </div>
-
-                        <div className="regex-test-section">
-                            <h4>Test Results</h4>
-                            <button onClick={testAllRules} className="regex-test-btn">
-                                Test All Rules
-                            </button>
-
-                            {Object.keys(testResults).length > 0 && (
-                                <div className="regex-test-results">
-                                    {Object.keys(testResults).map(index => (
-                                        <div key={index} className="regex-test-item">
-                                            <div className="regex-test-filename">
-                                                <strong>{testResults[index].fileName}</strong>
-                                            </div>
-                                            <div className="regex-test-extractions">
-                                                {Object.keys(testResults[index].results).map(field => {
-                                                    const result = testResults[index].results[field];
-                                                    if (result && typeof result === 'object' && !result.error) {
-                                                        // Display individual named groups
-                                                        return Object.entries(result).map(([key, value]) => (
-                                                            <div key={`${field}-${key}`} className="regex-test-field">
-                                                                <span className="regex-field-name">{key}:</span>
-                                                                <span className="regex-field-value success">
-                                                                    {value || 'No match'}
-                                                                </span>
-                                                            </div>
-                                                        ));
-                                                    } else {
-                                                        // Fallback for simple results
-                                                        return (
-                                                            <div key={field} className="regex-test-field">
-                                                                <span className="regex-field-name">{field}:</span>
-                                                                <span className={`regex-field-value ${result ? 'success' : 'empty'}`}>
-                                                                    {result ? (result.error ? `Error: ${result.error}` : result) : 'No match'}
-                                                                </span>
-                                                            </div>
-                                                        );
-                                                    }
-                                                })}
-                                            </div>
-                                        </div>
-                                    ))}
+                                <div className="pattern-actions">
+                                    <button
+                                        onClick={addPattern}
+                                        className="add-pattern-btn"
+                                        title="Add new pattern"
+                                    >
+                                        ➕ Add Pattern
+                                    </button>
                                 </div>
-                            )}
+                            </div>
+
+
+                            <div className="patterns-table-container">
+                                <table className="patterns-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Priority</th>
+                                            <th>Name</th>
+                                            <th>Enabled</th>
+                                            <th>Description</th>
+                                            <th>Regex Pattern</th>
+                                            <th>Example</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {rules.patterns && rules.patterns.map((pattern, index) => (
+                                            <tr key={pattern.id} className={`pattern-row ${!pattern.enabled ? 'disabled' : ''}`}>
+                                                <td className="priority-cell">
+                                                    #{pattern.priority}
+                                                </td>
+                                                <td className="name-cell">
+                                                    <input
+                                                        type="text"
+                                                        value={pattern.name}
+                                                        onChange={(e) => updatePattern(pattern.id, 'name', e.target.value)}
+                                                        className="pattern-name-input"
+                                                        placeholder="Pattern name"
+                                                    />
+                                                </td>
+                                                <td className="enabled-cell">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={pattern.enabled}
+                                                        onChange={(e) => updatePattern(pattern.id, 'enabled', e.target.checked)}
+                                                    />
+                                                </td>
+                                                <td className="description-cell">
+                                                    <input
+                                                        type="text"
+                                                        value={pattern.description}
+                                                        onChange={(e) => updatePattern(pattern.id, 'description', e.target.value)}
+                                                        placeholder="Pattern description"
+                                                        className="pattern-description-input"
+                                                    />
+                                                </td>
+                                                <td className="regex-cell">
+                                                    <input
+                                                        type="text"
+                                                        value={pattern.pattern}
+                                                        onChange={(e) => updatePattern(pattern.id, 'pattern', e.target.value)}
+                                                        placeholder="^(?&lt;localCaseId&gt;\d+)_(?&lt;localStainID&gt;\w+)$"
+                                                        className="pattern-regex-input"
+                                                    />
+                                                </td>
+                                                <td className="example-cell">
+                                                    <input
+                                                        type="text"
+                                                        value={pattern.example}
+                                                        onChange={(e) => updatePattern(pattern.id, 'example', e.target.value)}
+                                                        placeholder="example.filename"
+                                                        className="pattern-example-input"
+                                                    />
+                                                </td>
+                                                <td className="actions-cell">
+                                                    <button
+                                                        onClick={() => movePattern(pattern.id, 'up')}
+                                                        disabled={index === 0}
+                                                        title="Move up"
+                                                        className="action-btn"
+                                                    >
+                                                        ⬆️
+                                                    </button>
+                                                    <button
+                                                        onClick={() => movePattern(pattern.id, 'down')}
+                                                        disabled={index === rules.patterns.length - 1}
+                                                        title="Move down"
+                                                        className="action-btn"
+                                                    >
+                                                        ⬇️
+                                                    </button>
+                                                    <button
+                                                        onClick={() => deletePattern(pattern.id)}
+                                                        className="action-btn delete-btn"
+                                                        title="Delete pattern"
+                                                    >
+                                                        🗑️
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+
+                            <div className="regex-test-section">
+                                <h4>Test Results</h4>
+                                <button onClick={testAllRules} className="regex-test-btn">
+                                    Test All Rules
+                                </button>
+
+                                {Object.keys(testResults).length > 0 && (
+                                    <div className="regex-test-results">
+                                        {Object.keys(testResults).map(index => (
+                                            <div key={index} className="regex-test-item">
+                                                <div className="regex-test-filename">
+                                                    <strong>{testResults[index].fileName}</strong>
+                                                </div>
+                                                <div className="regex-test-extractions">
+                                                    {Object.keys(testResults[index].results).map(field => {
+                                                        const result = testResults[index].results[field];
+                                                        if (result && typeof result === 'object' && !result.error) {
+                                                            // Display individual named groups
+                                                            return Object.entries(result).map(([key, value]) => (
+                                                                <div key={`${field}-${key}`} className="regex-test-field">
+                                                                    <span className="regex-field-name">{key}:</span>
+                                                                    <span className="regex-field-value success">
+                                                                        {value || 'No match'}
+                                                                    </span>
+                                                                </div>
+                                                            ));
+                                                        } else {
+                                                            // Fallback for simple results
+                                                            return (
+                                                                <div key={field} className="regex-test-field">
+                                                                    <span className="regex-field-name">{field}:</span>
+                                                                    <span className={`regex-field-value ${result ? 'success' : 'empty'}`}>
+                                                                        {result ? (result.error ? `Error: ${result.error}` : result) : 'No match'}
+                                                                    </span>
+                                                                </div>
+                                                            );
+                                                        }
+                                                    })}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <div className="regex-modal-footer">
-                    <div className="regex-footer-left">
-                        <button
-                            onClick={handlePullFromDSA}
-                            className="regex-dsa-btn"
-                            disabled={isSyncing}
-                            title="Pull regex rules from DSA server"
-                        >
-                            {isSyncing ? '⏳' : '⬇️'} Pull from DSA
-                        </button>
-                        <button
-                            onClick={handlePushToDSA}
-                            className="regex-dsa-btn regex-push-btn"
-                            disabled={isSyncing}
-                            title="Push regex rules to DSA server"
-                        >
-                            {isSyncing ? '⏳' : '🔄'} Push to DSA
-                        </button>
-                    </div>
-                    <div className="regex-footer-center">
-                        <label className="regex-override-checkbox" title="Re-apply regex rules to values that were previously extracted by regex (protects manual edits and column mappings)">
-                            <input
-                                type="checkbox"
-                                checked={forceOverride}
-                                onChange={(e) => setForceOverride(e.target.checked)}
-                            />
-                            <span>Override existing regex values</span>
-                        </label>
-                    </div>
-                    <div className="regex-footer-right">
-                        <button onClick={handleApplyRegexRules} className="regex-apply-btn">Apply REGEX Rules</button>
-                        <button onClick={onClose} className="regex-cancel-btn">Cancel</button>
-                        <button onClick={handleSave} className="regex-save-btn">Save Rules</button>
+                    <div className="regex-modal-footer">
+                        <div className="regex-footer-left">
+                            <button
+                                onClick={handlePullFromDSA}
+                                className="regex-dsa-btn"
+                                disabled={isSyncing}
+                                title="Pull regex rules from DSA server"
+                            >
+                                {isSyncing ? '⏳' : '⬇️'} Pull from DSA
+                            </button>
+                            <button
+                                onClick={handlePushToDSA}
+                                className="regex-dsa-btn regex-push-btn"
+                                disabled={isSyncing}
+                                title="Push regex rules to DSA server"
+                            >
+                                {isSyncing ? '⏳' : '🔄'} Push to DSA
+                            </button>
+                        </div>
+                        <div className="regex-footer-center">
+                            <label className="regex-override-checkbox" title="Re-apply regex rules to values that were previously extracted by regex (protects manual edits and column mappings)">
+                                <input
+                                    type="checkbox"
+                                    checked={forceOverride}
+                                    onChange={(e) => setForceOverride(e.target.checked)}
+                                />
+                                <span>Override existing regex values</span>
+                            </label>
+                        </div>
+                        <div className="regex-footer-right">
+                            <button onClick={handleApplyRegexRules} className="regex-apply-btn">Apply REGEX Rules</button>
+                            <button onClick={onClose} className="regex-cancel-btn">Cancel</button>
+                            <button onClick={handleSave} className="regex-save-btn">Save Rules</button>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -7,6 +7,7 @@ const ProtocolList = ({ protocols, type, onEdit, onDelete, onAdd }) => {
         if (type === 'stain') {
             return (
                 <div className="protocol-details">
+                    <p><strong>GUID:</strong> <code>{protocol.id}</code></p>
                     <p><strong>Description:</strong> {protocol.description || 'No description'}</p>
                     {protocol.stainType && protocol.stainType !== 'ignore' && (
                         <p><strong>Stain Type:</strong> {protocol.stainType}</p>
@@ -31,6 +32,7 @@ const ProtocolList = ({ protocols, type, onEdit, onDelete, onAdd }) => {
         } else {
             return (
                 <div className="protocol-details">
+                    <p><strong>GUID:</strong> <code>{protocol.id}</code></p>
                     <p><strong>Description:</strong> {protocol.description || 'No description'}</p>
                     {protocol.regionType && protocol.regionType !== 'ignore' && (
                         <p><strong>Region Type:</strong> {protocol.regionType}</p>

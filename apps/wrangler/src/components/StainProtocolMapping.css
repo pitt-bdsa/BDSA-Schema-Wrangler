@@ -305,6 +305,26 @@
     border-radius: 12px;
     font-size: 10px;
     font-weight: 500;
+    max-width: 200px;
+    /* Prevent chips from getting too wide */
+    min-width: fit-content;
+    /* Ensure content fits */
+    white-space: nowrap;
+    /* Prevent text wrapping */
+    overflow: hidden;
+    /* Hide overflow text */
+    position: relative;
+    /* For proper button positioning */
+}
+
+/* Text inside protocol chips should truncate with ellipsis */
+.protocol-chip>span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: calc(100% - 24px);
+    /* Leave space for the remove button */
+    display: inline-block;
 }
 
 .group-chip {
@@ -337,6 +357,12 @@
     align-items: center;
     justify-content: center;
     transition: background-color 0.2s;
+    flex-shrink: 0;
+    /* Prevent button from shrinking */
+    position: relative;
+    /* Ensure button stays visible */
+    z-index: 1;
+    /* Ensure button is on top */
 }
 
 .remove-protocol-btn:hover {

@@ -42,6 +42,44 @@ const resolveProtocolToNames = (protocolRefs, protocolType, protocolStore) => {
 };
 
 /**
+ * Resolves protocol references (names or GUIDs) to protocol GUIDs for internal tracking
+ * Names are used for display, but GUIDs are used for internal consistency
+ * @param {Array<string>} protocolRefs - Array of protocol references (names or GUIDs)
+ * @param {string} protocolType - 'stain' or 'region'
+ * @param {Object} protocolStore - Protocol store instance
+ * @returns {Array<string>} Array of protocol GUIDs
+ */
+const resolveProtocolToGuids = (protocolRefs, protocolType, protocolStore) => {
+    if (!Array.isArray(protocolRefs) || protocolRefs.length === 0) {
+        return [];
+    }
+
+    return protocolRefs.map(ref => {
+        // Check if this looks like a GUID (STAIN_xxxxx or REGION_xxxxx)
+        const isGuid = /^(STAIN|REGION)_[a-z0-9]{6}$/.test(ref);
+
+        if (isGuid) {
+            // Already a GUID, use as-is
+            return ref;
+        } else {
+            // Resolve name to GUID
+            const protocols = protocolType === 'stain'
+                ? protocolStore.stainProtocols
+                : protocolStore.regionProtocols;
+            const protocol = protocols.find(p => p.name === ref);
+
+            if (protocol) {
+                console.log(`✅ Resolved protocol name ${ref} → ${protocol.id}`);
+                return protocol.id;
+            } else {
+                console.warn(`⚠️ Protocol name ${ref} not found in ${protocolType} protocols, using as-is`);
+                return ref; // Fallback to name if not found
+            }
+        }
+    });
+};
+
+/**
  * Adds/updates specific metadata fields for a single DSA item using the add metadata endpoint
  * This only updates the specified metadata fields without replacing the entire metadata object
  * @param {string} baseUrl - DSA base URL
@@ -147,6 +185,8 @@ export const updateItemMetadata = async (baseUrl, itemId, girderToken, metadata)
  * @param {Object} metadata - Metadata fields to add/update
  * @returns {Promise<Object>} Update result
  */
+export { resolveProtocolToNames, resolveProtocolToGuids };
+
 export const addFolderMetadata = async (baseUrl, folderId, girderToken, metadata) => {
     try {
         if (!baseUrl || !folderId || !girderToken) {

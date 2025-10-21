@@ -747,16 +747,16 @@ class ProtocolStore {
             if (data.stainProtocols) {
                 this.stainProtocols = data.stainProtocols.map(p => ({
                     ...p,
-                    _localModified: true,
-                    _remoteVersion: null
+                    _localModified: false, // Imported protocols are not locally modified
+                    _remoteVersion: p.lastUpdated || null
                 }));
                 this.saveStainProtocols();
             }
             if (data.regionProtocols) {
                 this.regionProtocols = data.regionProtocols.map(p => ({
                     ...p,
-                    _localModified: true,
-                    _remoteVersion: null
+                    _localModified: false, // Imported protocols are not locally modified
+                    _remoteVersion: p.lastUpdated || null
                 }));
                 this.saveRegionProtocols();
             }

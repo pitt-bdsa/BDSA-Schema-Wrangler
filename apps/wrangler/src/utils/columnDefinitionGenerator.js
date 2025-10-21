@@ -298,6 +298,24 @@ export const generateColumnDefinitions = (processedData, columnVisibility, colum
         sampleColumns: columnDefs.slice(0, 5).map(col => col.field)
     });
 
+    // Debug: Check for meta.npClinical columns
+    const metaNpClinicalColumns = columnDefs.filter(col => col.field.startsWith('meta.npClinical.'));
+    console.log('🔍 meta.npClinical columns found:', {
+        count: metaNpClinicalColumns.length,
+        sampleFields: metaNpClinicalColumns.slice(0, 5).map(col => col.field)
+    });
+
+    // Debug: Check if the data actually has values for these fields
+    if (processedData.length > 0) {
+        const firstRow = processedData[0];
+        const sampleMetaFields = metaNpClinicalColumns.slice(0, 3).map(col => ({
+            field: col.field,
+            value: firstRow[col.field],
+            type: typeof firstRow[col.field]
+        }));
+        console.log('🔍 Sample meta.npClinical values in data:', sampleMetaFields);
+    }
+
     return columnDefs;
 };
 

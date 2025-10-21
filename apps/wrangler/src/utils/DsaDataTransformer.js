@@ -16,7 +16,7 @@ export const flattenObject = (obj, prefix = '') => {
 
     for (const key in obj) {
         if (obj.hasOwnProperty(key)) {
-            const newKey = prefix ? `${prefix}.${key}` : key;
+            const newKey = prefix ? `${prefix}_${key}` : key;
 
             if (obj[key] !== null && typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
                 // Recursively flatten nested objects
@@ -55,10 +55,10 @@ export const filterFilesByExtension = (dsaData) => {
         const fileName = item.name || item._id || '';
         const extension = fileName.split('.').pop()?.toLowerCase();
 
-        // Debug logging for first few items
-        if (skipStats.totalSkipped < 10) {
-            console.log(`🔍 File filtering debug: "${fileName}" -> extension: "${extension}" -> allowed: ${allowedExtensions.includes(extension)}`);
-        }
+        // Debug logging for first few items (disabled to reduce console spam)
+        // if (skipStats.totalSkipped < 10) {
+        //     console.log(`🔍 File filtering debug: "${fileName}" -> extension: "${extension}" -> allowed: ${allowedExtensions.includes(extension)}`);
+        // }
 
         // If no extension, keep the file (might be a folder or special item)
         if (!extension) {
@@ -222,7 +222,11 @@ export const enhanceDataWithExistingMetadata = (dsaData) => {
 export const transformDsaData = (dsaData, regexRules = {}) => {
     // This function will transform DSA API response to match your expected data format
     // and flatten nested JSON dictionaries
+    console.log('🚀🚀🚀 TRANSFORM DEBUG: transformDsaData called with', dsaData?.length, 'items');
+    console.log('🚀🚀🚀 TRANSFORM DEBUG: First item keys:', dsaData?.[0] ? Object.keys(dsaData[0]) : 'no items');
+
     if (!dsaData || !Array.isArray(dsaData)) {
+        console.log('❌ TRANSFORM DEBUG: No valid data provided');
         return [];
     }
 
@@ -232,7 +236,31 @@ export const transformDsaData = (dsaData, regexRules = {}) => {
     // Apply file extension filtering
     const { filteredData, skipStats } = filterFilesByExtension(enhancedData);
 
-    const transformedData = filteredData.map(item => {
+    console.log('🔍 TRANSFORM DEBUG: About to process', filteredData.length, 'filtered items');
+
+    const transformedData = filteredData.map((item, index) => {
+        // Debug: Log raw data structure for first few items
+        if (index < 3) {
+            console.log(`🔍 Raw item ${index} structure:`, {
+                hasMeta: !!item.meta,
+                metaKeys: item.meta ? Object.keys(item.meta) : [],
+                hasNpClinical: !!(item.meta && item.meta.npClinical),
+                npClinicalKeys: item.meta && item.meta.npClinical ? Object.keys(item.meta.npClinical) : []
+            });
+
+            // Debug: Check if meta.npClinical has actual data
+            if (item.meta && item.meta.npClinical) {
+                console.log(`🔍 Raw item ${index} meta.npClinical sample:`, {
+                    keys: Object.keys(item.meta.npClinical).slice(0, 5),
+                    sampleValues: Object.keys(item.meta.npClinical).slice(0, 3).map(key => ({
+                        key,
+                        value: item.meta.npClinical[key],
+                        type: typeof item.meta.npClinical[key]
+                    }))
+                });
+            }
+        }
+
         // Flatten the entire item, including nested objects
         const flattenedItem = flattenObject(item);
 
@@ -252,6 +280,16 @@ export const transformDsaData = (dsaData, regexRules = {}) => {
         }
 
         console.log(`🔍 Cleaned flattened data - removed BDSA fields to prevent duplicates`);
+        console.log(`🔍 Sample flattened fields:`, Object.keys(cleanedFlattenedItem).slice(0, 20));
+        console.log(`🔍 Sample meta.npClinical fields:`, Object.keys(cleanedFlattenedItem).filter(key => key.startsWith('meta.npClinical')).slice(0, 10));
+
+        // Debug: Check if the flattened data has actual values
+        const sampleValues = Object.keys(cleanedFlattenedItem).map(key => ({
+            key,
+            value: cleanedFlattenedItem[key],
+            type: typeof cleanedFlattenedItem[key]
+        }));
+        console.log(`🔍 ALL flattened values:`, sampleValues);
 
         // Add some common field mappings for compatibility
         const transformedItem = {
