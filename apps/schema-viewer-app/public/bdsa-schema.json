@@ -1,0 +1,777 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://example.com/product.schema.json",
+    "title": "BDSA Schema",
+    "description": "JSON Schema for the BDSA Project.",
+    "type": "object",
+    "required": [
+        "bdsaID",
+        "stainID",
+        "regionIDs"
+    ],
+    "properties": {
+        "bdsaID": {
+            "type": "string",
+            "title": "BDSA ID",
+            "pattern": "^BDSA\\d+\\.\\d+$",
+            "description": "Unique BDSA case identifier (example: \"BDSA1.33\")"
+        },
+        "stainIDs": {
+            "type": "array",
+            "items": {
+                "title": "Stain ID",
+                "description": "Stain used on tissue section, with potentially additional information.",
+                "properties": {
+                    "TDP-43": {
+                        "type": "object",
+                        "title": "TDP-43",
+                        "abbreviation": "TDP",
+                        "required": [
+                            "phospho-specific"
+                        ],
+                        "properties": {
+                            "phospho-specific": {
+                                "type": "string",
+                                "title": "Phospho-specific",
+                                "enum": [
+                                    "yes",
+                                    "no"
+                                ]
+                            },
+                            "dilution": {
+                                "type": "string",
+                                "title": "Dilution",
+                                "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
+                            },
+                            "vendor": {
+                                "type": "string",
+                                "title": "Vendor"
+                            }
+                        }
+                    },
+                    "aSyn": {
+                        "type": "object",
+                        "title": "Alpha Synuclein",
+                        "abbreviation": "aSyn",
+                        "required": [
+                            "phospho-specific"
+                        ],
+                        "properties": {
+                            "phospho-specific": {
+                                "type": "string",
+                                "title": "Phospho-specific",
+                                "enum": [
+                                    "yes",
+                                    "no"
+                                ]
+                            },
+                            "dilution": {
+                                "type": "string",
+                                "title": "Dilution",
+                                "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
+                            },
+                            "vendor": {
+                                "type": "string",
+                                "title": "Vendor"
+                            }
+                        }
+                    },
+                    "HE": {
+                        "type": "object",
+                        "title": "Hematoxylin and Eosin",
+                        "abbreviation": "HE",
+                        "properties": {
+                            "dilution": {
+                                "type": "string",
+                                "title": "Dilution",
+                                "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
+                            },
+                            "vendor": {
+                                "type": "string",
+                                "title": "Vendor"
+                            }
+                        }
+                    },
+                    "Silver": {
+                        "type": "object",
+                        "title": "Silver Stain",
+                        "abbreviation": "Silver",
+                        "required": [
+                            "technique"
+                        ],
+                        "properties": {
+                            "technique": {
+                                "type": "string",
+                                "title": "Silver Stain",
+                                "enum": [
+                                    "Bielschowsky",
+                                    "Gallyas",
+                                    "Campbell-Switzer"
+                                ]
+                            },
+                            "dilution": {
+                                "type": "string",
+                                "title": "Dilution",
+                                "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
+                            },
+                            "vendor": {
+                                "type": "string",
+                                "title": "Vendor"
+                            }
+                        }
+                    },
+                    "Thioflavin": {
+                        "type": "object",
+                        "title": "Thioflavin",
+                        "abbreviation": "ThioS"
+                    },
+                    "Tau": {
+                        "type": "object",
+                        "title": "Tau",
+                        "abbreviation": "Tau",
+                        "required": [
+                            "antibody"
+                        ],
+                        "properties": {
+                            "antibody": {
+                                "type": "string",
+                                "title": "Antibody",
+                                "enum": [
+                                    "AT8",
+                                    "PHF1",
+                                    "CP13",
+                                    "Total Tau",
+                                    "RD3",
+                                    "RD4"
+                                ]
+                            },
+                            "vendor": {
+                                "type": "string",
+                                "title": "Vendor"
+                            },
+                            "dilution": {
+                                "type": "string",
+                                "title": "Dilution",
+                                "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
+                                "pattern": "^\\d+:\\d+$"
+                            }
+                        }
+                    },
+                    "aBeta": {
+                        "type": "object",
+                        "title": "Amyloid Beta",
+                        "abbreviation": "Aβ",
+                        "required": [
+                            "antibody"
+                        ],
+                        "properties": {
+                            "antibody": {
+                                "type": "string",
+                                "title": "Antibody",
+                                "enum": [
+                                    "4G8",
+                                    "6E10"
+                                ]
+                            },
+                            "vendor": {
+                                "type": "string",
+                                "title": "Vendor"
+                            },
+                            "dilution": {
+                                "type": "string",
+                                "title": "Dilution",
+                                "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
+                                "pattern": "^\\d+:\\d+$"
+                            }
+                        }
+                    },
+                    "LFB": {
+                        "type": "object",
+                        "title": "Luxol Fast Blue",
+                        "abbreviation": "LFB",
+                        "properties": {
+                            "dilution": {
+                                "type": "string",
+                                "title": "Dilution",
+                                "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
+                            },
+                            "vendor": {
+                                "type": "string",
+                                "title": "Vendor"
+                            }
+                        }
+                    },
+                    "GFAP": {
+                        "type": "object",
+                        "title": "Glial Fibrillary Acidic Protein",
+                        "abbreviation": "GFAP",
+                        "properties": {
+                            "dilution": {
+                                "type": "string",
+                                "title": "Dilution",
+                                "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
+                            },
+                            "vendor": {
+                                "type": "string",
+                                "title": "Vendor"
+                            }
+                        }
+                    },
+                    "IBA1": {
+                        "type": "object",
+                        "title": "Ionized Calcium-Binding Adapter Molecule 1",
+                        "abbreviation": "IBA1",
+                        "properties": {
+                            "dilution": {
+                                "type": "string",
+                                "title": "Dilution",
+                                "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
+                            },
+                            "vendor": {
+                                "type": "string",
+                                "title": "Vendor"
+                            }
+                        }
+                    },
+                    "NeuN": {
+                        "type": "object",
+                        "title": "Neuronal Nuclei",
+                        "abbreviation": "NeuN",
+                        "properties": {
+                            "dilution": {
+                                "type": "string",
+                                "title": "Dilution",
+                                "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
+                            },
+                            "vendor": {
+                                "type": "string",
+                                "title": "Vendor"
+                            }
+                        }
+                    }
+                },
+                "minProperties": 1,
+                "maxProperties": 1
+            },
+            "description": "List of stains used on the tissue section, each including the stain name and potentially additional information."
+        },
+        "regionIDs": {
+            "type": "object",
+            "title": "Region Information",
+            "required": [
+                "regions"
+            ],
+            "properties": {
+                "regions": {
+                    "type": "object",
+                    "title": "Regions",
+                    "minItems": 1,
+                    "additionalProperties": false,
+                    "properties": {
+                        "Olfactory Bulb": {
+                            "type": "array",
+                            "title": "Olfactory Bulb",
+                            "abbreviation": "OB",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "Bulb",
+                                    "Tract"
+                                ]
+                            }
+                        },
+                        "Parietal Lobe": {
+                            "type": "array",
+                            "title": "Parietal Lobe",
+                            "abbreviation": "PL",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "Super",
+                                    "Middle",
+                                    "Inferior",
+                                    "Angular gyrus",
+                                    "Supramarginal gyrus"
+                                ]
+                            }
+                        },
+                        "Temporal Pole": {
+                            "type": "array",
+                            "title": "Temporal Pole",
+                            "abbreviation": "TP",
+                            "items": {
+                                "type": "string"
+                            },
+                            "maxItems": 0
+                        },
+                        "Frontal Lobe": {
+                            "type": "array",
+                            "title": "Frontal Lobe",
+                            "abbreviation": "FL",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "Superior",
+                                    "Middle",
+                                    "Inferior"
+                                ]
+                            }
+                        },
+                        "Temporal Lobe": {
+                            "type": "array",
+                            "title": "Temporal Lobe",
+                            "abbreviation": "TL",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "Superior",
+                                    "Middle",
+                                    "Inferior"
+                                ]
+                            }
+                        },
+                        "Hippocampus": {
+                            "type": "array",
+                            "title": "Hippocampus",
+                            "abbreviation": "HP",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "CA1-4 with dentate gyrus",
+                                    "Parahippocampal gyrus",
+                                    "Tail of caudate",
+                                    "Lateral geniculate nucleus",
+                                    "Occipital temporal gyrus"
+                                ]
+                            }
+                        },
+                        "Anterior Cingulate": {
+                            "type": "array",
+                            "title": "Anterior Cingulate",
+                            "abbreviation": "ACg",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "Corpus callosum",
+                                    "Superior frontal"
+                                ]
+                            }
+                        },
+                        "Posterior Cingulate": {
+                            "type": "array",
+                            "title": "Posterior Cingulate",
+                            "abbreviation": "PCg",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "Corpus callosum",
+                                    "Superior frontal"
+                                ]
+                            }
+                        },
+                        "Amygdala": {
+                            "type": "array",
+                            "title": "Amygdala",
+                            "abbreviation": "Amy",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "Entorhinal cortex"
+                                ]
+                            }
+                        },
+                        "Thalamus": {
+                            "type": "array",
+                            "title": "Thalamus",
+                            "abbreviation": "Thal",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "Mammillary body",
+                                    "Subthalamic nucleus",
+                                    "Mammilo-thalmaic tract",
+                                    "Anterior nucleus of thalamus",
+                                    "Pulvinar"
+                                ]
+                            }
+                        },
+                        "White Matter": {
+                            "type": "array",
+                            "title": "White Matter",
+                            "abbreviation": "WM",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "Frontal",
+                                    "Parietal",
+                                    "Temporal",
+                                    "Occipital"
+                                ]
+                            }
+                        },
+                        "Midbrain": {
+                            "type": "array",
+                            "title": "Midbrain",
+                            "abbreviation": "MB",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "3rd cranial nerve",
+                                    "Substantia nigra",
+                                    "Red nucleus",
+                                    "Superior colliculus"
+                                ]
+                            }
+                        },
+                        "Pons": {
+                            "type": "array",
+                            "title": "Pons",
+                            "abbreviation": "Pons",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "Superior cerebellar peduncle",
+                                    "Inferior colliculus",
+                                    "Locus coeruleus",
+                                    "Pontine base / fibers"
+                                ]
+                            }
+                        },
+                        "Medulla": {
+                            "type": "array",
+                            "title": "Medulla",
+                            "abbreviation": "Med",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "Dorsal motor nucleus of vagus",
+                                    "Hypoglossal nucleus",
+                                    "Inferior olive",
+                                    "Medullary velum",
+                                    "Pyramid"
+                                ]
+                            }
+                        },
+                        "Cerebellum": {
+                            "type": "array",
+                            "title": "Cerebellum",
+                            "abbreviation": "Cb",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "Dentate",
+                                    "Vermis",
+                                    "Cortex"
+                                ]
+                            }
+                        },
+                        "Basal Ganglia": {
+                            "type": "array",
+                            "title": "Basal Ganglia",
+                            "abbreviation": "BG",
+                            "items": {
+                                "type": "string"
+                            },
+                            "maxItems": 0
+                        },
+                        "Occipital Lobe": {
+                            "type": "array",
+                            "title": "Occipital Lobe",
+                            "abbreviation": "OL",
+                            "items": {
+                                "type": "string"
+                            },
+                            "maxItems": 0
+                        },
+                        "Primary Motor Cortex": {
+                            "type": "array",
+                            "title": "Primary Motor Cortex",
+                            "abbreviation": "M1",
+                            "items": {
+                                "type": "string"
+                            },
+                            "maxItems": 0
+                        },
+                        "Insula": {
+                            "type": "array",
+                            "title": "Insula",
+                            "abbreviation": "Ins",
+                            "items": {
+                                "type": "string"
+                            },
+                            "maxItems": 0
+                        },
+                        "Frontal Pole": {
+                            "type": "array",
+                            "title": "Frontal Pole",
+                            "abbreviation": "FP",
+                            "items": {
+                                "type": "string"
+                            },
+                            "maxItems": 0
+                        },
+                        "Spinal Cord": {
+                            "type": "array",
+                            "title": "Spinal Cord",
+                            "abbreviation": "SC",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "Lower",
+                                    "Middle",
+                                    "Upper"
+                                ]
+                            }
+                        },
+                        "Hypothalamus": {
+                            "type": "array",
+                            "title": "Hypothalamus",
+                            "abbreviation": "Hyp",
+                            "items": {
+                                "type": "string"
+                            },
+                            "maxItems": 0
+                        }
+                    }
+                },
+                "hemisphere": {
+                    "type": "string",
+                    "title": "Hemisphere",
+                    "enum": [
+                        "left",
+                        "right"
+                    ]
+                },
+                "sliceOrientation": {
+                    "title": "Slice Orientation",
+                    "type": "string",
+                    "enum": [
+                        "axial",
+                        "coronal",
+                        "sagittal"
+                    ]
+                },
+                "damage": {
+                    "type": "array",
+                    "title": "Damage",
+                    "description": "Specifies tissue damage in this region and the cause of it.",
+                    "items": {
+                        "type": "string",
+                        "enum": [
+                            "Infarct",
+                            "Lacune",
+                            "Microinfarct",
+                            "CTE",
+                            "TBI"
+                        ]
+                    }
+                },
+                "sliceThickness": {
+                    "type": "number",
+                    "title": "Slice Thickness",
+                    "description": "Thickness of the tissue slice in microns (μm). This represents the physical thickness of the tissue section.",
+                    "minimum": 0.1,
+                    "maximum": 1000,
+                    "multipleOf": 0.1
+                },
+                "landmarks": {
+                    "type": "array",
+                    "title": "Landmarks",
+                    "description": "Multiple anatomical landmarks present in this region (allows for non-mutually exclusive landmarks)",
+                    "items": {
+                        "type": "string"
+                    },
+                    "uniqueItems": true
+                }
+            }
+        },
+        "slideComments": {
+            "type": "string",
+            "description": "Optional free text field for additional comments about the slide."
+        },
+        "slideIndex": {
+            "type": "integer",
+            "default": 1,
+            "description": "Index of the slide when multiple sections have the same stain and block information, or if there are replicates."
+        },
+        "otherCaseIdentifiers": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "caseID": {
+                        "type": "string",
+                        "description": "Other unique identifier for the case from other repositires."
+                    },
+                    "caseSource": {
+                        "type": "string",
+                        "description": "The source of the case identifier, e.g., NACC, NIGAD, dbGAP, ADNI.",
+                        "enum": [
+                            "NACC",
+                            "NIGAD",
+                            "dbGAP",
+                            "ADNI"
+                        ]
+                    }
+                },
+                "required": [
+                    "caseID",
+                    "caseSource"
+                ],
+                "description": "An object containing both the caseID and the caseSource for other case identifiers associated with the case."
+            },
+            "description": "List of other case identifiers that may be associated with the case, each including a caseID and a caseSource."
+        },
+        "clinicalData": {
+            "type": "object",
+            "title": "Clinical Metadata",
+            "description": "The metadata fields that each case must have to include in the BDSA database, based on NACC fields.",
+            "required": [
+                "NPSEX",
+                "NACCDAGE",
+                "EDUC",
+                "HISPANIC",
+                "NACCUDSD",
+                "RACE",
+                "NPPMIH",
+                "NPADNC"
+            ],
+            "properties": {
+                "NACCID": {
+                    "type": "string",
+                    "title": "NACC ID",
+                    "description": "NACCID is a unique identifier for each case in the NACC database."
+                },
+                "NPSEX": {
+                    "type": "integer",
+                    "title": "Sex",
+                    "enum": [
+                        1,
+                        2
+                    ],
+                    "description": "1=male, 2=female. NACC variable.\nCDE: `sex`",
+                    "cde": "sex"
+                },
+                "NACCDAGE": {
+                    "type": "integer",
+                    "title": "Age at Death",
+                    "description": "Age at death in years. NACC variable.\nCDE: `age_at_death`",
+                    "cde": "age_at_death"
+                },
+                "EDUC": {
+                    "type": "integer",
+                    "title": "Years of Education",
+                    "description": "Number of years of formal education. NACC variable.\nCDE: `years_of_education`",
+                    "cde": "years_of_education"
+                },
+                "HISPANIC": {
+                    "type": "integer",
+                    "title": "Hispanic Ethnicity",
+                    "enum": [
+                        0,
+                        1
+                    ],
+                    "description": "0=no, 1=yes. NACC variable.\nCDE: `hispanic_ethnicity`",
+                    "cde": "hispanic_ethnicity"
+                },
+                "NACCUDSD": {
+                    "type": "integer",
+                    "title": "NACC UDS Dementia Status",
+                    "enum": [
+                        1,
+                        2,
+                        3,
+                        4,
+                        5,
+                        6,
+                        7,
+                        8,
+                        9
+                    ],
+                    "description": "NACC UDS Dementia Status. NACC variable.\nCDE: `dementia_status`",
+                    "cde": "dementia_status"
+                },
+                "RACE": {
+                    "type": "integer",
+                    "title": "Race",
+                    "enum": [
+                        1,
+                        2,
+                        3,
+                        4,
+                        5,
+                        6,
+                        7,
+                        8,
+                        9
+                    ],
+                    "description": "Race categories. NACC variable.\nCDE: `race`",
+                    "cde": "race"
+                },
+                "NPPMIH": {
+                    "type": "integer",
+                    "title": "NACC PMI Hours",
+                    "description": "Post-mortem interval in hours. NACC variable.\nCDE: `pmi_hours`",
+                    "cde": "pmi_hours"
+                },
+                "NPADNC": {
+                    "type": "integer",
+                    "title": "NACC ADNC",
+                    "enum": [
+                        1,
+                        2,
+                        3,
+                        4,
+                        5,
+                        6,
+                        7,
+                        8,
+                        9
+                    ],
+                    "description": "NACC ADNC (Alzheimer's Disease Neuropathologic Change) score. NACC variable.\nCDE: `adnc_score`",
+                    "cde": "adnc_score"
+                }
+            }
+        }
+    }
+}

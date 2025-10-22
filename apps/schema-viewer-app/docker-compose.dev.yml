@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  bdsa-schema-viewer-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"  # Vite dev server
+      - "8000:8000"  # FastAPI backend
+    container_name: bdsa-schema-viewer-dev
+    volumes:
+      # Bind mount source code for hot reload
+      - ./src:/app/src:ro
+      - ./api:/app/api:ro
+      - ./public:/app/public:ro
+      - ./index.html:/app/index.html:ro
+      - ./vite.config.js:/app/vite.config.js:ro
+      - ./package.json:/app/package.json:ro
+      # Use named volumes for node_modules and Python packages to avoid conflicts
+      - node_modules:/app/node_modules
+      - python_packages:/usr/local/lib/python3.11/site-packages
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://localhost:8000
+    restart: unless-stopped
+    labels:
+      - "com.bdsa.service=schema-viewer"
+      - "com.bdsa.version=dev"
+    command: >
+      sh -c "
+        echo 'Starting FastAPI backend...' &&
+        python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload &
+        echo 'Waiting for FastAPI to start...' &&
+        sleep 3 &&
+        echo 'Starting Vite dev server...' &&
+        npm run dev -- --host 0.0.0.0
+      "
+
+volumes:
+  node_modules:
+  python_packages:
+

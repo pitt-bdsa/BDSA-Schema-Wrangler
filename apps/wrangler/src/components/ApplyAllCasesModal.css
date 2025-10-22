@@ -1,0 +1,254 @@
+.apply-all-modal-content {
+    max-width: 600px;
+    width: 90%;
+}
+
+.apply-all-info {
+    margin-bottom: 20px;
+    padding: 16px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border: 1px solid #dee2e6;
+}
+
+.apply-all-info p {
+    margin: 0 0 8px 0;
+    color: #6c757d;
+    font-size: 0.9rem;
+}
+
+.apply-all-info p:last-child {
+    margin-bottom: 0;
+}
+
+.apply-all-actions {
+    text-align: center;
+    margin: 20px 0;
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.start-apply-btn {
+    background: linear-gradient(135deg, #007bff, #0056b3);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.start-apply-btn:hover {
+    background: linear-gradient(135deg, #0056b3, #004085);
+    transform: translateY(-1px);
+}
+
+.start-apply-btn:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.cancel-apply-btn {
+    background: #6c757d;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.cancel-apply-btn:hover {
+    background: #5a6268;
+    transform: translateY(-1px);
+}
+
+.apply-all-progress {
+    margin: 20px 0;
+    padding: 16px;
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+}
+
+.progress-header {
+    margin-bottom: 16px;
+}
+
+.progress-header h3 {
+    margin: 0 0 8px 0;
+    color: #495057;
+    font-size: 1.1rem;
+}
+
+.current-case {
+    font-size: 0.9rem;
+    color: #6c757d;
+    background: #e9ecef;
+    padding: 6px 12px;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 12px;
+    background-color: #e9ecef;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #28a745, #20c997);
+    transition: width 0.3s ease;
+    border-radius: 6px;
+}
+
+.progress-text {
+    font-size: 0.9rem;
+    color: #495057;
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.progress-details {
+    font-size: 0.8rem;
+    color: #6c757d;
+    display: flex;
+    gap: 16px;
+}
+
+.apply-all-results {
+    margin: 20px 0;
+    padding: 16px;
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+}
+
+.apply-all-results h3 {
+    margin: 0 0 16px 0;
+    color: #495057;
+    font-size: 1.1rem;
+}
+
+.error-message {
+    background: #f8d7da;
+    color: #721c24;
+    padding: 12px;
+    border-radius: 4px;
+    border: 1px solid #f5c6cb;
+    margin-bottom: 16px;
+}
+
+.success-message {
+    background: #d4edda;
+    color: #155724;
+    padding: 12px;
+    border-radius: 4px;
+    border: 1px solid #c3e6cb;
+    margin-bottom: 16px;
+}
+
+.results-summary {
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.results-details {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+.results-actions {
+    text-align: center;
+}
+
+.close-results-btn {
+    background: #6c757d;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.close-results-btn:hover {
+    background: #5a6268;
+}
+
+/* Modal overlay styles */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.modal-header h2 {
+    margin: 0;
+    color: #495057;
+    font-size: 1.25rem;
+}
+
+.close-modal-btn {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #6c757d;
+    cursor: pointer;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.close-modal-btn:hover:not(:disabled) {
+    background: #f8f9fa;
+    color: #495057;
+}
+
+.close-modal-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.modal-body {
+    padding: 24px;
+}

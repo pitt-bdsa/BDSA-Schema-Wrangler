@@ -1,0 +1,11 @@
+# Ignore reactApp directory to prevent AI from editing it
+reactApp/
+reactApp/***
+
+# Also ignore other directories that shouldn't be touched
+reactApp-v2/
+deidCode/
+notebooks/
+app/
+allenAtlasExplorer/
+json-schema-app/

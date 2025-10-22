@@ -1,0 +1,263 @@
+/* DSA Folder Browser Modal Styles */
+.dsa-folder-browser-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.dsa-folder-browser-modal {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    width: 90%;
+    max-width: 800px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.dsa-folder-browser-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.dsa-folder-browser-header h3 {
+    margin: 0;
+    color: #333;
+}
+
+.dsa-close-btn {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: #666;
+    padding: 5px;
+    border-radius: 4px;
+}
+
+.dsa-close-btn:hover {
+    background-color: #f0f0f0;
+    color: #333;
+}
+
+.dsa-folder-browser-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    max-height: 60vh;
+}
+
+.dsa-loading,
+.dsa-error,
+.dsa-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    color: #666;
+}
+
+.dsa-error {
+    flex-direction: column;
+    gap: 10px;
+}
+
+.dsa-error button {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.dsa-error button:hover {
+    background-color: #0056b3;
+}
+
+/* Collections and Folders */
+.dsa-collections {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.dsa-collection,
+.dsa-folder {
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    background: white;
+}
+
+.dsa-folder-header {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s ease;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.dsa-folder-header:hover {
+    background-color: #f8f9fa;
+}
+
+.dsa-folder-icon {
+    margin-right: 8px;
+    font-size: 16px;
+    transition: transform 0.2s ease;
+}
+
+.dsa-folder-icon.expanded {
+    transform: rotate(0deg);
+}
+
+.dsa-folder-name {
+    flex: 1;
+    font-weight: 500;
+    color: #333;
+}
+
+.dsa-folder-type {
+    font-size: 12px;
+    color: #666;
+    background-color: #e9ecef;
+    padding: 2px 8px;
+    border-radius: 12px;
+    margin-left: 8px;
+}
+
+.dsa-folder-contents {
+    padding: 8px 0;
+    background-color: #fafafa;
+}
+
+/* Resource Items (selectable) */
+.dsa-resource-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    border-left: 3px solid transparent;
+}
+
+.dsa-resource-item:hover {
+    background-color: #e3f2fd;
+}
+
+.dsa-resource-item.selected {
+    background-color: #bbdefb;
+    border-left-color: #2196f3;
+}
+
+.dsa-resource-icon {
+    margin-right: 8px;
+    font-size: 14px;
+}
+
+.dsa-resource-name {
+    flex: 1;
+    color: #333;
+}
+
+.dsa-resource-type {
+    font-size: 11px;
+    color: #666;
+    background-color: #e3f2fd;
+    padding: 2px 6px;
+    border-radius: 10px;
+    margin-left: 8px;
+}
+
+/* Footer */
+.dsa-folder-browser-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-top: 1px solid #e0e0e0;
+    background-color: #f8f9fa;
+}
+
+.dsa-selection-info {
+    color: #666;
+    font-size: 14px;
+}
+
+.dsa-footer-buttons {
+    display: flex;
+    gap: 12px;
+}
+
+.dsa-cancel-btn,
+.dsa-confirm-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s ease;
+}
+
+.dsa-cancel-btn {
+    background-color: #6c757d;
+    color: white;
+}
+
+.dsa-cancel-btn:hover {
+    background-color: #5a6268;
+}
+
+.dsa-confirm-btn {
+    background-color: #007bff;
+    color: white;
+}
+
+.dsa-confirm-btn:hover:not(:disabled) {
+    background-color: #0056b3;
+}
+
+.dsa-confirm-btn:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .dsa-folder-browser-modal {
+        width: 95%;
+        max-height: 90vh;
+    }
+
+    .dsa-folder-browser-content {
+        max-height: 50vh;
+    }
+
+    .dsa-folder-browser-footer {
+        flex-direction: column;
+        gap: 12px;
+        align-items: stretch;
+    }
+
+    .dsa-footer-buttons {
+        justify-content: center;
+    }
+}
+
+
+
+
