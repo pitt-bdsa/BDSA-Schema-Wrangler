@@ -96,7 +96,18 @@ class DsaLoader {
 
             // Set DSA configuration for sync functionality
             dataStoreInstance.girderToken = token;
-            dataStoreInstance.dsaConfig = config;
+
+            // Create complete DSA config with all required fields
+            const dsaConfig = {
+                baseUrl: config.baseUrl,
+                resourceId: config.resourceId,
+                resourceType: config.resourceType,
+                metadataSyncTargetFolder: config.metadataSyncTargetFolder,
+                token: token  // Include the token in the config
+            };
+
+            console.log('🔧 Setting dsaConfig in dataStore:', dsaConfig);
+            dataStoreInstance.dsaConfig = dsaConfig;
 
             // Try to save to storage, but don't fail if quota exceeded
             try {

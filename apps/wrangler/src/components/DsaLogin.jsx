@@ -116,6 +116,26 @@ const DsaLogin = () => {
 
                         <form onSubmit={handleLogin} className="login-form">
                             <div className="form-group">
+                                <label htmlFor="serverUrl">DSA Server URL *</label>
+                                <input
+                                    type="url"
+                                    id="serverUrl"
+                                    value={authStatus.serverUrl || ''}
+                                    onChange={(e) => {
+                                        const url = e.target.value;
+                                        dsaAuthStore.updateConfig({ baseUrl: url });
+                                    }}
+                                    placeholder="http://multiplex.pathology.emory.edu:8080"
+                                    required
+                                />
+                                <div className="field-help">
+                                    The base URL of your Digital Slide Archive server
+                                    <br />
+                                    <small>💡 Don't include /api/v1 - it will be added automatically</small>
+                                </div>
+                            </div>
+
+                            <div className="form-group">
                                 <label htmlFor="username">Username</label>
                                 <input
                                     type="text"

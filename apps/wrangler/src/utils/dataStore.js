@@ -838,6 +838,10 @@ class DataStore {
 
     // DSA Sync Methods
     async syncBdsaMetadataToServer(progressCallback) {
+        console.log('📡 DataStore.syncBdsaMetadataToServer called');
+        console.log('📡 DataStore processedData length:', this.processedData?.length);
+        console.log('📡 DataStore modifiedItems size:', this.modifiedItems?.size);
+        console.log('📡 DataStore dsaConfig:', this.dsaConfig);
         return dsaSync.syncBdsaMetadataToServer(this.processedData, this.modifiedItems, this, progressCallback);
     }
     shouldSyncItem(item) {

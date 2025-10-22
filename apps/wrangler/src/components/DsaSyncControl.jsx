@@ -58,7 +58,8 @@ const DsaSyncControl = () => {
 
     const handleStartSync = async () => {
         try {
-            console.log('Starting DSA metadata sync...');
+            console.log('🚀 DsaSyncControl.handleStartSync called');
+            console.log('🚀 Starting DSA metadata sync...');
             await syncBdsaMetadataToServer((progress) => {
                 console.log('Sync progress:', progress);
             });
@@ -74,6 +75,12 @@ const DsaSyncControl = () => {
                     // Don't show error to user since sync was successful
                 }
             }
+
+            // Trigger folder browser refresh event
+            console.log('🔄 Triggering folder browser refresh after sync...');
+            window.dispatchEvent(new CustomEvent('bdsa-sync-completed', {
+                detail: { timestamp: Date.now() }
+            }));
         } catch (error) {
             console.error('Sync failed:', error);
             alert(`Sync failed: ${error.message}`);
@@ -83,6 +90,34 @@ const DsaSyncControl = () => {
     const handleCancelSync = () => {
         console.log('Cancelling DSA metadata sync...');
         cancelDsaMetadataSync();
+    };
+
+    const handleUpdateResourceFolder = async () => {
+        try {
+            console.log('🔧 Manual resource folder touch update...');
+
+            // Get current data store
+            const currentDataStore = getDataStoreSnapshot();
+            console.log('🔧 Current dataStore dsaConfig:', currentDataStore.dsaConfig);
+
+            if (!currentDataStore.dsaConfig) {
+                alert('DSA configuration not found. Please ensure you are connected to DSA.');
+                return;
+            }
+
+            // Import the DSA sync utility
+            const { default: dsaSync } = await import('../utils/DsaSync.js');
+
+            // Call the touch indicator update directly
+            await dsaSync.updateResourceFolderTouchIndicator(currentDataStore);
+
+            console.log('✅ Resource folder touch update completed');
+            alert('✅ Resource folder touch indicator updated successfully!');
+
+        } catch (error) {
+            console.error('❌ Error updating resource folder:', error);
+            alert(`❌ Failed to update resource folder: ${error.message}`);
+        }
     };
 
     const canStartSync = dataStore?.dataSource === 'dsa' &&
@@ -186,6 +221,16 @@ const DsaSyncControl = () => {
                         Sync to DSA Server
                     </button>
                 )}
+
+                {/* Debug button for resource folder touch update */}
+                <button
+                    className="debug-touch-btn"
+                    onClick={handleUpdateResourceFolder}
+                    disabled={!dataStore?.dsaConfig}
+                    title={!dataStore?.dsaConfig ? 'DSA configuration required' : 'Update resource folder touch indicator (debug)'}
+                >
+                    🔧 Touch Resource Folder
+                </button>
             </div>
 
             {!canStartSync && (

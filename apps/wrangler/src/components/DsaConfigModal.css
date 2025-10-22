@@ -57,6 +57,34 @@
     font-style: italic;
 }
 
+/* Resource name display */
+.resource-name-display {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.resource-name-label {
+    color: #666;
+    font-weight: 500;
+    margin-right: 8px;
+}
+
+.resource-name {
+    color: #333;
+    font-weight: 600;
+    margin-right: 4px;
+}
+
+.resource-type {
+    color: #666;
+    font-size: 12px;
+    text-transform: capitalize;
+}
+
 .normalization-indicator {
     display: block;
     color: #28a745;

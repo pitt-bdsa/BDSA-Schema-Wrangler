@@ -216,12 +216,18 @@ export const addFolderMetadata = async (baseUrl, folderId, girderToken, metadata
             headers: { ...headers, 'Girder-Token': '[REDACTED]' }
         });
 
+        console.log('📡 Making PUT request to:', apiUrl);
+        console.log('📡 Request body:', JSON.stringify(metadata, null, 2));
+
         // Use PUT to update metadata fields
         const response = await fetch(apiUrl, {
             method: 'PUT',
             headers: headers,
             body: JSON.stringify(metadata)
         });
+
+        console.log('📡 Response status:', response.status);
+        console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
 
         if (!response.ok) {
             const errorText = await response.text();
@@ -235,6 +241,7 @@ export const addFolderMetadata = async (baseUrl, folderId, girderToken, metadata
         }
 
         const result = await response.json();
+        console.log('📡 Response body:', result);
         console.log('Successfully updated metadata for folder:', folderId);
         return {
             success: true,

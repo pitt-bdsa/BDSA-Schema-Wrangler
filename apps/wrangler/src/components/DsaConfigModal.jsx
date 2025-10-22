@@ -9,72 +9,71 @@ const DsaConfigModal = ({ onSave, onClose }) => {
     const [isTesting, setIsTesting] = useState(false);
     const [testResult, setTestResult] = useState(null);
     const [errors, setErrors] = useState({});
-    const [urlNormalized, setUrlNormalized] = useState(false);
 
     // Folder browser state
     const [showFolderBrowser, setShowFolderBrowser] = useState(false);
     const [showMetadataFolderBrowser, setShowMetadataFolderBrowser] = useState(false);
     const [dsaClient, setDsaClient] = useState(null);
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+    // Resource name display
+    const [resourceName, setResourceName] = useState(null);
+    const [metadataResourceName, setMetadataResourceName] = useState(null);
 
     useEffect(() => {
         setConfig(dsaAuthStore.config);
     }, []);
 
-    // Normalize DSA server URL to handle common formatting issues
-    const normalizeDsaUrl = (url) => {
-        if (!url || typeof url !== 'string') {
-            return url;
-        }
+    // Fetch resource names when config changes
+    useEffect(() => {
+        const fetchResourceNames = async () => {
+            if (!config.baseUrl || !dsaAuthStore.token) return;
 
-        let normalizedUrl = url.trim();
+            const client = new DSAClient(config.baseUrl, dsaAuthStore.token);
 
-        // Remove trailing slashes
-        normalizedUrl = normalizedUrl.replace(/\/+$/, '');
+            // Fetch main resource name
+            if (config.resourceId && config.resourceType) {
+                try {
+                    const resourceInfo = await client.getResourceName(config.resourceId, config.resourceType);
+                    setResourceName(resourceInfo);
+                } catch (error) {
+                    console.warn('Failed to fetch resource name:', error);
+                    setResourceName({ name: 'Unknown', type: config.resourceType, id: config.resourceId });
+                }
+            } else {
+                setResourceName(null);
+            }
 
-        // Remove /api/v1 if it was accidentally added by the user
-        normalizedUrl = normalizedUrl.replace(/\/api\/v1\/?$/, '');
+            // Fetch metadata resource name
+            if (config.metadataSyncTargetFolder) {
+                try {
+                    const metadataResourceInfo = await client.getResourceName(config.metadataSyncTargetFolder, 'folder');
+                    setMetadataResourceName(metadataResourceInfo);
+                } catch (error) {
+                    console.warn('Failed to fetch metadata resource name:', error);
+                    setMetadataResourceName({ name: 'Unknown', type: 'folder', id: config.metadataSyncTargetFolder });
+                }
+            } else {
+                setMetadataResourceName(null);
+            }
+        };
 
-        // Ensure protocol is present
-        if (!normalizedUrl.match(/^https?:\/\//)) {
-            normalizedUrl = `http://${normalizedUrl}`;
-        }
+        fetchResourceNames();
+    }, [config.resourceId, config.resourceType, config.metadataSyncTargetFolder, config.baseUrl]);
 
-        // Remove any duplicate slashes
-        normalizedUrl = normalizedUrl.replace(/([^:]\/)\/+/g, '$1');
-
-        return normalizedUrl;
-    };
 
     const handleFieldChange = (field, value) => {
-        let processedValue = value;
-        let wasNormalized = false;
-
-        // Apply URL normalization for baseUrl field
-        if (field === 'baseUrl') {
-            const originalValue = value;
-            processedValue = normalizeDsaUrl(value);
-            wasNormalized = originalValue !== processedValue;
-        }
-
         setConfig(prev => {
-            const newConfig = { ...prev, [field]: processedValue };
+            const newConfig = { ...prev, [field]: value };
 
             // Auto-populate metadataSyncTargetFolder with resourceId when resourceId changes and metadataSyncTargetFolder is blank
             if (field === 'resourceId' && !prev.metadataSyncTargetFolder.trim()) {
-                newConfig.metadataSyncTargetFolder = processedValue;
+                newConfig.metadataSyncTargetFolder = value;
             }
 
             return newConfig;
         });
 
-        // Show normalization indicator
-        if (field === 'baseUrl') {
-            setUrlNormalized(wasNormalized);
-            // Hide the indicator after 3 seconds
-            if (wasNormalized) {
-                setTimeout(() => setUrlNormalized(false), 3000);
-            }
-        }
 
         // Clear field error when user starts typing
         if (errors[field]) {
@@ -186,6 +185,7 @@ const DsaConfigModal = ({ onSave, onClose }) => {
             resourceId: resource._id,
             resourceType: resource.type
         }));
+        setResourceName({ name: resource.name, type: resource.type, id: resource._id });
         closeFolderBrowser();
     };
 
@@ -195,12 +195,13 @@ const DsaConfigModal = ({ onSave, onClose }) => {
             ...prev,
             metadataSyncTargetFolder: resource._id
         }));
+        setMetadataResourceName({ name: resource.name, type: resource.type, id: resource._id });
         closeMetadataFolderBrowser();
     };
 
-    // Form is valid if base URL is provided and no validation errors
+    // Form is valid if no validation errors (baseUrl is now handled in login)
     // Resource ID is optional for initial setup
-    const isFormValid = config.baseUrl.trim() && Object.keys(errors).length === 0;
+    const isFormValid = Object.keys(errors).length === 0;
 
     return (
         <>
@@ -212,28 +213,6 @@ const DsaConfigModal = ({ onSave, onClose }) => {
                     </div>
 
                     <div className="config-form">
-                        <div className="form-group">
-                            <label htmlFor="baseUrl">DSA Server URL *</label>
-                            <input
-                                type="url"
-                                id="baseUrl"
-                                value={config.baseUrl}
-                                onChange={(e) => handleFieldChange('baseUrl', e.target.value)}
-                                placeholder="https://your-dsa-server.com"
-                                className={errors.baseUrl ? 'error' : ''}
-                            />
-                            {errors.baseUrl && <div className="error-message">{errors.baseUrl}</div>}
-                            {urlNormalized && (
-                                <div className="normalization-indicator">
-                                    ✨ URL automatically cleaned up
-                                </div>
-                            )}
-                            <div className="field-help">
-                                The base URL of your Digital Slide Archive server (e.g., http://multiplex.pathology.emory.edu:8080)
-                                <br />
-                                <small>💡 Tip: Don't include /api/v1 - it will be added automatically</small>
-                            </div>
-                        </div>
 
                         <div className="form-group">
                             <label htmlFor="resourceId">Resource ID (optional for setup)</label>
@@ -256,6 +235,13 @@ const DsaConfigModal = ({ onSave, onClose }) => {
                                     Browse
                                 </button>
                             </div>
+                            {resourceName && (
+                                <div className="resource-name-display">
+                                    <span className="resource-name-label">Selected:</span>
+                                    <span className="resource-name">{resourceName.name}</span>
+                                    <span className="resource-type">({resourceName.type})</span>
+                                </div>
+                            )}
                             {errors.resourceId && <div className="error-message">{errors.resourceId}</div>}
                             <div className="field-help">
                                 The ID of the DSA resource (folder or collection) you want to access
@@ -285,6 +271,13 @@ const DsaConfigModal = ({ onSave, onClose }) => {
                                     Browse
                                 </button>
                             </div>
+                            {metadataResourceName && (
+                                <div className="resource-name-display">
+                                    <span className="resource-name-label">Selected:</span>
+                                    <span className="resource-name">{metadataResourceName.name}</span>
+                                    <span className="resource-type">({metadataResourceName.type})</span>
+                                </div>
+                            )}
                             {errors.metadataSyncTargetFolder && <div className="error-message">{errors.metadataSyncTargetFolder}</div>}
                             <div className="field-help">
                                 The ID of the DSA folder where metadata will be synced (if blank, will use the same folder as the main data pull)
