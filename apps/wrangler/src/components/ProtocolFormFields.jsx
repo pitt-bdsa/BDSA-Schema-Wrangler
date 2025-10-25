@@ -100,6 +100,26 @@ const ProtocolFormFields = ({
                                 placeholder="Enter vendor name"
                             />
                         </div>
+
+                        {/* Show chromogen only for IHC stains, not histological stains */}
+                        {['TDP-43', 'aSyn', 'Tau', 'aBeta', 'GFAP', 'IBA1', 'NeuN'].includes(formData.stainType) && (
+                            <div className="form-group">
+                                <label htmlFor="chromogen">Chromogen</label>
+                                <select
+                                    id="chromogen"
+                                    value={formData.chromogen || 'DAB (brown)'}
+                                    onChange={(e) => onFieldChange('chromogen', e.target.value)}
+                                >
+                                    <option value="DAB (brown)">DAB (brown)</option>
+                                    <option value="AEC (red)">AEC (red)</option>
+                                    <option value="Fast Red (red)">Fast Red (red)</option>
+                                    <option value="NovaRED (red)">NovaRED (red)</option>
+                                    <option value="VIP (purple)">VIP (purple)</option>
+                                    <option value="BCIP/NBT (blue)">BCIP/NBT (blue)</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                        )}
                     </>
                 )}
             </>

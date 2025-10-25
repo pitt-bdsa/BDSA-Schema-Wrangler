@@ -136,6 +136,18 @@ The application uses schema files located in the `public/` directory:
 
 These files are served by the FastAPI backend at runtime.
 
+### 📋 Schema Synchronization
+
+**Important:** The `bdsa-schema.json` file is automatically synced from the wrangler app:
+
+- **Source of Truth:** `apps/wrangler/public/bdsa-schema.json`
+- **Auto-copied when running:**
+  - `npm run dev` (before starting dev server)
+  - `npm run build` (before building)
+  - `npm run copy-schema` (manual copy)
+
+⚠️ **Do not edit** `bdsa-schema.json` in this app - always edit it in the wrangler app! The schema-viewer-app will automatically get the latest version when you start it.
+
 ## API Documentation
 
 ### Available Endpoints

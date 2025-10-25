@@ -5,13 +5,17 @@
   "type": "module",
   "description": "Standalone BDSA Schema Viewer - A containerized service for viewing BDSA schemas",
   "scripts": {
+    "copy-schema": "cp ../wrangler/public/bdsa-schema.json public/bdsa-schema.json && echo '✅ Copied latest bdsa-schema.json from wrangler'",
+    "predev": "npm run copy-schema",
     "dev": "vite",
+    "prebuild": "npm run copy-schema",
     "build": "vite build",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "serve": "vite preview --port 3000 --host 0.0.0.0"
   },
   "dependencies": {
+    "@bdsa/schema-components": "file:../../packages/schema-components",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },

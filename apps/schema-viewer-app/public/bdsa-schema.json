@@ -51,6 +51,20 @@
                             "vendor": {
                                 "type": "string",
                                 "title": "Vendor"
+                            },
+                            "chromogen": {
+                                "type": "string",
+                                "title": "Chromogen",
+                                "default": "DAB (brown)",
+                                "enum": [
+                                    "DAB (brown)",
+                                    "AEC (red)",
+                                    "Fast Red (red)",
+                                    "NovaRED (red)",
+                                    "VIP (purple)",
+                                    "BCIP/NBT (blue)",
+                                    "Other"
+                                ]
                             }
                         }
                     },
@@ -83,6 +97,20 @@
                             "vendor": {
                                 "type": "string",
                                 "title": "Vendor"
+                            },
+                            "chromogen": {
+                                "type": "string",
+                                "title": "Chromogen",
+                                "default": "DAB (brown)",
+                                "enum": [
+                                    "DAB (brown)",
+                                    "AEC (red)",
+                                    "Fast Red (red)",
+                                    "NovaRED (red)",
+                                    "VIP (purple)",
+                                    "BCIP/NBT (blue)",
+                                    "Other"
+                                ]
                             }
                         }
                     },
@@ -174,6 +202,20 @@
                                 "title": "Dilution",
                                 "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
                                 "pattern": "^\\d+:\\d+$"
+                            },
+                            "chromogen": {
+                                "type": "string",
+                                "title": "Chromogen",
+                                "default": "DAB (brown)",
+                                "enum": [
+                                    "DAB (brown)",
+                                    "AEC (red)",
+                                    "Fast Red (red)",
+                                    "NovaRED (red)",
+                                    "VIP (purple)",
+                                    "BCIP/NBT (blue)",
+                                    "Other"
+                                ]
                             }
                         }
                     },
@@ -202,6 +244,20 @@
                                 "title": "Dilution",
                                 "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
                                 "pattern": "^\\d+:\\d+$"
+                            },
+                            "chromogen": {
+                                "type": "string",
+                                "title": "Chromogen",
+                                "default": "DAB (brown)",
+                                "enum": [
+                                    "DAB (brown)",
+                                    "AEC (red)",
+                                    "Fast Red (red)",
+                                    "NovaRED (red)",
+                                    "VIP (purple)",
+                                    "BCIP/NBT (blue)",
+                                    "Other"
+                                ]
                             }
                         }
                     },
@@ -244,6 +300,20 @@
                             "vendor": {
                                 "type": "string",
                                 "title": "Vendor"
+                            },
+                            "chromogen": {
+                                "type": "string",
+                                "title": "Chromogen",
+                                "default": "DAB (brown)",
+                                "enum": [
+                                    "DAB (brown)",
+                                    "AEC (red)",
+                                    "Fast Red (red)",
+                                    "NovaRED (red)",
+                                    "VIP (purple)",
+                                    "BCIP/NBT (blue)",
+                                    "Other"
+                                ]
                             }
                         }
                     },
@@ -265,6 +335,20 @@
                             "vendor": {
                                 "type": "string",
                                 "title": "Vendor"
+                            },
+                            "chromogen": {
+                                "type": "string",
+                                "title": "Chromogen",
+                                "default": "DAB (brown)",
+                                "enum": [
+                                    "DAB (brown)",
+                                    "AEC (red)",
+                                    "Fast Red (red)",
+                                    "NovaRED (red)",
+                                    "VIP (purple)",
+                                    "BCIP/NBT (blue)",
+                                    "Other"
+                                ]
                             }
                         }
                     },
@@ -272,6 +356,41 @@
                         "type": "object",
                         "title": "Neuronal Nuclei",
                         "abbreviation": "NeuN",
+                        "properties": {
+                            "dilution": {
+                                "type": "string",
+                                "title": "Dilution",
+                                "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
+                            },
+                            "vendor": {
+                                "type": "string",
+                                "title": "Vendor"
+                            },
+                            "chromogen": {
+                                "type": "string",
+                                "title": "Chromogen",
+                                "default": "DAB (brown)",
+                                "enum": [
+                                    "DAB (brown)",
+                                    "AEC (red)",
+                                    "Fast Red (red)",
+                                    "NovaRED (red)",
+                                    "VIP (purple)",
+                                    "BCIP/NBT (blue)",
+                                    "Other"
+                                ]
+                            }
+                        }
+                    },
+                    "LFB-PAS": {
+                        "type": "object",
+                        "title": "Luxol Fast Blue - Periodic Acid-Schiff",
+                        "abbreviation": "LFB-PAS",
                         "properties": {
                             "dilution": {
                                 "type": "string",
@@ -323,7 +442,7 @@
                         "Parietal Lobe": {
                             "type": "array",
                             "title": "Parietal Lobe",
-                            "abbreviation": "PL",
+                            "abbreviation": "Par",
                             "items": {
                                 "type": "string",
                                 "enum": [
@@ -338,7 +457,7 @@
                         "Temporal Pole": {
                             "type": "array",
                             "title": "Temporal Pole",
-                            "abbreviation": "TP",
+                            "abbreviation": "TempPole",
                             "items": {
                                 "type": "string"
                             },
@@ -347,7 +466,7 @@
                         "Frontal Lobe": {
                             "type": "array",
                             "title": "Frontal Lobe",
-                            "abbreviation": "FL",
+                            "abbreviation": "Frntl",
                             "items": {
                                 "type": "string",
                                 "enum": [
@@ -360,7 +479,7 @@
                         "Temporal Lobe": {
                             "type": "array",
                             "title": "Temporal Lobe",
-                            "abbreviation": "TL",
+                            "abbreviation": "Temp",
                             "items": {
                                 "type": "string",
                                 "enum": [
@@ -373,7 +492,7 @@
                         "Hippocampus": {
                             "type": "array",
                             "title": "Hippocampus",
-                            "abbreviation": "HP",
+                            "abbreviation": "Hipp",
                             "items": {
                                 "type": "string",
                                 "enum": [
@@ -412,7 +531,7 @@
                         "Amygdala": {
                             "type": "array",
                             "title": "Amygdala",
-                            "abbreviation": "Amy",
+                            "abbreviation": "Amyg",
                             "items": {
                                 "type": "string",
                                 "enum": [
@@ -452,7 +571,7 @@
                         "Midbrain": {
                             "type": "array",
                             "title": "Midbrain",
-                            "abbreviation": "MB",
+                            "abbreviation": "MidBrn",
                             "items": {
                                 "type": "string",
                                 "enum": [
@@ -495,7 +614,7 @@
                         "Cerebellum": {
                             "type": "array",
                             "title": "Cerebellum",
-                            "abbreviation": "Cb",
+                            "abbreviation": "Cblm",
                             "items": {
                                 "type": "string",
                                 "enum": [
@@ -517,7 +636,7 @@
                         "Occipital Lobe": {
                             "type": "array",
                             "title": "Occipital Lobe",
-                            "abbreviation": "OL",
+                            "abbreviation": "Occ",
                             "items": {
                                 "type": "string"
                             },
@@ -544,7 +663,7 @@
                         "Frontal Pole": {
                             "type": "array",
                             "title": "Frontal Pole",
-                            "abbreviation": "FP",
+                            "abbreviation": "FtlPole",
                             "items": {
                                 "type": "string"
                             },
@@ -553,7 +672,7 @@
                         "Spinal Cord": {
                             "type": "array",
                             "title": "Spinal Cord",
-                            "abbreviation": "SC",
+                            "abbreviation": "SpnCd",
                             "items": {
                                 "type": "string",
                                 "enum": [

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import SchemaViewer from './components/SchemaViewer';
+import { SchemaViewer } from '@bdsa/schema-components';
 import FlattenedDataView from './components/FlattenedDataView';
 import CdeReferenceView from './components/CdeReferenceView';
 import './App.css';
@@ -8,12 +8,12 @@ const App = () => {
     const [activeSchema, setActiveSchema] = useState('clinical');
 
     const schemas = [
-        { id: 'clinical', label: 'Clinical Schema', file: '/api/schemas/bdsa-schema', section: 'clinical' },
-        { id: 'region', label: 'Region Schema', file: '/api/schemas/bdsa-schema', section: 'region' },
-        { id: 'stain', label: 'Stain Schema', file: '/api/schemas/bdsa-schema', section: 'stain' },
-        { id: 'bdsa', label: 'BDSA Schema', file: '/api/schemas/bdsa-schema', section: 'bdsa' },
-        { id: 'flattened', label: 'Flattened View', file: '/api/schemas/bdsa-schema', section: 'flattened' },
-        { id: 'cde-reference', label: 'CDE Reference', file: '/api/schemas/bdsa-schema', section: 'cde-reference' }
+        { id: 'clinical', label: 'Clinical Schema', file: '/bdsa-schema.json', section: 'clinical' },
+        { id: 'region', label: 'Region Schema', file: '/bdsa-schema.json', section: 'region' },
+        { id: 'stain', label: 'Stain Schema', file: '/bdsa-schema.json', section: 'stain' },
+        { id: 'bdsa', label: 'BDSA Schema', file: '/bdsa-schema.json', section: 'bdsa' },
+        { id: 'flattened', label: 'Flattened View', file: '/bdsa-schema.json', section: 'flattened' },
+        { id: 'cde-reference', label: 'CDE Reference', file: '/bdsa-schema.json', section: 'cde-reference' }
     ];
 
     return (
