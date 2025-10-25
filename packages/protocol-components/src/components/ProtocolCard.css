@@ -1,0 +1,110 @@
+.protocol-card {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e0e0e0;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.protocol-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.protocol-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 16px;
+}
+
+.protocol-title {
+    flex: 1;
+}
+
+.protocol-title h4 {
+    margin: 0 0 8px 0;
+    color: #1976d2;
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+.protocol-badges {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+.status-local {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+.status-modified {
+    background: #fff3e0;
+    color: #f57c00;
+}
+
+.status-synced {
+    background: #e8f5e8;
+    color: #2e7d32;
+}
+
+.protocol-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.edit-button,
+.delete-button {
+    background: none;
+    border: none;
+    padding: 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1.2rem;
+    transition: background-color 0.2s ease;
+}
+
+.edit-button:hover {
+    background: #e3f2fd;
+}
+
+.delete-button:hover {
+    background: #ffebee;
+}
+
+.protocol-details {
+    color: #555;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.protocol-details p {
+    margin: 6px 0;
+}
+
+.protocol-details strong {
+    color: #333;
+    font-weight: 600;
+}
+
+.protocol-details code {
+    background: #f5f5f5;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'Monaco', 'Courier New', monospace;
+    font-size: 0.85rem;
+}
+

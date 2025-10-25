@@ -14,7 +14,7 @@
     "install:all": "npm install",
     "clean": "rm -rf node_modules packages/*/node_modules apps/*/node_modules",
     "test:all": "npm test --workspaces --if-present",
-    "test:shared": "npm test --workspace=packages/schema-components --workspace=packages/shared-components --workspace=packages/shared-utils --if-present",
+    "test:shared": "npm test --workspace=packages/schema-components --workspace=packages/protocol-components --workspace=packages/shared-components --workspace=packages/shared-utils --if-present",
     "prepare": "husky"
   },
   "devDependencies": {

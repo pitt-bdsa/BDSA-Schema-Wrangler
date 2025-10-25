@@ -9,7 +9,8 @@
     "build": "echo 'Using source files directly in monorepo'",
     "dev": "echo 'No build needed - using source directly'",
     "clean": "rm -rf dist",
-    "test": "vitest",
+    "test": "vitest --run",
+    "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage"
   },
@@ -33,4 +34,3 @@
     "react-dom": "^18.0.0"
   }
 }
-

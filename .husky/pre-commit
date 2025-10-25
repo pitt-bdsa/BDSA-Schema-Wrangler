@@ -1,9 +1,6 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
 # Run tests for all shared packages before committing
 echo "🧪 Running tests on shared components..."
-npm run test:shared -- --run
+npm run test:shared
 
 # If tests fail, prevent commit
 if [ $? -ne 0 ]; then
