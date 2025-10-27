@@ -25,8 +25,9 @@ This document compares different abbreviation options for stain types and brain 
 | 9 | Glial Fibrillary Acidic Protein | GFAP | GFAP | ✅ Same in both |
 | 10 | Ionized Calcium-Binding Adapter Molecule 1 | IBA1 | IBA1 | ✅ Same in both |
 | 11 | Neuronal Nuclei | NeuN | NeuN | ✅ Same in both |
+| 12 | Luxol Fast Blue - Periodic Acid-Schiff | LFB-PAS | LFB-PAS | ✅ Same in both |
 
-**Summary**: All 11 stain abbreviations match perfectly! ✅
+**Summary**: All 12 stain abbreviations match perfectly! ✅
 
 ### Stain Abbreviation Analysis
 

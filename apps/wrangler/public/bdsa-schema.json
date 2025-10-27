@@ -51,6 +51,20 @@
                             "vendor": {
                                 "type": "string",
                                 "title": "Vendor"
+                            },
+                            "chromogen": {
+                                "type": "string",
+                                "title": "Chromogen",
+                                "default": "DAB (brown)",
+                                "enum": [
+                                    "DAB (brown)",
+                                    "AEC (red)",
+                                    "Fast Red (red)",
+                                    "NovaRED (red)",
+                                    "VIP (purple)",
+                                    "BCIP/NBT (blue)",
+                                    "Other"
+                                ]
                             }
                         }
                     },
@@ -83,6 +97,20 @@
                             "vendor": {
                                 "type": "string",
                                 "title": "Vendor"
+                            },
+                            "chromogen": {
+                                "type": "string",
+                                "title": "Chromogen",
+                                "default": "DAB (brown)",
+                                "enum": [
+                                    "DAB (brown)",
+                                    "AEC (red)",
+                                    "Fast Red (red)",
+                                    "NovaRED (red)",
+                                    "VIP (purple)",
+                                    "BCIP/NBT (blue)",
+                                    "Other"
+                                ]
                             }
                         }
                     },
@@ -174,6 +202,20 @@
                                 "title": "Dilution",
                                 "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
                                 "pattern": "^\\d+:\\d+$"
+                            },
+                            "chromogen": {
+                                "type": "string",
+                                "title": "Chromogen",
+                                "default": "DAB (brown)",
+                                "enum": [
+                                    "DAB (brown)",
+                                    "AEC (red)",
+                                    "Fast Red (red)",
+                                    "NovaRED (red)",
+                                    "VIP (purple)",
+                                    "BCIP/NBT (blue)",
+                                    "Other"
+                                ]
                             }
                         }
                     },
@@ -202,6 +244,20 @@
                                 "title": "Dilution",
                                 "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
                                 "pattern": "^\\d+:\\d+$"
+                            },
+                            "chromogen": {
+                                "type": "string",
+                                "title": "Chromogen",
+                                "default": "DAB (brown)",
+                                "enum": [
+                                    "DAB (brown)",
+                                    "AEC (red)",
+                                    "Fast Red (red)",
+                                    "NovaRED (red)",
+                                    "VIP (purple)",
+                                    "BCIP/NBT (blue)",
+                                    "Other"
+                                ]
                             }
                         }
                     },
@@ -244,6 +300,20 @@
                             "vendor": {
                                 "type": "string",
                                 "title": "Vendor"
+                            },
+                            "chromogen": {
+                                "type": "string",
+                                "title": "Chromogen",
+                                "default": "DAB (brown)",
+                                "enum": [
+                                    "DAB (brown)",
+                                    "AEC (red)",
+                                    "Fast Red (red)",
+                                    "NovaRED (red)",
+                                    "VIP (purple)",
+                                    "BCIP/NBT (blue)",
+                                    "Other"
+                                ]
                             }
                         }
                     },
@@ -265,6 +335,20 @@
                             "vendor": {
                                 "type": "string",
                                 "title": "Vendor"
+                            },
+                            "chromogen": {
+                                "type": "string",
+                                "title": "Chromogen",
+                                "default": "DAB (brown)",
+                                "enum": [
+                                    "DAB (brown)",
+                                    "AEC (red)",
+                                    "Fast Red (red)",
+                                    "NovaRED (red)",
+                                    "VIP (purple)",
+                                    "BCIP/NBT (blue)",
+                                    "Other"
+                                ]
                             }
                         }
                     },
@@ -272,6 +356,41 @@
                         "type": "object",
                         "title": "Neuronal Nuclei",
                         "abbreviation": "NeuN",
+                        "properties": {
+                            "dilution": {
+                                "type": "string",
+                                "title": "Dilution",
+                                "_comment": "Mapped to NCI CDE 'Laboratory Procedure Antibody Dilution Ratio Text' (CDE ID 2189728)",
+                                "pattern": "^1:\\d+$",
+                                "examples": [
+                                    "1:100",
+                                    "1:1000"
+                                ]
+                            },
+                            "vendor": {
+                                "type": "string",
+                                "title": "Vendor"
+                            },
+                            "chromogen": {
+                                "type": "string",
+                                "title": "Chromogen",
+                                "default": "DAB (brown)",
+                                "enum": [
+                                    "DAB (brown)",
+                                    "AEC (red)",
+                                    "Fast Red (red)",
+                                    "NovaRED (red)",
+                                    "VIP (purple)",
+                                    "BCIP/NBT (blue)",
+                                    "Other"
+                                ]
+                            }
+                        }
+                    },
+                    "LFB-PAS": {
+                        "type": "object",
+                        "title": "Luxol Fast Blue - Periodic Acid-Schiff",
+                        "abbreviation": "LFB-PAS",
                         "properties": {
                             "dilution": {
                                 "type": "string",

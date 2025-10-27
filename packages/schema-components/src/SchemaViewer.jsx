@@ -1,7 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import './SchemaViewer.css';
 
-const SchemaViewer = ({ schemaFile, schemaData, schemaType }) => {
+/**
+ * SchemaViewer - Displays JSON Schema in a readable, hierarchical format
+ * 
+ * @param {string} schemaFile - URL to fetch schema from (optional if schemaData provided)
+ * @param {object} schemaData - Schema object to display directly (optional if schemaFile provided)
+ * @param {string} schemaType - Display name for the schema type (e.g., "BDSA", "Stain")
+ * @param {string} schemaSection - Extract specific section from schema (clinical, region, stain, bdsa)
+ */
+const SchemaViewer = ({ schemaFile, schemaData, schemaType = 'Schema', schemaSection }) => {
     const [schema, setSchema] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -9,14 +17,58 @@ const SchemaViewer = ({ schemaFile, schemaData, schemaType }) => {
     useEffect(() => {
         if (schemaData) {
             // Use provided schema data directly
-            setSchema(schemaData);
-            setLoading(false);
-            setError(null);
+            processSchemaData(schemaData);
         } else if (schemaFile) {
-            // Fallback to loading from file
+            // Load from file
             loadSchema();
+        } else {
+            setLoading(false);
         }
-    }, [schemaFile, schemaData]);
+    }, [schemaFile, schemaData, schemaSection]);
+
+    const processSchemaData = (data) => {
+        setLoading(true);
+        setError(null);
+
+        try {
+            let processedSchema = data;
+
+            // Extract specific section if requested
+            if (schemaSection && data.properties) {
+                switch (schemaSection) {
+                    case 'clinical':
+                        processedSchema = data.properties.clinicalData;
+                        break;
+                    case 'region':
+                        processedSchema = data.properties.regionIDs;
+                        break;
+                    case 'stain':
+                        // Extract stain properties from array items
+                        const stainSchema = data.properties.stainIDs;
+                        if (stainSchema?.items?.properties) {
+                            processedSchema = {
+                                type: 'object',
+                                title: 'Stain Schema',
+                                description: 'Stain-related properties from BDSA schema',
+                                properties: stainSchema.items.properties
+                            };
+                        } else {
+                            processedSchema = stainSchema;
+                        }
+                        break;
+                    case 'bdsa':
+                    default:
+                        processedSchema = data;
+                }
+            }
+
+            setSchema(processedSchema);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const loadSchema = async () => {
         try {
@@ -26,11 +78,10 @@ const SchemaViewer = ({ schemaFile, schemaData, schemaType }) => {
             if (!response.ok) {
                 throw new Error(`Failed to load ${schemaType} schema`);
             }
-            const schemaData = await response.json();
-            setSchema(schemaData);
+            const data = await response.json();
+            processSchemaData(data);
         } catch (err) {
             setError(err.message);
-        } finally {
             setLoading(false);
         }
     };
@@ -49,6 +100,12 @@ const SchemaViewer = ({ schemaFile, schemaData, schemaType }) => {
 
                     {property.description && (
                         <div className="property-description">{property.description}</div>
+                    )}
+
+                    {property.abbreviation && (
+                        <div className="property-abbreviation">
+                            <strong>Abbreviation:</strong> <code>{property.abbreviation}</code>
+                        </div>
                     )}
 
                     {property.enum && (
@@ -78,12 +135,20 @@ const SchemaViewer = ({ schemaFile, schemaData, schemaType }) => {
                     </div>
                 )}
 
-                {property.items && property.items.properties && (
+                {property.items && (
                     <div className="property-children">
-                        <div className="array-items-label">Array items:</div>
-                        {Object.entries(property.items.properties).map(([childKey, childProperty]) =>
-                            renderProperty(childKey, childProperty, level + 1)
-                        )}
+                        {property.items.properties ? (
+                            <>
+                                <div className="array-items-label">Array items:</div>
+                                {Object.entries(property.items.properties).map(([childKey, childProperty]) =>
+                                    renderProperty(childKey, childProperty, level + 1)
+                                )}
+                            </>
+                        ) : property.items.enum ? (
+                            <div className="property-enum">
+                                <strong>Landmarks:</strong> {property.items.enum.join(', ')}
+                            </div>
+                        ) : null}
                     </div>
                 )}
             </div>
@@ -92,7 +157,7 @@ const SchemaViewer = ({ schemaFile, schemaData, schemaType }) => {
 
     if (loading) {
         return (
-            <div className="schema-loading">
+            <div className="schema-loading" role="status">
                 <div className="loading-spinner"></div>
                 <p>Loading {schemaType} schema...</p>
             </div>
@@ -101,7 +166,7 @@ const SchemaViewer = ({ schemaFile, schemaData, schemaType }) => {
 
     if (error) {
         return (
-            <div className="schema-error">
+            <div className="schema-error" role="alert">
                 <div className="error-icon">⚠️</div>
                 <h3>Error loading schema</h3>
                 <p>{error}</p>
@@ -125,9 +190,11 @@ const SchemaViewer = ({ schemaFile, schemaData, schemaType }) => {
             <div className="schema-overview">
                 <div className="schema-header-row">
                     <h3>{schema.title || `${schemaType} Schema`}</h3>
-                    <button onClick={loadSchema} className="refresh-button" disabled={loading}>
-                        {loading ? 'Loading...' : 'Refresh'}
-                    </button>
+                    {schemaFile && (
+                        <button onClick={loadSchema} className="refresh-button" disabled={loading}>
+                            {loading ? 'Loading...' : 'Refresh'}
+                        </button>
+                    )}
                 </div>
 
                 <div className="schema-info">
@@ -152,3 +219,4 @@ const SchemaViewer = ({ schemaFile, schemaData, schemaType }) => {
 };
 
 export default SchemaViewer;
+

@@ -18,6 +18,7 @@ Standard abbreviations have been added to all stain types and brain regions in t
 | Glial Fibrillary Acidic Protein | GFAP | `GFAP` |
 | Ionized Calcium-Binding Adapter Molecule 1 | IBA1 | `IBA1` |
 | Neuronal Nuclei | NeuN | `NeuN` |
+| Luxol Fast Blue - Periodic Acid-Schiff | LFB-PAS | `LFB-PAS` |
 
 ## Brain Region Abbreviations
 
@@ -198,7 +199,7 @@ if (regionsWithoutAbbr.length > 0) {
 ## Update History
 
 - **2024-10**: Initial addition of abbreviations to all stains and regions
-  - All 11 stain types now have abbreviations
+  - All 12 stain types now have abbreviations
   - All 22 brain regions now have abbreviations
   - Full names updated for clarity (e.g., "HE" → "Hematoxylin and Eosin")
 

@@ -12,10 +12,15 @@
     "dev:sync-app": "cd apps/react-sync-app && npm run dev",
     "build:all": "npm run build --workspaces",
     "install:all": "npm install",
-    "clean": "rm -rf node_modules packages/*/node_modules apps/*/node_modules"
+    "clean": "rm -rf node_modules packages/*/node_modules apps/*/node_modules",
+    "test:all": "npm test --workspaces --if-present",
+    "test:shared": "npm test --workspace=packages/schema-components --workspace=packages/protocol-components --workspace=packages/shared-components --workspace=packages/shared-utils --if-present",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.6",
     "typescript": "^4.9.5"
   },
   "engines": {
@@ -24,5 +29,10 @@
   },
   "dependencies": {
     "ajv": "^8.17.1"
+  },
+  "lint-staged": {
+    "packages/*/src/**/*.{js,jsx,ts,tsx}": [
+      "npm run test:shared -- --run"
+    ]
   }
 }

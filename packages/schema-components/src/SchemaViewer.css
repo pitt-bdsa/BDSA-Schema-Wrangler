@@ -121,7 +121,8 @@
 
 .property-enum,
 .property-pattern,
-.property-cde {
+.property-cde,
+.property-abbreviation {
     margin: 6px 0;
     font-size: 0.85rem;
     color: #666;
@@ -129,8 +130,17 @@
 
 .property-enum strong,
 .property-pattern strong,
-.property-cde strong {
+.property-cde strong,
+.property-abbreviation strong {
     color: #333;
+}
+
+.property-abbreviation code {
+    background: #e3f2fd;
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: #1976d2;
+    font-weight: 600;
 }
 
 .property-children {

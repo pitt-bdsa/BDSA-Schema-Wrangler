@@ -47,6 +47,10 @@ class DataStore {
         this.girderToken = null;
         this.dsaConfig = null;
         this.columnMappings = {};
+        
+        // Track data structure changes for column list updates
+        this.dataStructureHash = null;
+        this.lastAccessoryDataLoad = null;
 
         // Load from localStorage on initialization
         this.loadFromStorage();

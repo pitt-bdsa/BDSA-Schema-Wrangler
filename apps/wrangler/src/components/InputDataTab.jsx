@@ -764,10 +764,17 @@ const InputDataTab = () => {
             return [];
         }
 
-        // Generate nested column keys from the first row (excluding meta.bdsaLocal fields)
-        const firstRow = dataStatus.processedData[0];
+        // Generate nested column keys from all rows to capture accessory data columns
+        // that might not be present in the first row
+        const allKeys = new Set();
 
-        return generateNestedKeys(firstRow).sort();
+        // Scan all rows to find all possible column keys
+        dataStatus.processedData.forEach((row, index) => {
+            const rowKeys = generateNestedKeys(row);
+            rowKeys.forEach(key => allKeys.add(key));
+        });
+
+        return Array.from(allKeys).sort();
     };
 
     // Generate column definitions from the first row of data

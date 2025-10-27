@@ -1,5 +1,6 @@
 import React from 'react';
 import { HIDDEN_DSA_FIELDS } from '../utils/constants';
+import { generateNestedKeys } from '../utils/columnDefinitionGenerator';
 
 const ColumnVisibilityModal = ({
     isOpen,
@@ -38,10 +39,18 @@ const ColumnVisibilityModal = ({
 
                     <div className="column-list">
                         {(() => {
-                            const currentOrder = columnOrder.length > 0 ? columnOrder : Object.keys(dataStatus.processedData[0]);
+                            // Scan all rows to capture all possible columns (including accessory data)
+                            const allKeys = new Set();
+                            dataStatus.processedData.forEach(row => {
+                                const rowKeys = generateNestedKeys(row);
+                                rowKeys.forEach(key => allKeys.add(key));
+                            });
+
+                            const currentOrder = columnOrder.length > 0 ? columnOrder : Array.from(allKeys).sort();
                             console.log('🔄 Rendering column list:', {
                                 columnOrder,
                                 currentOrder,
+                                allKeys: Array.from(allKeys),
                                 dataKeys: Object.keys(dataStatus.processedData[0])
                             });
                             return currentOrder;

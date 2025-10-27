@@ -9,6 +9,7 @@
         "preview": "vite preview"
     },
     "dependencies": {
+        "@bdsa/schema-components": "file:../../packages/schema-components",
         "@bdsa/shared-components": "file:../../packages/shared-components",
         "@bdsa/shared-types": "file:../../packages/shared-types",
         "@bdsa/shared-utils": "file:../../packages/shared-utils",

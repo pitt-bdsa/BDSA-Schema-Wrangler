@@ -1,6 +1,7 @@
 import React from 'react';
 import { DATA_SOURCE_TYPES } from '../utils/constants';
 import { getItemsToSyncCount } from '../utils/dataStore';
+import { generateNestedKeys } from '../utils/columnDefinitionGenerator';
 
 const DataControlsToolbar = ({
     dataSource,
@@ -26,6 +27,74 @@ const DataControlsToolbar = ({
     setShowRegexRules,
     setShowDsaSync
 }) => {
+    const handleCsvExport = () => {
+        if (!dataStatus.processedData || dataStatus.processedData.length === 0) {
+            console.warn('No data to export');
+            return;
+        }
+
+        try {
+            // Get all unique column keys from all rows
+            const allKeys = new Set();
+            dataStatus.processedData.forEach(row => {
+                const rowKeys = generateNestedKeys(row);
+                rowKeys.forEach(key => allKeys.add(key));
+            });
+
+            const columns = Array.from(allKeys).sort();
+
+            // Create CSV header
+            const csvHeader = columns.join(',');
+
+            // Create CSV rows
+            const csvRows = dataStatus.processedData.map(row => {
+                return columns.map(column => {
+                    const value = getNestedValue(row, column);
+                    // Escape CSV values (handle commas, quotes, newlines)
+                    if (value === null || value === undefined) {
+                        return '';
+                    }
+                    const stringValue = String(value);
+                    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+                        return `"${stringValue.replace(/"/g, '""')}"`;
+                    }
+                    return stringValue;
+                }).join(',');
+            });
+
+            // Combine header and rows
+            const csvContent = [csvHeader, ...csvRows].join('\n');
+
+            // Create and download file
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+
+            // Generate filename with timestamp
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            const filename = `bdsa-data-export-${timestamp}.csv`;
+            link.setAttribute('download', filename);
+
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            console.log(`✅ CSV exported: ${filename} (${dataStatus.processedData.length} rows, ${columns.length} columns)`);
+        } catch (error) {
+            console.error('❌ CSV export failed:', error);
+            alert('Failed to export CSV: ' + error.message);
+        }
+    };
+
+    // Helper function to get nested values
+    const getNestedValue = (obj, path) => {
+        return path.split('.').reduce((current, key) => {
+            return current && current[key] !== undefined ? current[key] : null;
+        }, obj);
+    };
+
     return (
         <div className="controls-row">
             <div className="data-source-selector">
@@ -165,6 +234,16 @@ const DataControlsToolbar = ({
                     title="Configure Regex Rules for Data Extraction"
                 >
                     Regex Rules
+                </button>
+            )}
+
+            {dataStatus.processedData && dataStatus.processedData.length > 0 && (
+                <button
+                    className="csv-export-btn"
+                    onClick={handleCsvExport}
+                    title="Export data to CSV file"
+                >
+                    📊 Export CSV
                 </button>
             )}
 

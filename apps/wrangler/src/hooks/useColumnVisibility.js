@@ -35,12 +35,18 @@ export const useColumnVisibility = (dataStatus) => {
 
     const getDataSourceKey = () => {
         if (!dataStatus.processedData || dataStatus.processedData.length === 0) return null;
-        
-        const firstRow = dataStatus.processedData[0];
+
         const dataSource = dataStatus.dataSource || 'unknown';
-        
+
         // Create a unique key based on data structure and source
-        const structureKey = Object.keys(firstRow).sort().join(',');
+        // Scan all rows to capture all possible columns (including accessory data)
+        const allKeys = new Set();
+        dataStatus.processedData.forEach(row => {
+            const rowKeys = generateNestedKeys(row);
+            rowKeys.forEach(key => allKeys.add(key));
+        });
+
+        const structureKey = Array.from(allKeys).sort().join(',');
         return `${dataSource}_${structureKey}`;
     };
 
@@ -91,10 +97,15 @@ export const useColumnVisibility = (dataStatus) => {
     const hideAllColumns = () => {
         if (!dataStatus.processedData || dataStatus.processedData.length === 0) return;
 
-        const firstRow = dataStatus.processedData[0];
-        const allKeys = generateNestedKeys(firstRow);
+        // Scan all rows to capture all possible columns (including accessory data)
+        const allKeys = new Set();
+        dataStatus.processedData.forEach(row => {
+            const rowKeys = generateNestedKeys(row);
+            rowKeys.forEach(key => allKeys.add(key));
+        });
+
         const hiddenColumns = {};
-        allKeys.forEach(key => {
+        Array.from(allKeys).forEach(key => {
             hiddenColumns[key] = false;
         });
         setColumnVisibility(hiddenColumns);
@@ -122,11 +133,16 @@ export const useColumnVisibility = (dataStatus) => {
         // Use the priority fields from constants
         const preferredOrder = PRIORITY_BDSA_FIELDS;
 
-        const allKeys = generateNestedKeys(dataStatus.processedData[0]);
+        // Scan all rows to capture all possible columns (including accessory data)
+        const allKeys = new Set();
+        dataStatus.processedData.forEach(row => {
+            const rowKeys = generateNestedKeys(row);
+            rowKeys.forEach(key => allKeys.add(key));
+        });
 
         // Create ordered list: preferred order first, then remaining keys
         const orderedKeys = [];
-        const remainingKeys = [...allKeys];
+        const remainingKeys = Array.from(allKeys);
 
         // Add preferred keys first
         preferredOrder.forEach(key => {
