@@ -1,5 +1,7 @@
 // CaseManager - Handles case ID mapping and conflict detection
 
+import { normalizeLocalCaseId } from './bdsaCaseIdAllocator.js';
+
 class CaseManager {
     constructor() {
         // This class is stateless and operates on provided data
@@ -18,8 +20,8 @@ class CaseManager {
 
         // First pass: collect all mappings and detect localCaseId conflicts
         processedData.forEach((item) => {
-            const localCaseId = item.BDSA?.bdsaLocal?.localCaseId;
-            const bdsaCaseId = item.BDSA?.bdsaLocal?.bdsaCaseId;
+            const localCaseId = normalizeLocalCaseId(item.BDSA?.bdsaLocal?.localCaseId);
+            const bdsaCaseId = item.BDSA?.bdsaLocal?.bdsaCaseId && String(item.BDSA.bdsaLocal.bdsaCaseId).trim();
 
             if (localCaseId && bdsaCaseId) {
                 // Check for conflicts - same localCaseId but different bdsaCaseId
@@ -39,8 +41,8 @@ class CaseManager {
         // Second pass: detect bdsaCaseId conflicts (same BDSA Case ID mapped to multiple local case IDs)
         const bdsaToLocalMap = new Map();
         processedData.forEach((item) => {
-            const localCaseId = item.BDSA?.bdsaLocal?.localCaseId;
-            const bdsaCaseId = item.BDSA?.bdsaLocal?.bdsaCaseId;
+            const localCaseId = normalizeLocalCaseId(item.BDSA?.bdsaLocal?.localCaseId);
+            const bdsaCaseId = item.BDSA?.bdsaLocal?.bdsaCaseId && String(item.BDSA.bdsaLocal.bdsaCaseId).trim();
 
             if (localCaseId && bdsaCaseId) {
                 if (bdsaToLocalMap.has(bdsaCaseId)) {
@@ -93,7 +95,7 @@ class CaseManager {
         let updatedCount = 0;
 
         processedData.forEach((item) => {
-            const currentLocalCaseId = item.BDSA?.bdsaLocal?.localCaseId;
+            const currentLocalCaseId = normalizeLocalCaseId(item.BDSA?.bdsaLocal?.localCaseId);
             if (currentLocalCaseId && caseIdMappings.has(currentLocalCaseId)) {
                 const bdsaCaseId = caseIdMappings.get(currentLocalCaseId);
 

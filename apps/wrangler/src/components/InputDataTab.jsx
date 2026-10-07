@@ -14,15 +14,16 @@ import DataGrid from './DataGrid';
 import ColumnVisibilityModal from './ColumnVisibilityModal';
 import ProtocolArrayCellRenderer from './ProtocolArrayCellRenderer';
 import NameCellRenderer from './NameCellRenderer';
-import { getDefaultRegexRules, applyRegexRules } from '../utils/regexExtractor';
+import { getDefaultRegexRules, normalizeRegexRules } from '../utils/regexExtractor';
 import { HIDDEN_DSA_FIELDS, PRIORITY_BDSA_FIELDS, DEFAULT_COLUMN_VISIBILITY, DATA_SOURCE_TYPES } from '../utils/constants';
 import { generateColumnDefinitions, getColumnDisplayName, generateNestedKeys } from '../utils/columnDefinitionGenerator';
 import { useColumnVisibility } from '../hooks/useColumnVisibility';
+import { clearWranglerLocalStorage } from '../utils/StorageManager';
 import './InputDataTab.css';
 
 
 
-const InputDataTab = () => {
+const InputDataTab = ({ embedded = false }) => {
     const [dataSource, setDataSource] = useState(DATA_SOURCE_TYPES.DSA);
     const [dataStatus, setDataStatus] = useState(dataStore.getStatus());
     const [authStatus, setAuthStatus] = useState(dsaAuthStore.getStatus());
@@ -52,20 +53,15 @@ const InputDataTab = () => {
     } = useColumnVisibility(dataStatus);
     const [showRegexRules, setShowRegexRules] = useState(false);
     const [regexRules, setRegexRules] = useState(() => {
-        // Load saved regex rules from localStorage
         const savedRules = localStorage.getItem('regexRules');
         if (savedRules) {
             try {
-                return JSON.parse(savedRules);
+                return normalizeRegexRules(JSON.parse(savedRules));
             } catch (error) {
                 console.error('Error loading saved regex rules:', error);
             }
         }
         return getDefaultRegexRules();
-    });
-    const [selectedRuleSet, setSelectedRuleSet] = useState(() => {
-        // Load saved rule set from localStorage
-        return localStorage.getItem('selectedRegexRuleSet') || '';
     });
     const [showBdsaMapping, setShowBdsaMapping] = useState(false);
     const [columnMappings, setColumnMappings] = useState(() => {
@@ -87,12 +83,7 @@ const InputDataTab = () => {
     });
     const [showDsaSync, setShowDsaSync] = useState(false);
     const [isDataRefresh, setIsDataRefresh] = useState(false);
-    const [hasAppliedInitialRegex, setHasAppliedInitialRegex] = useState(false);
-    const [isLoadingMore, setIsLoadingMore] = useState(false);
-    const [loadMoreProgress, setLoadMoreProgress] = useState({ current: 0, total: 0 });
     const [modifiedItemsCount, setModifiedItemsCount] = useState(0);
-    const [hasMoreData, setHasMoreData] = useState(true); // Track if there's more data to load
-    const [hasCheckedForMoreData, setHasCheckedForMoreData] = useState(false); // Track if we've determined there's no more data
     const [showFileFilterNotification, setShowFileFilterNotification] = useState(false);
     const [isNotificationFading, setIsNotificationFading] = useState(false);
 
@@ -159,9 +150,6 @@ const InputDataTab = () => {
         return () => clearInterval(interval);
     }, [modifiedItemsCount]);
 
-    // Note: hasMoreData is now managed by the API responses from loadDsaData and loadMoreDsaData
-    // No need for heuristic-based logic here
-
     // Auto-dismiss file filter notification
     useEffect(() => {
         if (window.dsaSkipStats && window.dsaSkipStats.totalSkipped > 0) {
@@ -186,93 +174,6 @@ const InputDataTab = () => {
             };
         }
     }, [window.dsaSkipStats?.totalSkipped]);
-
-    // Auto-apply regex rules when data is loaded (if no column mappings exist)
-    // Only run this once when data is first loaded, not on every data change
-    useEffect(() => {
-        // Check if this is data loaded from localStorage (page refresh scenario)
-        // If data exists but we haven't explicitly refreshed, it's likely from localStorage
-        const isLoadedFromStorage = dataStatus.processedData && dataStatus.processedData.length > 0 &&
-            !isDataRefresh && hasAppliedInitialRegex;
-
-        console.log('🔍 Auto-apply useEffect triggered:', {
-            hasData: dataStatus.processedData && dataStatus.processedData.length > 0,
-            dataLength: dataStatus.processedData?.length || 0,
-            isDataRefresh,
-            isLoadedFromStorage,
-            hasAppliedInitialRegex,
-            dataLoadTimestamp: dataStatus.dataLoadTimestamp,
-            shouldRun: dataStatus.processedData && dataStatus.processedData.length > 0 && !isDataRefresh && !isLoadedFromStorage && !hasAppliedInitialRegex
-        });
-
-        // TEMPORARILY DISABLED: Auto-apply logic is marking all items as modified on page refresh
-        // TODO: Fix the isLoadedFromStorage detection logic
-        if (false && dataStatus.processedData && dataStatus.processedData.length > 0 && !isDataRefresh && !isLoadedFromStorage && !hasAppliedInitialRegex) {
-            // Check which fields need regex extraction on a per-field basis
-            const fieldsNeedingExtraction = {
-                localCaseId: 0,
-                localStainID: 0,
-                localRegionId: 0
-            };
-
-            dataStatus.processedData.forEach(item => {
-                const bdsaLocal = item.BDSA?.bdsaLocal;
-                if (!bdsaLocal) return;
-
-                // Count items missing each field
-                if (!bdsaLocal.localCaseId || bdsaLocal.localCaseId.trim() === '') {
-                    fieldsNeedingExtraction.localCaseId++;
-                }
-                if (!bdsaLocal.localStainID || bdsaLocal.localStainID.trim() === '') {
-                    fieldsNeedingExtraction.localStainID++;
-                }
-                if (!bdsaLocal.localRegionId || bdsaLocal.localRegionId.trim() === '') {
-                    fieldsNeedingExtraction.localRegionId++;
-                }
-            });
-
-            // If any fields need extraction, apply regex rules
-            const totalNeedingExtraction = Object.values(fieldsNeedingExtraction).reduce((sum, count) => sum + count, 0);
-
-            console.log(`🔍 Fields needing extraction:`, fieldsNeedingExtraction, `Total: ${totalNeedingExtraction}`);
-
-            if (totalNeedingExtraction > 0) {
-                console.log(`🔄 Found items needing regex extraction:`, fieldsNeedingExtraction);
-                console.log(`🔄 Auto-applying regex rules to extract missing field values...`);
-                // Don't mark items as modified during data refresh or page refresh - only mark as modified for initial load
-                const shouldMarkAsModified = !isDataRefresh && !isLoadedFromStorage;
-                const result = dataStore.applyRegexRules(regexRules, shouldMarkAsModified);
-                if (result.success) {
-                    const action = shouldMarkAsModified ? 'marked as modified for sync' : 'extracted (not marked as modified - data refresh)';
-                    console.log(`✅ Auto-applied regex rules: ${result.extractedCount} items updated (${action})`);
-                    console.log(`📊 Modified items count after regex: ${dataStore.modifiedItems.size}`);
-                }
-            } else {
-                console.log('🔄 All items already have BDSA field values, skipping auto-apply of regex rules');
-            }
-
-            // Also auto-apply column mappings if they exist
-            if (columnMappings && (columnMappings.localCaseId || columnMappings.localStainID || columnMappings.localRegionId)) {
-                console.log(`🔄 Auto-applying column mappings:`, columnMappings);
-                // Don't mark items as modified during data refresh or page refresh - only mark as modified for initial load
-                const shouldMarkAsModified = !isDataRefresh && !isLoadedFromStorage;
-                const mappingResult = dataStore.applyColumnMappings(columnMappings, shouldMarkAsModified);
-                if (mappingResult.success) {
-                    const action = shouldMarkAsModified ? 'updated' : 'mapped (not marked as modified - data refresh)';
-                    console.log(`✅ Auto-applied column mappings: ${mappingResult.updatedCount} items ${action}`);
-                    console.log(`📊 Modified items count after column mappings: ${dataStore.modifiedItems.size}`);
-                }
-            } else {
-                console.log(`🔄 No column mappings to auto-apply:`, columnMappings);
-            }
-
-            // Mark that we've applied initial regex to prevent infinite loop
-            setHasAppliedInitialRegex(true);
-
-            // Debug: Check final modified items count
-            console.log(`📊 Final modified items count after auto-apply: ${dataStore.modifiedItems.size}`);
-        }
-    }, [dataStatus.processedData, dataStatus.dataSource, isDataRefresh, hasAppliedInitialRegex]); // Removed regexRules from dependencies
 
     // Auto-load DSA data when authenticated and no data is loaded
     useEffect(() => {
@@ -310,7 +211,6 @@ const InputDataTab = () => {
         // Clear data when switching data sources
         if (newDataSource !== dataStatus.dataSource) {
             dataStore.clearData();
-            setHasAppliedInitialRegex(false); // Reset regex flag when clearing data
         }
     };
 
@@ -416,9 +316,60 @@ const InputDataTab = () => {
         }
     };
 
+    const persistRegexRules = (newRules) => {
+        const normalized = normalizeRegexRules(newRules);
+        setRegexRules(normalized);
+        localStorage.setItem('regexRules', JSON.stringify(normalized));
+        localStorage.removeItem('selectedRegexRuleSet');
+        return normalized;
+    };
+
+    const persistPendingBdsaLocal = async () => {
+        const pendingIds = dataStore.modifiedItems;
+        if (!pendingIds || pendingIds.size === 0) {
+            return { updatedCount: 0, failedCount: 0 };
+        }
+        const items = (dataStore.processedData || []).filter((item) => {
+            const itemId = item.id || item._id || item.dsa_id;
+            return itemId && pendingIds.has(itemId);
+        });
+        if (items.length === 0) {
+            return { updatedCount: 0, failedCount: 0 };
+        }
+        try {
+            const { persistBdsaLocalBulk } = await import('../utils/DsaMetadataManager.js');
+            const result = await persistBdsaLocalBulk(items);
+            (result.updated || []).forEach((itemId) => pendingIds.delete(itemId));
+            dataStore.notify();
+            return result;
+        } catch (error) {
+            console.warn('Could not persist BDSA item metadata:', error.message);
+            return { updatedCount: 0, failedCount: items.length, error: error.message };
+        }
+    };
+
+    const rematchHostCases = async () => {
+        if (!(embedded || dsaAuthStore.hostImported)) {
+            return;
+        }
+        try {
+            const { default: bdsaCatalogClient } = await import('../utils/bdsaCatalogClient.js');
+            const {
+                indexHostCases,
+                applyHostCaseMatches,
+            } = await import('../utils/hostCaseMatcher.js');
+            const hostCases = await bdsaCatalogClient.listCases();
+            applyHostCaseMatches(dataStore, indexHostCases(hostCases));
+        } catch (hostCaseError) {
+            console.warn('Could not match host BDSA cases:', hostCaseError.message);
+        }
+    };
+
     const handleLoadDsa = async () => {
         if (!authStatus.isAuthenticated) {
-            setError('Please login to DSA server first');
+            setError(dsaAuthStore.hostImported
+                ? 'Host session is not ready. Reload the page or log in to BDSA again.'
+                : 'Please login to DSA server first');
             return;
         }
 
@@ -447,34 +398,19 @@ const InputDataTab = () => {
             if (result.success) {
                 console.log(`✅ Successfully loaded ${result.itemCount} items from DSA`);
 
-                // Use the hasMoreData information from the API response
-                if (result.hasMoreData !== undefined) {
-                    setHasMoreData(result.hasMoreData);
-                    console.log(`🔍 DEBUG: hasMoreData set to: ${result.hasMoreData} (from API response)`);
-                } else {
-                    // Fallback: Check if we got a full page of data to determine if there might be more
-                    const itemCount = result.itemCount || 0;
-                    // If we got exactly 100 items (page size), there might be more. If less, we've reached the end.
-                    const mightHaveMore = itemCount >= 100;
-                    console.log(`🔍 DEBUG: Loaded ${itemCount} items, setting hasMoreData to ${mightHaveMore} (fallback logic)`);
-                    setHasMoreData(mightHaveMore);
-                }
-
                 // Check for file filtering stats
                 if (window.dsaSkipStats && window.dsaSkipStats.totalSkipped > 0) {
                     console.log('📁 File filtering applied:', window.dsaSkipStats);
                 }
 
-                // Auto-pull regex rules from DSA server if available
                 const config = dsaAuthStore.getConfig();
-                // Use metadataSyncTargetFolder if set, otherwise fall back to resourceId
                 const metadataTargetFolder = config.metadataSyncTargetFolder && config.metadataSyncTargetFolder.trim()
                     ? config.metadataSyncTargetFolder.trim()
                     : config.resourceId;
 
+                let rulesToApply = regexRules;
                 try {
                     const { getRegexRulesFromFolder } = await import('../utils/dsaIntegration.js');
-
                     const regexResult = await getRegexRulesFromFolder(
                         config.baseUrl,
                         metadataTargetFolder,
@@ -482,25 +418,21 @@ const InputDataTab = () => {
                     );
 
                     if (regexResult.success && regexResult.regexRules) {
-                        const pulledRules = regexResult.regexRules.rules;
                         const pulledRuleSetName = regexResult.regexRules.ruleSetName || '';
-
-                        // Auto-apply pulled regex rules
-                        setRegexRules(pulledRules);
-                        setSelectedRuleSet(pulledRuleSetName);
-
-                        // Save to localStorage
-                        localStorage.setItem('regexRules', JSON.stringify(pulledRules));
-                        localStorage.setItem('selectedRegexRuleSet', pulledRuleSetName);
-
-                        console.log('✅ Auto-pulled regex rules from DSA server:', pulledRuleSetName || 'custom');
+                        rulesToApply = persistRegexRules(regexResult.regexRules.rules);
+                        console.log('✅ Auto-pulled regex rules from folder metadata');
                     } else {
-                        console.log('ℹ️ No regex rules found on DSA server, using local rules');
+                        rulesToApply = persistRegexRules(regexRules);
+                        console.log('ℹ️ No regex rules found on folder, using local rules');
                     }
                 } catch (regexError) {
                     console.warn('⚠️ Could not auto-pull regex rules:', regexError.message);
-                    // Non-fatal error - continue with local regex rules
+                    rulesToApply = persistRegexRules(regexRules);
                 }
+
+                dataStore.applyRegexRules(rulesToApply, true, false);
+                await rematchHostCases();
+                await persistPendingBdsaLocal();
 
                 // Auto-pull column mappings from DSA server if available
                 try {
@@ -529,24 +461,25 @@ const InputDataTab = () => {
                     // Non-fatal error - continue with local column mappings
                 }
 
-                // Auto-pull protocols from DSA server if available
-                try {
-                    const { pullProtocolsFromDSA } = await import('../utils/dsaIntegration.js');
-                    const protocolResult = await pullProtocolsFromDSA(
-                        config.baseUrl,
-                        metadataTargetFolder,
-                        dsaAuthStore.getToken()
-                    );
+                // Folder-metadata protocol pull is standalone-only. Embedded uses the host catalog.
+                if (!dsaAuthStore.hostImported) {
+                    try {
+                        const { pullProtocolsFromDSA } = await import('../utils/dsaIntegration.js');
+                        const protocolResult = await pullProtocolsFromDSA(
+                            config.baseUrl,
+                            metadataTargetFolder,
+                            dsaAuthStore.getToken()
+                        );
 
-                    if (protocolResult.success) {
-                        console.log('✅ Auto-pulled protocols from DSA server for this collection');
-                        console.log(`📊 Pulled ${protocolResult.stainProtocols?.length || 0} stain protocols and ${protocolResult.regionProtocols?.length || 0} region protocols`);
-                    } else {
-                        console.log('ℹ️ No protocols found on DSA server for this collection');
+                        if (protocolResult.success) {
+                            console.log('✅ Auto-pulled protocols from DSA server for this collection');
+                            console.log(`📊 Pulled ${protocolResult.stainProtocols?.length || 0} stain protocols and ${protocolResult.regionProtocols?.length || 0} region protocols`);
+                        } else {
+                            console.log('ℹ️ No protocols found on DSA server for this collection');
+                        }
+                    } catch (protocolError) {
+                        console.warn('⚠️ Could not auto-pull protocols:', protocolError.message);
                     }
-                } catch (protocolError) {
-                    console.warn('⚠️ Could not auto-pull protocols:', protocolError.message);
-                    // Non-fatal error - continue with default protocols
                 }
 
             }
@@ -561,111 +494,46 @@ const InputDataTab = () => {
         }
     };
 
-    const handleLoadMoreData = async () => {
-        if (!authStatus.isAuthenticated) {
-            setError('Please login to DSA server first');
+    const isAccessorySpreadsheet = (file) => (
+        file
+        && (
+            file.type === 'text/csv'
+            || file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            || file.type === 'application/vnd.ms-excel'
+            || file.name.endsWith('.csv')
+            || file.name.endsWith('.xlsx')
+            || file.name.endsWith('.xls')
+        )
+    );
+
+    const loadAccessoryFromFile = async (file) => {
+        if (!file) {
             return;
         }
-
-        if (!dataStatus.processedData || dataStatus.processedData.length === 0) {
-            setError('Please load initial data first');
-            return;
-        }
-
-        setIsLoadingMore(true);
-        setError(null);
-
-        try {
-            // Load data in the background
-            const result = await dataStore.loadMoreDsaData(dsaAuthStore, (progress) => {
-                setLoadMoreProgress(progress);
-            });
-
-            if (result.success) {
-                const newItemsCount = result.data?.length || 0;
-                console.log(`✅ Successfully loaded ${result.totalItemCount} total items from DSA`);
-
-                // Use the hasMoreData information from the API response
-                if (result.hasMoreData !== undefined) {
-                    setHasMoreData(result.hasMoreData);
-                    console.log(`🏁 hasMoreData set to: ${result.hasMoreData} (from API response)`);
-                } else {
-                    // Fallback: If we got no new items, we've reached the end
-                    if (newItemsCount === 0) {
-                        setHasMoreData(false);
-                        setHasCheckedForMoreData(true);
-                        console.log('🏁 No more data available - reached end of dataset');
-                    }
-                }
-            } else {
-                console.error('❌ Failed to load more data:', result.error);
-                setHasMoreData(false); // Assume no more data if loading failed
-            }
-        } catch (error) {
-            console.error('Error loading more DSA data:', error);
-            setError(error.message);
-        } finally {
-            setIsLoadingMore(false);
-            setLoadMoreProgress({ current: 0, total: 0 });
-        }
-    };
-
-    const handleAccessoryFileChange = (event) => {
-        const file = event.target.files[0];
-        if (file && (file.type === 'text/csv' ||
-            file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-            file.type === 'application/vnd.ms-excel' ||
-            file.name.endsWith('.csv') ||
-            file.name.endsWith('.xlsx') ||
-            file.name.endsWith('.xls'))) {
-            setAccessoryFile(file);
-            setError(null);
-        } else {
+        if (!isAccessorySpreadsheet(file)) {
             setError('Please select a valid CSV or Excel file');
-            setAccessoryFile(null);
-        }
-    };
-
-    const handleLoadAccessoryFile = async () => {
-        if (!accessoryFile) {
-            setError('Please select an accessory file first');
             return;
         }
-
         if (!dataStatus.processedData || dataStatus.processedData.length === 0) {
             setError('Please load DSA data first before uploading accessory file');
             return;
         }
 
+        setAccessoryFile(file);
         setIsLoading(true);
         setLoadingMessage('Loading accessory file...');
         setError(null);
 
         try {
-            const result = await dataStore.loadAccessoryFile(accessoryFile);
+            const result = await dataStore.loadAccessoryFile(file);
             if (result.success) {
-                console.log(`✅ Successfully loaded accessory data: ${result.itemCount} items`);
-                console.log(`🔗 Matched ${result.matchedCount} items with DSA data`);
-                console.log('📊 Matching details:', result.matchedData);
                 setAccessoryData(result.data);
-
-                // Show detailed matching info to user
-                if (result.matchedCount > 0) {
-                    console.log(`🎯 Found ${result.matchedCount} matches out of ${result.itemCount} accessory items`);
-                    console.log('💡 Accessory fields added with "accessory_" prefix - check the data grid columns');
-                    setAccessoryMatchInfo({
-                        matched: result.matchedCount,
-                        total: result.itemCount,
-                        unmatched: result.itemCount - result.matchedCount
-                    });
-                } else {
-                    console.warn('⚠️ No matches found - check if filenames in accessory file match DSA item names');
-                    setAccessoryMatchInfo({
-                        matched: 0,
-                        total: result.itemCount,
-                        unmatched: result.itemCount
-                    });
-                    // Show field mapping dialog if no matches found
+                setAccessoryMatchInfo({
+                    matched: result.matchedCount,
+                    total: result.itemCount,
+                    unmatched: result.itemCount - result.matchedCount
+                });
+                if (result.matchedCount === 0) {
                     setShowAccessoryFieldMapping(true);
                 }
             }
@@ -675,6 +543,23 @@ const InputDataTab = () => {
         } finally {
             setIsLoading(false);
             setLoadingMessage('');
+        }
+    };
+
+    const handleAccessoryFileChange = (event) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        loadAccessoryFromFile(file);
+    };
+
+    const handleClearAllData = () => {
+        if (window.confirm('Clear ALL data and start fresh?\n\nThis will delete all loaded data, localStorage, and modified items.')) {
+            clearWranglerLocalStorage();
+            dataStore.clearData();
+            setCsvFile(null);
+            setAccessoryFile(null);
+            setAccessoryData(null);
+            window.location.reload();
         }
     };
 
@@ -710,34 +595,12 @@ const InputDataTab = () => {
         }
     };
 
-    const handleClearData = () => {
-        if (window.confirm('Are you sure you want to clear all loaded data?')) {
-            dataStore.clearData();
-            setCsvFile(null);
-            setAccessoryFile(null);
-            setAccessoryData(null);
-            setError(null);
-            setHasAppliedInitialRegex(false); // Reset regex flag when clearing data
-        }
-    };
-
-
-    const handleSaveRegexRules = (newRules, ruleSetKey = '') => {
-        setRegexRules(newRules);
-        setSelectedRuleSet(ruleSetKey);
-
-        // Save to localStorage for persistence
-        localStorage.setItem('regexRules', JSON.stringify(newRules));
-        localStorage.setItem('selectedRegexRuleSet', ruleSetKey);
-        console.log('💾 Saved regex rules:', newRules);
-        console.log('💾 Saved rule set:', ruleSetKey);
-
-        // Apply the regex rules to the current data
-        const result = dataStore.applyRegexRules(newRules);
-        if (result.success) {
-            console.log(`✅ Applied regex rules: ${result.extractedCount} items updated`);
-        } else {
-            console.error('❌ Failed to apply regex rules:', result.error);
+    const handleAppliedRegexRules = async (newRules) => {
+        persistRegexRules(newRules);
+        await rematchHostCases();
+        const persist = await persistPendingBdsaLocal();
+        if (persist?.failedCount) {
+            console.warn(`Regex metadata persist: ${persist.updatedCount} saved, ${persist.failedCount} failed`);
         }
     };
 
@@ -806,7 +669,7 @@ const InputDataTab = () => {
                             sortable: true,
                             filter: true,
                             resizable: true,
-                            minWidth: 150,
+                            minWidth: 110,
                             // Hide if explicitly set to false in columnVisibility OR if it's in HIDDEN_DSA_FIELDS (unless explicitly overridden)
                             hide: (columnVisibility[fullKey] === false) || (HIDDEN_DSA_FIELDS.includes(fullKey) && columnVisibility[fullKey] !== true),
                             cellStyle: (params) => {
@@ -873,6 +736,22 @@ const InputDataTab = () => {
                         // Use custom cell renderer for name field to show tooltip on hover
                         if (fullKey === 'name') {
                             columnDef.cellRenderer = NameCellRenderer;
+                            columnDef.width = 240;
+                            columnDef.minWidth = 160;
+                        }
+
+                        if (fullKey === 'BDSA.bdsaLocal.localCaseId'
+                            || fullKey === 'BDSA.bdsaLocal.localRegionId'
+                            || fullKey === 'BDSA.bdsaLocal.localStainID'
+                            || fullKey === 'BDSA.bdsaLocal.bdsaCaseId') {
+                            columnDef.width = 170;
+                            columnDef.minWidth = 130;
+                        }
+
+                        if (fullKey === 'BDSA.bdsaLocal.bdsaStainProtocol'
+                            || fullKey === 'BDSA.bdsaLocal.bdsaRegionProtocol') {
+                            columnDef.width = 210;
+                            columnDef.minWidth = 160;
                         }
 
                         // Add cell value change handler for BDSA fields
@@ -965,11 +844,13 @@ const InputDataTab = () => {
         // Add status column at the beginning
         const statusColumn = {
             field: '_status',
-            headerName: 'Status',
+            headerName: 'St',
             sortable: true,
-            filter: true,
+            filter: false,
             resizable: false,
-            width: 120,
+            width: 52,
+            minWidth: 52,
+            maxWidth: 56,
             hide: false,
             pinned: 'left',
             cellRenderer: StatusCellRenderer
@@ -1023,38 +904,11 @@ const InputDataTab = () => {
                         </span>
                     </div>
                     <div className="legend-right">
-                        {/* {console.log(`🔍 RENDER: modifiedItemsCount = ${modifiedItemsCount}, condition = ${modifiedItemsCount > 0}`)} */}
                         {modifiedItemsCount > 0 && (
                             <span className="update-count-text">
                                 {modifiedItemsCount} of {dataStatus.processedData.length} items updated
                             </span>
                         )}
-                        <button
-                            onClick={() => {
-                                if (window.confirm('🗑️ Clear ALL data and start fresh?\n\nThis will delete all loaded data, localStorage, and modified items.')) {
-                                    localStorage.clear();
-                                    dataStore.clearData();
-                                    setCsvFile(null);
-                                    setAccessoryFile(null);
-                                    setAccessoryData(null);
-                                    setHasAppliedInitialRegex(false);
-                                    window.location.reload();
-                                }
-                            }}
-                            className="btn btn-danger"
-                            style={{
-                                fontSize: '12px',
-                                padding: '4px 8px',
-                                backgroundColor: '#dc3545',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                marginLeft: '10px'
-                            }}
-                        >
-                            🗑️ Clear ALL Data & Restart
-                        </button>
                     </div>
                 </div>
             )}
@@ -1080,86 +934,6 @@ const InputDataTab = () => {
                 </div>
             )}
 
-            {/* Load More Data Button - Compact */}
-            {(() => {
-                // Only show if we're certain there's more data and haven't determined there isn't
-                const shouldShow = dataStatus.processedData &&
-                    dataStatus.processedData.length > 0 &&
-                    dataStatus.dataSource === 'dsa' &&
-                    !isLoadingMore &&
-                    hasMoreData &&
-                    !hasCheckedForMoreData;
-                console.log(`🔍 DEBUG: Load More button conditions:`, {
-                    hasData: !!dataStatus.processedData,
-                    dataLength: dataStatus.processedData?.length || 0,
-                    isDSA: dataStatus.dataSource === 'dsa',
-                    notLoadingMore: !isLoadingMore,
-                    hasMoreData,
-                    hasCheckedForMoreData,
-                    shouldShow
-                });
-                return shouldShow;
-            })() && (
-                    <div className="compact-notification load-more-notification">
-                        <span className="notification-icon">⬇️</span>
-                        <span className="notification-text">
-                            Showing {dataStatus.processedData.length.toLocaleString()} items
-                        </span>
-                        <button className="notification-btn" onClick={handleLoadMoreData}>
-                            Load More
-                        </button>
-                        <button
-                            className="notification-btn"
-                            onClick={() => {
-                                console.log(`🔍 DEBUG: Current hasMoreData state: ${hasMoreData}`);
-                                console.log(`🔍 DEBUG: Current hasCheckedForMoreData state: ${hasCheckedForMoreData}`);
-                                console.log(`🔍 DEBUG: Current item count: ${dataStatus.processedData.length}`);
-                                console.log(`🔍 DEBUG: Data source: ${dataStatus.dataSource}`);
-                                console.log(`🔍 DEBUG: Loading more: ${isLoadingMore}`);
-                                console.log(`🔍 DEBUG: Should show bar: ${dataStatus.processedData && dataStatus.processedData.length > 0 && dataStatus.dataSource === 'dsa' && !isLoadingMore && hasMoreData && !hasCheckedForMoreData}`);
-                            }}
-                            style={{ marginLeft: '5px', fontSize: '10px', padding: '2px 6px' }}
-                            title="Debug Load More State"
-                        >
-                            ?
-                        </button>
-                        <button
-                            className="notification-btn"
-                            onClick={() => {
-                                console.log(`🔍 Manually marking as no more data available`);
-                                setHasMoreData(false);
-                                setHasCheckedForMoreData(true);
-                            }}
-                            style={{ marginLeft: '5px', fontSize: '10px', padding: '2px 6px', backgroundColor: '#dc3545' }}
-                            title="Mark as No More Data"
-                        >
-                            ✕
-                        </button>
-                    </div>
-                )}
-
-            {/* Loading More Progress */}
-            {isLoadingMore && (
-                <div className="loading-more-alert">
-                    <div className="alert-header">
-                        <span className="alert-icon">⏳</span>
-                        <span className="alert-title">Loading More Data...</span>
-                    </div>
-                    <div className="alert-content">
-                        <p>
-                            Loading page {loadMoreProgress.current} of {loadMoreProgress.total}...
-                            You can continue working while data loads in the background.
-                        </p>
-                        <div className="progress-bar">
-                            <div
-                                className="progress-fill"
-                                style={{ width: `${(loadMoreProgress.current / loadMoreProgress.total) * 100}%` }}
-                            ></div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {/* Toolbar */}
             <DataControlsToolbar
                 dataSource={dataSource}
@@ -1172,7 +946,6 @@ const InputDataTab = () => {
                 handleLoadExcel={handleLoadExcel}
                 accessoryFile={accessoryFile}
                 handleAccessoryFileChange={handleAccessoryFileChange}
-                handleLoadAccessoryFile={handleLoadAccessoryFile}
                 accessoryData={accessoryData}
                 accessoryMatchInfo={accessoryMatchInfo}
                 isLoading={isLoading}
@@ -1184,6 +957,7 @@ const InputDataTab = () => {
                 setShowBdsaMapping={setShowBdsaMapping}
                 setShowRegexRules={setShowRegexRules}
                 setShowDsaSync={setShowDsaSync}
+                onClearAllData={handleClearAllData}
             />
 
 
@@ -1199,7 +973,7 @@ const InputDataTab = () => {
                             <strong>{accessoryMatchInfo.matched}</strong> out of <strong>{accessoryMatchInfo.total}</strong> accessory items were matched with DSA data.
                         </p>
                         <p>
-                            <strong>To see the accessory fields:</strong> Click the "Show Columns" button above to view all available columns.
+                            <strong>To see the accessory fields:</strong> Open the gear menu and choose Show columns.
                             Look for fields starting with <code>accessory_</code> (e.g., <code>accessory_R#</code>, <code>accessory_SB Stain/IHC</code>).
                         </p>
                         {accessoryMatchInfo.unmatched > 0 && (
@@ -1258,9 +1032,8 @@ const InputDataTab = () => {
             <RegexRulesModal
                 isOpen={showRegexRules}
                 onClose={() => setShowRegexRules(false)}
-                onSave={handleSaveRegexRules}
+                onApplied={handleAppliedRegexRules}
                 currentRules={regexRules}
-                selectedRuleSet={selectedRuleSet}
                 sampleData={dataStatus.processedData || []}
             />
 

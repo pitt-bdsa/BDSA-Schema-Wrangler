@@ -120,7 +120,7 @@ const DataGrid = ({
                         <p>Choose a CSV file and click "Load CSV Data" to begin.</p>
                     )}
                     {dataSource === DATA_SOURCE_TYPES.DSA && (
-                        <p>Configure your DSA server and click "Load DSA Data" to begin.</p>
+                        <p>Choose a DSA source folder and click "Load DSA Data" to begin.</p>
                     )}
                 </div>
             )}

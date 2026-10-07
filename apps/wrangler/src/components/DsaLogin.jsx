@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import DsaConfigModal from './DsaConfigModal';
 import dsaAuthStore from '../utils/dsaAuthStore';
+import DSAClient from '../utils/dsaClient';
 import './DsaLogin.css';
 
-const DsaLogin = () => {
+const DsaLogin = ({ embedded = false }) => {
     const [showConfigModal, setShowConfigModal] = useState(false);
     const [showLoginModal, setShowLoginModal] = useState(false);
     const [authStatus, setAuthStatus] = useState(dsaAuthStore.getStatus());
@@ -16,13 +17,35 @@ const DsaLogin = () => {
             setAuthStatus(dsaAuthStore.getStatus());
         });
 
-        // Validate token on mount
-        if (authStatus.isAuthenticated) {
+        // Validate token on mount (standalone only — host session is owned by BDSA)
+        if (!embedded && authStatus.isAuthenticated) {
             dsaAuthStore.validateToken();
         }
 
         return unsubscribe;
     }, []);
+
+    useEffect(() => {
+        const status = dsaAuthStore.getStatus();
+        if (!status.resourceId || !status.serverUrl || !dsaAuthStore.token || status.resourceName) {
+            return;
+        }
+
+        let cancelled = false;
+        const client = new DSAClient(status.serverUrl, dsaAuthStore.token);
+        client.resolveResource(status.resourceId, status.resourceType).then((details) => {
+            if (cancelled || !details?.name) return;
+            dsaAuthStore.updateConfig({
+                resourceType: details.type,
+                resourceName: details.name,
+                resourcePath: details.path,
+            });
+        }).catch(() => {});
+
+        return () => {
+            cancelled = true;
+        };
+    }, [authStatus.resourceId, authStatus.resourceName, authStatus.serverUrl]);
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -50,6 +73,16 @@ const DsaLogin = () => {
     };
 
     const getStatusDisplay = () => {
+        if (embedded) {
+            if (!authStatus.resourceId) {
+                return { text: 'Select DSA source', className: 'status-not-configured', icon: '⚙️' };
+            }
+            return {
+                text: authStatus.resourceName || 'DSA source ready',
+                className: 'status-connected',
+                icon: '✅',
+            };
+        }
         if (!authStatus.isConfigured) {
             return { text: 'Not Configured', className: 'status-not-configured', icon: '⚙️' };
         }
@@ -64,13 +97,17 @@ const DsaLogin = () => {
     return (
         <>
             <div className="dsa-login">
-                <div className="dsa-status" onClick={() => setShowConfigModal(true)}>
+                <div
+                    className="dsa-status"
+                    onClick={() => setShowConfigModal(true)}
+                    title={embedded ? 'Choose data folder' : 'DSA server configuration'}
+                >
                     <span className={`status-indicator ${status.className}`}>
                         {status.icon}
                     </span>
                     <div className="status-info">
                         <div className="status-text">{status.text}</div>
-                        {authStatus.isAuthenticated && authStatus.user && (
+                        {!embedded && authStatus.isAuthenticated && authStatus.user && (
                             <div className="user-info">
                                 {authStatus.user.name}
                                 {authStatus.serverUrl && (
@@ -80,33 +117,40 @@ const DsaLogin = () => {
                                 )}
                             </div>
                         )}
+                        {embedded && authStatus.resourceId && authStatus.resourcePath && (
+                            <div className="user-info">
+                                {authStatus.resourcePath}
+                            </div>
+                        )}
                     </div>
                 </div>
 
-                <div className="dsa-actions">
-                    {authStatus.isAuthenticated ? (
-                        <button
-                            className="logout-button"
-                            onClick={handleLogout}
-                            title="Logout from DSA server"
-                        >
-                            Logout
-                        </button>
-                    ) : (
-                        <button
-                            className="login-button"
-                            onClick={() => setShowLoginModal(true)}
-                            disabled={!authStatus.isConfigured}
-                            title={!authStatus.isConfigured ? 'Configure DSA server first' : 'Login to DSA server'}
-                        >
-                            Login
-                        </button>
-                    )}
-                </div>
+                {!embedded && (
+                    <div className="dsa-actions">
+                        {authStatus.isAuthenticated ? (
+                            <button
+                                className="logout-button"
+                                onClick={handleLogout}
+                                title="Logout from DSA server"
+                            >
+                                Logout
+                            </button>
+                        ) : (
+                            <button
+                                className="login-button"
+                                onClick={() => setShowLoginModal(true)}
+                                disabled={!authStatus.isConfigured}
+                                title={!authStatus.isConfigured ? 'Configure DSA server first' : 'Login to DSA server'}
+                            >
+                                Login
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Login Modal */}
-            {showLoginModal && (
+            {!embedded && showLoginModal && (
                 <div className="modal-overlay" onClick={() => setShowLoginModal(false)}>
                     <div className="modal-content login-modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
@@ -190,6 +234,7 @@ const DsaLogin = () => {
             {/* Configuration Modal */}
             {showConfigModal && (
                 <DsaConfigModal
+                    embedded={embedded}
                     onSave={handleConfigSave}
                     onClose={() => setShowConfigModal(false)}
                 />

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import SchemaViewer from '../../../../packages/schema-components/src/SchemaViewer';
 import './SchemaTab.css';
 
-const SchemaTab = () => {
+const SchemaTab = ({ schemaFile = '/bdsa-schema.json' }) => {
     const [activeSchema, setActiveSchema] = useState('clinical');
     const [mainSchema, setMainSchema] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -15,12 +15,12 @@ const SchemaTab = () => {
 
     useEffect(() => {
         loadMainSchema();
-    }, []);
+    }, [schemaFile]);
 
     const loadMainSchema = async () => {
         try {
             setLoading(true);
-            const response = await fetch('/bdsa-schema.json');
+            const response = await fetch(schemaFile);
             if (!response.ok) {
                 throw new Error('Failed to load main BDSA schema');
             }

@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import protocolStore from '../utils/protocolStore';
+import useProtocolList from '../hooks/useProtocolList';
 import dataStore from '../utils/dataStore';
 import './ProtocolArrayCellRenderer.css';
 
 const ProtocolArrayCellRenderer = ({ value, data, colDef, api }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [protocols, setProtocols] = useState([]);
-    const [availableProtocols, setAvailableProtocols] = useState([]);
+    const protocolType = colDef.field.includes('Stain') ? 'stain' : 'region';
+    const availableProtocols = useProtocolList(protocolType);
 
     // Initialize protocols from the cell value
     React.useEffect(() => {
@@ -20,13 +21,6 @@ const ProtocolArrayCellRenderer = ({ value, data, colDef, api }) => {
             setProtocols([]);
         }
     }, [value]);
-
-    // Load available protocols
-    React.useEffect(() => {
-        const protocolType = colDef.field.includes('Stain') ? 'stain' : 'region';
-        const available = protocolType === 'stain' ? protocolStore.stainProtocols : protocolStore.regionProtocols;
-        setAvailableProtocols(available || []);
-    }, [colDef.field]);
 
     const handleCellClick = () => {
         setIsEditing(true);

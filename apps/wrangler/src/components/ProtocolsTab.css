@@ -1,38 +1,44 @@
+.wrangler-app .tab-content:has(.protocols-tab) {
+    padding: 6px 8px;
+}
+
 .protocols-tab {
     width: 100%;
     height: 100%;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    gap: 0;
 }
 
 .protocols-header {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 24px;
-    padding: 20px;
+    align-items: center;
+    margin-bottom: 0;
+    padding: 4px 10px;
     background: #f8f9fa;
-    border-radius: 8px;
+    border-radius: 6px;
     border-left: 4px solid #1976d2;
+    flex-shrink: 0;
 }
 
 .header-content h2 {
-    margin: 0 0 8px 0;
+    margin: 0;
     color: #1976d2;
-    font-size: 1.8rem;
+    font-size: 1.25rem;
     font-weight: 600;
 }
 
 .header-content p {
-    margin: 0;
+    margin: 2px 0 0 0;
     color: #666;
-    font-size: 1rem;
+    font-size: 0.85rem;
 }
 
 .header-actions {
     display: flex;
-    gap: 12px;
+    gap: 8px;
     align-items: center;
 }
 
@@ -41,8 +47,8 @@
     color: white;
     border: none;
     border-radius: 6px;
-    padding: 10px 16px;
-    font-size: 0.9rem;
+    padding: 6px 12px;
+    font-size: 0.85rem;
     cursor: pointer;
     transition: background-color 0.2s ease;
     display: flex;
@@ -73,8 +79,8 @@
     color: white;
     border: none;
     border-radius: 6px;
-    padding: 10px 16px;
-    font-size: 0.9rem;
+    padding: 6px 12px;
+    font-size: 0.85rem;
     cursor: pointer;
     transition: background-color 0.2s ease;
     display: flex;
@@ -88,22 +94,24 @@
 
 .protocols-navigation {
     display: flex;
-    gap: 8px;
-    margin-bottom: 24px;
-    padding: 0 4px;
+    gap: 6px;
+    margin-top: 10px;
+    margin-bottom: 0;
+    padding: 0;
+    flex-shrink: 0;
 }
 
 .nav-button {
     background: #fff;
     border: 2px solid #e0e0e0;
-    border-radius: 8px;
-    padding: 12px 20px;
-    font-size: 1rem;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 0.9rem;
     font-weight: 500;
     color: #666;
     cursor: pointer;
     transition: all 0.2s ease;
-    min-width: 180px;
+    min-width: 0;
 }
 
 .nav-button:hover {
@@ -123,6 +131,7 @@
     flex: 1;
     min-height: 0;
     overflow: hidden;
+    margin-top: 0;
 }
 
 /* Sync Status Styles */

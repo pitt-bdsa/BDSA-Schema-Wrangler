@@ -22,12 +22,24 @@ export const HIDDEN_DSA_FIELDS = [
     'meta.BDSA.bdsaLocal.lastUpdated',
     'meta.BDSA.bdsaLocal.source',
 
+    // Girder item id — not useful in the Input Data grid
+    'id',
+    'dsa_id',
+    'dsa_name',
+    'dsa_created',
+    'dsa_updated',
+    'dsa_size',
+    'dsa_mimeType',
+    'created',
+    'updated',
+
     // Raw duplicate fields from transformDsaData (we use BDSA.bdsaLocal versions instead)
     // These are created during DSA import and conflict with our managed BDSA fields
     'localCaseId',
     'localStainID',
     'localRegionId',
     'localImageType',
+    'BDSA.bdsaLocal.localImageType',
 
     // Internal DSA fields that are not useful for users
     '_id',
@@ -87,106 +99,48 @@ export const HIDDEN_DSA_FIELDS = [
 
 // BDSA fields that should always be visible (our managed fields)
 export const PRIORITY_BDSA_FIELDS = [
-    'id',
     'name',
-    'BDSA.bdsaLocal.bdsaCaseId',
-    'BDSA.bdsaLocal.bdsaStainProtocol',
-    'BDSA.bdsaLocal.bdsaRegionProtocol',
     'BDSA.bdsaLocal.localCaseId',
     'BDSA.bdsaLocal.localRegionId',
     'BDSA.bdsaLocal.localStainID',
-    'BDSA.bdsaLocal.localImageType',
-    'dsa_name',
-    'dsa_created',
-    'dsa_updated',
-    'dsa_size',
-    'dsa_mimeType'
+    'BDSA.bdsaLocal.bdsaCaseId',
+    'BDSA.bdsaLocal.bdsaStainProtocol',
+    'BDSA.bdsaLocal.bdsaRegionProtocol',
 ];
 
-// Default regex rules for common filename patterns
-export const DEFAULT_REGEX_RULES = {
-    // Primary regex with named groups (single pattern approach)
-    primaryPattern: {
-        pattern: '^(?<localCaseId>\\d+-\\d+)-(?<localRegionId>\\w+)_(?<localStainID>\\w+)\\.',
-        description: 'Single regex pattern with named groups',
-        example: '05-662-Temporal_AT8.czi → Case: 05-662, Region: Temporal, Stain: AT8'
-    },
-    // Fallback individual patterns (for complex cases)
-    fallbackPatterns: {
-        localCaseId: {
-            pattern: '^(\\d+-\\d+)',
-            description: 'Extract case ID from filename',
-            example: '05-662-Temporal_AT8.czi → 05-662'
-        },
-        localStainID: {
-            pattern: '_(\\w+)\\.',
-            description: 'Extract stain ID from filename',
-            example: '05-662-Temporal_AT8.czi → AT8'
-        },
-        localRegionId: {
-            pattern: '-(\\w+)_',
-            description: 'Extract region ID from filename',
-            example: '05-662-Temporal_AT8.czi → Temporal'
-        }
-    }
-};
+export const COLUMN_LAYOUT_VERSION = 'v3';
 
-// Predefined regex rule sets for different dataset patterns
-export const REGEX_RULE_SETS = {
-    'legacy-dash-format': {
-        name: 'Legacy Dash Format',
-        description: 'Format: 05-662-Temporal_AT8.czi',
-        rules: {
-            localCaseId: {
-                pattern: '^(\\d+-\\d+)',
-                description: 'Extract case ID from filename',
-                example: '05-662-Temporal_AT8.czi → 05-662'
-            },
-            localStainID: {
-                pattern: '_(\\w+)\\.',
-                description: 'Extract stain ID from filename',
-                example: '05-662-Temporal_AT8.czi → AT8'
-            },
-            localRegionId: {
-                pattern: '-(\\w+)_',
-                description: 'Extract region ID from filename',
-                example: '05-662-Temporal_AT8.czi → Temporal'
-            }
+// Default regex rules: ordered named-group patterns. First match wins per file.
+export const DEFAULT_REGEX_RULES = {
+    patterns: [
+        {
+            id: 'pattern-1',
+            name: 'Underscore Format',
+            pattern: '^(?<localCaseId>\\d+)_(?<regionNumber>\\d+)_(?<localStainID>[A-Za-z0-9_-]+)_(?<slideNumber>\\d+)',
+            description: 'Format: 550058_2_Sil_1.mrxs',
+            example: '550058_2_Sil_1.mrxs',
+            priority: 1,
+            enabled: true
+        },
+        {
+            id: 'pattern-2',
+            name: 'Space Format',
+            pattern: '^(?<localCaseId>\\d+)\\s+(?<localRegionId>\\w+)\\s+(?<localStainID>\\w+)_(?<localImageType>\\w+)',
+            description: 'Format: 20232824 B TDP43_LabelArea_Image.optimized.tiff',
+            example: '20232824 B TDP43_LabelArea_Image.optimized.tiff',
+            priority: 2,
+            enabled: true
+        },
+        {
+            id: 'pattern-3',
+            name: 'Extended Format',
+            pattern: '^(?<localCaseId>\\d+)\\s+(?<localRegionId>\\w+)\\s+(?<localStainID>\\w+)_(?<localImageType>\\w+)_(?<extendedType>\\w+)',
+            description: 'Format: 20243819 H PTDP43_Default_Extended.optimized.tiff',
+            example: '20243819 H PTDP43_Default_Extended.optimized.tiff',
+            priority: 3,
+            enabled: true
         }
-    },
-    'numeric-space-format': {
-        name: 'Numeric Space Format',
-        description: 'Format: ######## # Stain (e.g., 20232824 B TDP43)',
-        rules: {
-            primaryPattern: {
-                pattern: '^(?<localCaseId>\\d{8})\\s+(?<localRegionId>\\w+)\\s+(?<localStainID>\\w+)_(?<localImageType>.+?)(?:\\.optimized)?\\.tiff?$',
-                description: 'Single regex with named groups for numeric-space format',
-                example: '20232824 B TDP43_LabelArea_Image.optimized.tiff → Case: 20232824, Region: B, Stain: TDP43, Type: LabelArea_Image'
-            },
-            fallbackPatterns: {
-                localCaseId: {
-                    pattern: '^(\\d{8})',
-                    description: 'Extract 8-digit case ID from filename',
-                    example: '20232817 B HE_Default_Extended.tif → 20232817'
-                },
-                localStainID: {
-                    pattern: '\\d{8}\\s+\\w+\\s+([^_]+)(?=_)',
-                    description: 'Extract stain ID after case ID and region, stopping at underscore',
-                    example: '20232817 B HE_Default_Extended.tif → HE'
-                },
-                localRegionId: {
-                    pattern: '\\d{8}\\s+(\\w+)',
-                    description: 'Extract region ID after case ID',
-                    example: '20232817 B HE_Default_Extended.tif → B'
-                },
-                localImageType: {
-                    pattern: '\\d{8}\\s+\\w+\\s+\\w+_(\\w+(?:_\\w+)*)',
-                    description: 'Extract image type after stain (e.g., Default_Extended, Preview_Image)',
-                    example: '20232817 B HE_Default_Extended.tif → Default_Extended'
-                }
-            }
-        }
-    }
+    ]
 };
 
 // Data source types

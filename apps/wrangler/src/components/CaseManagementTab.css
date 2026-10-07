@@ -128,6 +128,43 @@
     box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
 }
 
+.institution-locked,
+.institution-edit {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.institution-locked-value {
+    padding: 8px 12px;
+    background: #f0f8ff;
+    border: 1px solid #4a90e2;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.institution-change-btn,
+.institution-cancel-btn {
+    padding: 6px 10px;
+    border: 1px solid #d0d5dd;
+    background: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+
+.institution-save-btn {
+    padding: 8px 12px;
+    border: none;
+    background: #1976d2;
+    color: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
 .setting-group small {
     color: #666;
     font-size: 0.8rem;
@@ -1353,4 +1390,33 @@
     .protocol-buttons {
         justify-content: center;
     }
+}
+
+.host-case-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.host-case-existing {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.host-case-would-create {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.host-case-unmapped {
+    background: #f3f4f6;
+    color: #4b5563;
+}
+
+.host-case-conflict {
+    background: #fee2e2;
+    color: #991b1b;
 }

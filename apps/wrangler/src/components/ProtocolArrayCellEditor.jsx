@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import protocolStore from '../utils/protocolStore';
+import useProtocolList from '../hooks/useProtocolList';
 import './ProtocolArrayCellEditor.css';
 
 const ProtocolArrayCellEditor = ({ value, onValueChange, colDef, data, api, columnApi, context, node, rowIndex }) => {
     const [protocols, setProtocols] = useState([]);
-    const [availableProtocols, setAvailableProtocols] = useState([]);
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const containerRef = useRef(null);
@@ -22,13 +21,9 @@ const ProtocolArrayCellEditor = ({ value, onValueChange, colDef, data, api, colu
         }
     }, [value]);
 
-    // Load available protocols
-    useEffect(() => {
-        const field = colDef.cellEditorParams?.field || colDef.field;
-        const protocolType = field.includes('Stain') ? 'stain' : 'region';
-        const available = protocolType === 'stain' ? protocolStore.stainProtocols : protocolStore.regionProtocols;
-        setAvailableProtocols(available || []);
-    }, [colDef]);
+    const field = colDef.cellEditorParams?.field || colDef.field;
+    const protocolType = field.includes('Stain') ? 'stain' : 'region';
+    const availableProtocols = useProtocolList(protocolType);
 
     // Handle clicks outside to close dropdown
     useEffect(() => {

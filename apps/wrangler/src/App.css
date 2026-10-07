@@ -1,43 +1,71 @@
-.app {
-    height: 100vh;
+.wrangler-app.app {
+    height: 100%;
     background: linear-gradient(135deg, #f5faff 0%, #e6f3ff 100%);
     width: 100%;
-    padding: 10px;
+    padding: 6px 8px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
 }
 
-.app-header {
+.wrangler-app-embedded.app {
+    padding: 0;
+}
+
+.wrangler-app .app-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 10px;
-    padding: 6px 16px;
+    margin-bottom: 4px;
+    padding: 6px 12px;
     background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
     border-radius: 8px;
     color: white;
     flex-shrink: 0;
 }
 
-.header-left {
-    display: flex;
-    align-items: center;
-    gap: 20px;
+.wrangler-app-embedded .app-header {
+    background: #fff;
+    border: none;
+    border-bottom: 1px solid #e3e8ef;
+    border-radius: 0;
+    margin-bottom: 0;
+    padding: 4px 12px;
+    color: #1976d2;
 }
 
-.header-right {
+.wrangler-app .header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.wrangler-app .header-right {
     display: flex;
     align-items: center;
 }
 
-.logo {
-    height: 60px;
+.wrangler-app .logo {
+    height: 72px;
     width: auto;
+    background: #fff;
+    border-radius: 6px;
+    padding: 4px 8px;
+    box-sizing: content-box;
 }
 
-.app-header h1 {
+.wrangler-app-embedded .logo {
+    padding: 0;
+    border-radius: 0;
+}
+
+.wrangler-app .app-header h1 {
     margin: 0;
-    font-size: 2rem;
+    font-size: 1.85rem;
     font-weight: 600;
+    color: white;
+}
+
+.wrangler-app-embedded .app-header h1 {
+    color: #1976d2;
 }

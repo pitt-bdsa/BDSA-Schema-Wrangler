@@ -22,7 +22,10 @@ class DsaSync {
         }
 
         // Filter to only modified items
-        const itemsToSync = processedData.filter(item => modifiedItems.has(item.id));
+        const itemsToSync = processedData.filter((item) => {
+            const itemId = item.id || item._id || item.dsa_id;
+            return itemId && modifiedItems.has(itemId);
+        });
 
         console.log(`🚀 Starting sync - ${itemsToSync.length} items to sync out of ${processedData.length} total`);
         console.log('🚀 Modified item IDs:', Array.from(modifiedItems));
@@ -66,6 +69,46 @@ class DsaSync {
                 skipped: 0,
                 details: []
             };
+
+            if (itemsToSync.length > 0) {
+                try {
+                    const { persistBdsaLocalBulk } = await import('./DsaMetadataManager.js');
+                    const bulk = await persistBdsaLocalBulk(itemsToSync, (progress) => {
+                        dataStore.syncProgress = {
+                            ...dataStore.syncProgress,
+                            ...progress,
+                        };
+                        if (progressCallback) {
+                            progressCallback(dataStore.syncProgress);
+                        }
+                        dataStore.notifySyncListeners('syncProgressUpdated', dataStore.syncProgress);
+                    });
+                    results.success = bulk.updatedCount || 0;
+                    results.errors = bulk.failedCount || 0;
+                    results.details = (bulk.failed || []).map((row) => ({
+                        item: row.itemId || row,
+                        error: row.error || String(row)
+                    }));
+                    dataStore.syncProgress.success = results.success;
+                    dataStore.syncProgress.errors = results.errors;
+                    dataStore.syncProgress.current = itemsToSync.length;
+                    dataStore.syncProgress.processed = itemsToSync.length;
+                    dataStore.syncProgress.percentage = 100;
+                    (bulk.updated || []).forEach((itemId) => {
+                        dataStore.modifiedItems.delete(itemId);
+                    });
+                    dataStore.syncStatus = results.errors ? 'error' : 'synced';
+                    dataStore.notifySyncListeners(results.errors ? 'syncError' : 'syncCompleted', results);
+                    await this.updateResourceFolderTouchIndicator(dataStore);
+                    return results;
+                } catch (bulkError) {
+                    const missingRoute = /404|not found/i.test(bulkError.message || '');
+                    if (!missingRoute) {
+                        throw bulkError;
+                    }
+                    console.warn('Bulk metadata route missing, falling back to per-item PUTs:', bulkError.message);
+                }
+            }
 
             for (let i = 0; i < itemsToSync.length; i++) {
                 // Check for cancellation before processing each item

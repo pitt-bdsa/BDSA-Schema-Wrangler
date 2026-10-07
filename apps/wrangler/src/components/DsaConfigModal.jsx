@@ -4,7 +4,7 @@ import DSAClient from '../utils/dsaClient';
 import DSAFolderBrowserModal from './DSAFolderBrowserModal';
 import './DsaConfigModal.css';
 
-const DsaConfigModal = ({ onSave, onClose }) => {
+const DsaConfigModal = ({ onSave, onClose, embedded = false }) => {
     const [config, setConfig] = useState(dsaAuthStore.config);
     const [isTesting, setIsTesting] = useState(false);
     const [testResult, setTestResult] = useState(null);
@@ -24,34 +24,67 @@ const DsaConfigModal = ({ onSave, onClose }) => {
         setConfig(dsaAuthStore.config);
     }, []);
 
-    // Fetch resource names when config changes
+    // Resolve folder name, path, and type when ids change
     useEffect(() => {
         const fetchResourceNames = async () => {
             if (!config.baseUrl || !dsaAuthStore.token) return;
 
             const client = new DSAClient(config.baseUrl, dsaAuthStore.token);
 
-            // Fetch main resource name
-            if (config.resourceId && config.resourceType) {
+            if (config.resourceId) {
                 try {
-                    const resourceInfo = await client.getResourceName(config.resourceId, config.resourceType);
+                    const resourceInfo = await client.resolveResource(config.resourceId, config.resourceType);
                     setResourceName(resourceInfo);
+                    setConfig((prev) => (
+                        prev.resourceType === resourceInfo.type
+                        && prev.resourceName === resourceInfo.name
+                        && prev.resourcePath === resourceInfo.path
+                            ? prev
+                            : {
+                                ...prev,
+                                resourceType: resourceInfo.type,
+                                resourceName: resourceInfo.name,
+                                resourcePath: resourceInfo.path,
+                            }
+                    ));
                 } catch (error) {
                     console.warn('Failed to fetch resource name:', error);
-                    setResourceName({ name: 'Unknown', type: config.resourceType, id: config.resourceId });
+                    setResourceName({
+                        name: config.resourceName || 'Unknown',
+                        type: config.resourceType,
+                        id: config.resourceId,
+                        path: config.resourcePath || '',
+                    });
                 }
             } else {
                 setResourceName(null);
             }
 
-            // Fetch metadata resource name
             if (config.metadataSyncTargetFolder) {
                 try {
-                    const metadataResourceInfo = await client.getResourceName(config.metadataSyncTargetFolder, 'folder');
+                    const metadataResourceInfo = await client.resolveResource(
+                        config.metadataSyncTargetFolder,
+                        'folder'
+                    );
                     setMetadataResourceName(metadataResourceInfo);
+                    setConfig((prev) => (
+                        prev.metadataResourceName === metadataResourceInfo.name
+                        && prev.metadataResourcePath === metadataResourceInfo.path
+                            ? prev
+                            : {
+                                ...prev,
+                                metadataResourceName: metadataResourceInfo.name,
+                                metadataResourcePath: metadataResourceInfo.path,
+                            }
+                    ));
                 } catch (error) {
                     console.warn('Failed to fetch metadata resource name:', error);
-                    setMetadataResourceName({ name: 'Unknown', type: 'folder', id: config.metadataSyncTargetFolder });
+                    setMetadataResourceName({
+                        name: config.metadataResourceName || 'Unknown',
+                        type: 'folder',
+                        id: config.metadataSyncTargetFolder,
+                        path: config.metadataResourcePath || '',
+                    });
                 }
             } else {
                 setMetadataResourceName(null);
@@ -59,7 +92,7 @@ const DsaConfigModal = ({ onSave, onClose }) => {
         };
 
         fetchResourceNames();
-    }, [config.resourceId, config.resourceType, config.metadataSyncTargetFolder, config.baseUrl]);
+    }, [config.resourceId, config.metadataSyncTargetFolder, config.baseUrl]);
 
 
     const handleFieldChange = (field, value) => {
@@ -146,7 +179,10 @@ const DsaConfigModal = ({ onSave, onClose }) => {
     // Folder browser handlers
     const openFolderBrowser = () => {
         if (!config.baseUrl.trim()) {
-            setErrors(prev => ({ ...prev, baseUrl: 'Please enter a DSA server URL first' }));
+            setErrors(prev => ({
+                ...prev,
+                baseUrl: embedded ? 'Host session is not ready' : 'Please enter a DSA server URL first'
+            }));
             return;
         }
 
@@ -158,7 +194,10 @@ const DsaConfigModal = ({ onSave, onClose }) => {
 
     const openMetadataFolderBrowser = () => {
         if (!config.baseUrl.trim()) {
-            setErrors(prev => ({ ...prev, baseUrl: 'Please enter a DSA server URL first' }));
+            setErrors(prev => ({
+                ...prev,
+                baseUrl: embedded ? 'Host session is not ready' : 'Please enter a DSA server URL first'
+            }));
             return;
         }
 
@@ -178,24 +217,44 @@ const DsaConfigModal = ({ onSave, onClose }) => {
         setDsaClient(null);
     };
 
-    const handleResourceSelect = (resource) => {
-        console.log('Selected resource:', resource);
-        setConfig(prev => ({
+    const applyResolvedResource = (prev, details, { metadataOnly = false } = {}) => {
+        if (metadataOnly) {
+            return {
+                ...prev,
+                metadataSyncTargetFolder: details.id,
+                metadataResourceName: details.name,
+                metadataResourcePath: details.path,
+            };
+        }
+
+        const reuseMetadata = !prev.metadataSyncTargetFolder?.trim();
+        return {
             ...prev,
-            resourceId: resource._id,
-            resourceType: resource.type
-        }));
-        setResourceName({ name: resource.name, type: resource.type, id: resource._id });
+            resourceId: details.id,
+            resourceType: details.type,
+            resourceName: details.name,
+            resourcePath: details.path,
+            ...(reuseMetadata ? {
+                metadataSyncTargetFolder: details.id,
+                metadataResourceName: details.name,
+                metadataResourcePath: details.path,
+            } : {}),
+        };
+    };
+
+    const handleResourceSelect = async (resource) => {
+        const client = new DSAClient(config.baseUrl, dsaAuthStore.token);
+        const details = await client.resolveResource(resource._id, resource.type);
+        setConfig((prev) => applyResolvedResource(prev, details));
+        setResourceName(details);
         closeFolderBrowser();
     };
 
-    const handleMetadataResourceSelect = (resource) => {
-        console.log('Selected metadata resource:', resource);
-        setConfig(prev => ({
-            ...prev,
-            metadataSyncTargetFolder: resource._id
-        }));
-        setMetadataResourceName({ name: resource.name, type: resource.type, id: resource._id });
+    const handleMetadataResourceSelect = async (resource) => {
+        const client = new DSAClient(config.baseUrl, dsaAuthStore.token);
+        const details = await client.resolveResource(resource._id, resource.type);
+        setConfig((prev) => applyResolvedResource(prev, details, { metadataOnly: true }));
+        setMetadataResourceName(details);
         closeMetadataFolderBrowser();
     };
 
@@ -208,96 +267,82 @@ const DsaConfigModal = ({ onSave, onClose }) => {
             <div className="modal-overlay" onClick={onClose}>
                 <div className="modal-content config-modal" onClick={(e) => e.stopPropagation()}>
                     <div className="modal-header">
-                        <h2>DSA Server Configuration</h2>
+                        <h2>{embedded ? 'DSA Source' : 'DSA Server Configuration'}</h2>
                         <button className="close-button" onClick={onClose}>×</button>
                     </div>
 
                     <div className="config-form">
+                        {embedded && (
+                            <div className="form-group">
+                                <div className="field-help">
+                                    Using this BDSA instance. Browse to the folder you want to load.
+                                </div>
+                            </div>
+                        )}
 
                         <div className="form-group">
-                            <label htmlFor="resourceId">Resource ID (optional for setup)</label>
-                            <div className="input-with-button">
-                                <input
-                                    type="text"
-                                    id="resourceId"
-                                    value={config.resourceId}
-                                    onChange={(e) => handleFieldChange('resourceId', e.target.value)}
-                                    placeholder="e.g., 507f1f77bcf86cd799439011"
-                                    className={errors.resourceId ? 'error' : ''}
-                                />
+                            <label>Data folder</label>
+                            <div className="source-picker">
+                                <div className={`source-summary ${errors.resourceId ? 'error' : ''}`}>
+                                    {resourceName ? (
+                                        <>
+                                            <div className="source-name">{resourceName.name}</div>
+                                            {resourceName.path && (
+                                                <div className="source-path">{resourceName.path}</div>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <div className="source-empty">No folder selected</div>
+                                    )}
+                                </div>
                                 <button
                                     type="button"
                                     onClick={openFolderBrowser}
                                     className="browse-button"
                                     disabled={!config.baseUrl.trim()}
-                                    title={!config.baseUrl.trim() ? 'Enter DSA server URL first' : 'Browse DSA folders and collections'}
+                                    title={!config.baseUrl.trim()
+                                        ? (embedded ? 'Host session is not ready' : 'Enter DSA server URL first')
+                                        : 'Browse folders'}
                                 >
                                     Browse
                                 </button>
                             </div>
-                            {resourceName && (
-                                <div className="resource-name-display">
-                                    <span className="resource-name-label">Selected:</span>
-                                    <span className="resource-name">{resourceName.name}</span>
-                                    <span className="resource-type">({resourceName.type})</span>
-                                </div>
-                            )}
                             {errors.resourceId && <div className="error-message">{errors.resourceId}</div>}
                             <div className="field-help">
-                                The ID of the DSA resource (folder or collection) you want to access
-                                <br />
-                                <small>💡 You can save the configuration now and select a resource later using the Browse button</small>
+                                Choose the folder to load slides from. Type is detected automatically.
                             </div>
                         </div>
 
                         <div className="form-group">
-                            <label htmlFor="metadataSyncTargetFolder">Metadata Sync Target Folder</label>
-                            <div className="input-with-button">
-                                <input
-                                    type="text"
-                                    id="metadataSyncTargetFolder"
-                                    value={config.metadataSyncTargetFolder}
-                                    onChange={(e) => handleFieldChange('metadataSyncTargetFolder', e.target.value)}
-                                    placeholder="e.g., 507f1f77bcf86cd799439011"
-                                    className={errors.metadataSyncTargetFolder ? 'error' : ''}
-                                />
+                            <label>Metadata folder</label>
+                            <div className="source-picker">
+                                <div className={`source-summary ${errors.metadataSyncTargetFolder ? 'error' : ''}`}>
+                                    {metadataResourceName ? (
+                                        <>
+                                            <div className="source-name">{metadataResourceName.name}</div>
+                                            {metadataResourceName.path && (
+                                                <div className="source-path">{metadataResourceName.path}</div>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <div className="source-empty">Same as data folder</div>
+                                    )}
+                                </div>
                                 <button
                                     type="button"
                                     onClick={openMetadataFolderBrowser}
                                     className="browse-button"
                                     disabled={!config.baseUrl.trim()}
-                                    title={!config.baseUrl.trim() ? 'Enter DSA server URL first' : 'Browse DSA folders and collections for metadata sync'}
+                                    title={!config.baseUrl.trim()
+                                        ? (embedded ? 'Host session is not ready' : 'Enter DSA server URL first')
+                                        : 'Browse folders for metadata sync'}
                                 >
                                     Browse
                                 </button>
                             </div>
-                            {metadataResourceName && (
-                                <div className="resource-name-display">
-                                    <span className="resource-name-label">Selected:</span>
-                                    <span className="resource-name">{metadataResourceName.name}</span>
-                                    <span className="resource-type">({metadataResourceName.type})</span>
-                                </div>
-                            )}
                             {errors.metadataSyncTargetFolder && <div className="error-message">{errors.metadataSyncTargetFolder}</div>}
                             <div className="field-help">
-                                The ID of the DSA folder where metadata will be synced (if blank, will use the same folder as the main data pull)
-                                <br />
-                                <small>💡 You can save the configuration now and select a metadata target folder later using the Browse button</small>
-                            </div>
-                        </div>
-
-                        <div className="form-group">
-                            <label htmlFor="resourceType">Resource Type</label>
-                            <select
-                                id="resourceType"
-                                value={config.resourceType}
-                                onChange={(e) => handleFieldChange('resourceType', e.target.value)}
-                            >
-                                <option value="folder">Folder</option>
-                                <option value="collection">Collection</option>
-                            </select>
-                            <div className="field-help">
-                                The type of DSA resource (usually 'folder')
+                                Where protocols and mappings are stored. Defaults to the data folder.
                             </div>
                         </div>
 
@@ -348,13 +393,15 @@ const DsaConfigModal = ({ onSave, onClose }) => {
                     </div>
 
                     <div className="modal-actions">
-                        <button
-                            className="test-button"
-                            onClick={handleTestConnection}
-                            disabled={!config.baseUrl.trim() || isTesting}
-                        >
-                            {isTesting ? 'Testing...' : 'Test Connection'}
-                        </button>
+                        {!embedded && (
+                            <button
+                                className="test-button"
+                                onClick={handleTestConnection}
+                                disabled={!config.baseUrl.trim() || isTesting}
+                            >
+                                {isTesting ? 'Testing...' : 'Test Connection'}
+                            </button>
+                        )}
 
                         <div className="action-buttons">
                             <button
@@ -381,7 +428,7 @@ const DsaConfigModal = ({ onSave, onClose }) => {
                 onClose={closeFolderBrowser}
                 dsaClient={dsaClient}
                 onSelectResource={handleResourceSelect}
-                title="Select DSA Resource"
+                title="Select data folder"
             />
 
             {/* DSA Metadata Folder Browser Modal */}
@@ -390,7 +437,7 @@ const DsaConfigModal = ({ onSave, onClose }) => {
                 onClose={closeMetadataFolderBrowser}
                 dsaClient={dsaClient}
                 onSelectResource={handleMetadataResourceSelect}
-                title="Select Metadata Sync Target Folder"
+                title="Select metadata folder"
             />
         </>
     );

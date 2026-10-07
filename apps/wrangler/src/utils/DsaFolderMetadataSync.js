@@ -684,3 +684,55 @@ export const getProtocolsFromFolder = async (baseUrl, folderId, girderToken) => 
         };
     }
 };
+
+function resourceApiPath(resourceType, resourceId) {
+    const kind = resourceType === 'collection' ? 'collection' : 'folder';
+    return `/api/v1/${kind}/${resourceId}`;
+}
+
+export function readInstitutionIdFromMeta(meta) {
+    const direct = String(meta?.bdsaInstitutionId || '').trim();
+    if (direct) return direct;
+    return String(meta?.bdsaCaseIdMappings?.institutionId || '').trim();
+}
+
+export async function getInstitutionIdFromResource(baseUrl, resourceId, girderToken, resourceType = 'folder') {
+    if (!baseUrl || !resourceId || !girderToken) {
+        return { success: false, institutionId: '', error: 'Missing resource' };
+    }
+    const response = await fetch(`${baseUrl}${resourceApiPath(resourceType, resourceId)}`, {
+        headers: { 'Girder-Token': girderToken },
+    });
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status} - ${errorText}`);
+    }
+    const result = await response.json();
+    return {
+        success: true,
+        institutionId: readInstitutionIdFromMeta(result.meta),
+        resourceName: result.name || '',
+        resourceType,
+        resourceId,
+    };
+}
+
+export async function setInstitutionIdOnResource(baseUrl, resourceId, girderToken, institutionId, resourceType = 'folder') {
+    const value = String(institutionId || '').trim();
+    if (!baseUrl || !resourceId || !girderToken || !value) {
+        return { success: false, error: 'Missing institution or resource' };
+    }
+    const response = await fetch(`${baseUrl}${resourceApiPath(resourceType, resourceId)}/metadata`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'Girder-Token': girderToken,
+        },
+        body: JSON.stringify({ bdsaInstitutionId: value }),
+    });
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status} - ${errorText}`);
+    }
+    return { success: true, institutionId: value, resourceId, resourceType };
+}

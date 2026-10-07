@@ -7,12 +7,28 @@ class SchemaValidator {
         this.stainSchema = null;
         this.regionSchema = null;
         this.loaded = false;
+        this.schemaFile = '/bdsa-schema.json';
     }
 
-    async loadSchemas() {
+    setSchemaFile(schemaFile) {
+        if (!schemaFile || schemaFile === this.schemaFile) {
+            return;
+        }
+        this.schemaFile = schemaFile;
+        this.loaded = false;
+        this.schema = null;
+        this.stainSchema = null;
+        this.regionSchema = null;
+    }
+
+    async loadSchemas(schemaFile) {
+        if (schemaFile) {
+            this.setSchemaFile(schemaFile);
+        }
+
         try {
             // Load the main BDSA schema
-            const response = await fetch('/bdsa-schema.json');
+            const response = await fetch(this.schemaFile);
             if (!response.ok) {
                 throw new Error(`Failed to load schema: ${response.statusText}`);
             }

@@ -104,30 +104,81 @@ class DSAClient {
 
     // Get resource name by ID and type
     async getResourceName(resourceId, resourceType = 'folder') {
-        try {
-            const endpoint = resourceType === 'collection'
-                ? `/api/v1/collection/${resourceId}`
-                : `/api/v1/folder/${resourceId}`;
+        return this.resolveResource(resourceId, resourceType);
+    }
 
-            const data = await this.makeRequest(endpoint, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
+    /**
+     * Resolve a Girder resource by id. Detects folder vs collection when type is
+     * unknown, and returns a human-readable path (collection / ... / name).
+     */
+    async resolveResource(resourceId, hintType) {
+        if (!resourceId) {
+            return null;
+        }
+
+        const tryFolder = async () => {
+            const data = await this.makeRequest(`/api/v1/folder/${resourceId}`, {
+                method: 'GET'
             });
+            const name = data?.name || 'Unknown';
+            const path = await this.getFolderPath(resourceId, name);
+            return {
+                name,
+                type: 'folder',
+                id: resourceId,
+                path
+            };
+        };
 
+        const tryCollection = async () => {
+            const data = await this.makeRequest(`/api/v1/collection/${resourceId}`, {
+                method: 'GET'
+            });
+            const name = data?.name || 'Unknown';
             return {
-                name: data?.name || 'Unknown',
-                type: resourceType,
-                id: resourceId
+                name,
+                type: 'collection',
+                id: resourceId,
+                path: name
             };
+        };
+
+        const order = hintType === 'collection'
+            ? [tryCollection, tryFolder]
+            : [tryFolder, tryCollection];
+
+        for (const attempt of order) {
+            try {
+                return await attempt();
+            } catch {
+                // Try the other resource type
+            }
+        }
+
+        console.error('Failed to resolve DSA resource:', resourceId);
+        return {
+            name: 'Unknown',
+            type: hintType || 'folder',
+            id: resourceId,
+            path: ''
+        };
+    }
+
+    async getFolderPath(folderId, folderName) {
+        try {
+            const rootpath = await this.makeRequest(`/api/v1/folder/${folderId}/rootpath`, {
+                method: 'GET'
+            });
+            const parts = (Array.isArray(rootpath) ? rootpath : [])
+                .map((entry) => entry?.object?.name)
+                .filter(Boolean);
+            if (folderName) {
+                parts.push(folderName);
+            }
+            return parts.join(' / ');
         } catch (error) {
-            console.error('Failed to get resource name:', error);
-            return {
-                name: 'Unknown',
-                type: resourceType,
-                id: resourceId
-            };
+            console.warn('Failed to get folder path:', error);
+            return folderName || '';
         }
     }
 

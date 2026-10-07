@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import dataStore, { getProtocolSuggestions } from '../utils/dataStore';
-import protocolStore from '../utils/protocolStore';
+import useProtocolList from '../hooks/useProtocolList';
 import ApplyAllCasesModal from './ApplyAllCasesModal';
 import './StainProtocolMapping.css'; // Reuse the same styles
 
 const RegionProtocolMapping = () => {
     const [dataStatus, setDataStatus] = useState(dataStore.getStatus());
-    const [regionProtocols, setRegionProtocols] = useState(protocolStore.regionProtocols);
-    const [availableProtocols, setAvailableProtocols] = useState([]);
+    const regionProtocols = useProtocolList('region');
+    const availableProtocols = regionProtocols;
     const [cases, setCases] = useState([]);
     const [currentCaseIndex, setCurrentCaseIndex] = useState(0);
     const [expandedGroups, setExpandedGroups] = useState(new Set());
@@ -19,20 +19,6 @@ const RegionProtocolMapping = () => {
             setDataStatus(dataStore.getStatus());
         });
         return unsubscribe;
-    }, []);
-
-    // Subscribe to protocol store changes
-    useEffect(() => {
-        const unsubscribeProtocols = protocolStore.subscribe(() => {
-            setRegionProtocols(protocolStore.regionProtocols);
-            setAvailableProtocols(protocolStore.regionProtocols || []);
-        });
-
-        // Initial load
-        setRegionProtocols(protocolStore.regionProtocols);
-        setAvailableProtocols(protocolStore.regionProtocols || []);
-
-        return unsubscribeProtocols;
     }, []);
 
     // Generate cases with region slides when data changes

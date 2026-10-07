@@ -157,7 +157,11 @@ const DsaSyncControl = () => {
         <div className="dsa-sync-control">
 
             <div className="sync-info">
-                <p>Sync BDSA metadata (localCaseId, localStainID, localRegionId) to DSA server as <code>bdsaLocal</code> field.</p>
+                <p>
+                    Writes local case, stain, and region IDs onto each Girder item as
+                    {' '}<code>meta.BDSA.bdsaLocal</code>, in batches of 500.
+                    This is wrangler working metadata, not an official BDSA case yet.
+                </p>
 
                 {dataStore?.processedData?.length > 0 && (
                     <div className="sync-stats">

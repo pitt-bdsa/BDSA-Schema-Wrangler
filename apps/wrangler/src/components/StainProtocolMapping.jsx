@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import dataStore, { getProtocolSuggestions } from '../utils/dataStore';
-import protocolStore from '../utils/protocolStore';
+import useProtocolList from '../hooks/useProtocolList';
 import ApplyAllCasesModal from './ApplyAllCasesModal';
 import './StainProtocolMapping.css';
 
 const StainProtocolMapping = () => {
     const [dataStatus, setDataStatus] = useState(dataStore.getStatus());
-    const [stainProtocols, setStainProtocols] = useState(protocolStore.stainProtocols);
-    const [availableProtocols, setAvailableProtocols] = useState([]);
+    const stainProtocols = useProtocolList('stain');
+    const availableProtocols = stainProtocols;
     const [cases, setCases] = useState([]);
     const [currentCaseIndex, setCurrentCaseIndex] = useState(0);
     const [expandedGroups, setExpandedGroups] = useState(new Set());
@@ -19,20 +19,6 @@ const StainProtocolMapping = () => {
             setDataStatus(dataStore.getStatus());
         });
         return unsubscribe;
-    }, []);
-
-    // Subscribe to protocol store changes
-    useEffect(() => {
-        const unsubscribeProtocols = protocolStore.subscribe(() => {
-            setStainProtocols(protocolStore.stainProtocols);
-            setAvailableProtocols(protocolStore.stainProtocols || []);
-        });
-
-        // Initial load
-        setStainProtocols(protocolStore.stainProtocols);
-        setAvailableProtocols(protocolStore.stainProtocols || []);
-
-        return unsubscribeProtocols;
     }, []);
 
     // Generate cases with stain slides when data changes

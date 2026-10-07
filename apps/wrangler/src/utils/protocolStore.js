@@ -494,6 +494,10 @@ class ProtocolStore {
     // DSA Integration Methods
     async syncWithDSA(dsaConfig, caseIdMappings = null, institutionId = null) {
         try {
+            const { default: dsaAuthStore } = await import('./dsaAuthStore.js');
+            if (dsaAuthStore.hostImported) {
+                return { success: false, error: 'Embedded mode uses the host catalog, not folder metadata' };
+            }
             if (!dsaConfig || !dsaConfig.baseUrl || !dsaConfig.resourceId || !dsaConfig.token) {
                 throw new Error('DSA configuration incomplete. Missing baseUrl, resourceId, or token.');
             }
@@ -604,6 +608,10 @@ class ProtocolStore {
 
     async pullFromDSA(dsaConfig) {
         try {
+            const { default: dsaAuthStore } = await import('./dsaAuthStore.js');
+            if (dsaAuthStore.hostImported) {
+                return { success: false, error: 'Embedded mode uses the host catalog, not folder metadata' };
+            }
             if (!dsaConfig || !dsaConfig.baseUrl || !dsaConfig.resourceId || !dsaConfig.token) {
                 throw new Error('DSA configuration incomplete. Missing baseUrl, resourceId, or token.');
             }

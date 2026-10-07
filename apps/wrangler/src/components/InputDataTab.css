@@ -123,20 +123,70 @@
     cursor: not-allowed;
 }
 
-.column-toggle-btn {
-    padding: 8px 16px;
-    border: none;
-    border-radius: 4px;
-    font-size: 0.9rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.2s ease;
-    background: #6c757d;
-    color: white;
+.toolbar-tools {
+    position: relative;
+    margin-left: auto;
 }
 
-.column-toggle-btn:hover {
-    background: #5a6268;
+.toolbar-gear-btn {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 1px solid #d0d5dd;
+    border-radius: 6px;
+    background: #fff;
+    color: #344054;
+    font-size: 1.15rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.toolbar-gear-btn:hover,
+.toolbar-gear-btn.open {
+    border-color: #98a2b3;
+    background: #f2f4f7;
+}
+
+.toolbar-gear-btn.has-pending {
+    box-shadow: inset 0 0 0 2px #f79009;
+}
+
+.toolbar-tools-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 20;
+    min-width: 220px;
+    padding: 6px;
+    background: #fff;
+    border: 1px solid #d0d5dd;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(16, 24, 40, 0.12);
+}
+
+.toolbar-tools-menu button {
+    display: block;
+    width: 100%;
+    padding: 8px 10px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: #1d2939;
+    font-size: 0.9rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.toolbar-tools-menu button:hover {
+    background: #f2f4f7;
+}
+
+.toolbar-tools-menu-danger {
+    color: #b42318;
+}
+
+.toolbar-tools-menu-danger:hover {
+    background: #fee4e2;
 }
 
 .regex-rules-btn {
@@ -1195,24 +1245,8 @@
     margin-left: 10px;
 }
 
-.accessory-file-section .file-input-container {
-    margin: 0;
-}
-
-.accessory-file-section .file-input-label {
-    background: #f0f8ff;
-    border: 1px solid #b3d9ff;
-    color: #1976d2;
-    font-size: 0.85rem;
-    padding: 6px 10px;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.accessory-file-section .file-input-label:hover {
-    background: #e3f2fd;
-    border-color: #1976d2;
+.accessory-file-input {
+    display: none;
 }
 
 .load-accessory-btn {

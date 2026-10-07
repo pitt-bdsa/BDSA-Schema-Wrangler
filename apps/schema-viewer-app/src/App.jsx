@@ -4,37 +4,46 @@ import FlattenedDataView from './components/FlattenedDataView';
 import CdeReferenceView from './components/CdeReferenceView';
 import './App.css';
 
-const App = () => {
+const DEFAULT_SCHEMA_FILE = '/bdsa-schema.json';
+
+const App = ({
+    schemaFile = DEFAULT_SCHEMA_FILE,
+    logoSrc = '/BDSA_logo_clear.png',
+    showApiDocs = true,
+    apiDocsUrl = '/api/docs',
+}) => {
     const [activeSchema, setActiveSchema] = useState('clinical');
 
     const schemas = [
-        { id: 'clinical', label: 'Clinical Schema', file: '/bdsa-schema.json', section: 'clinical' },
-        { id: 'region', label: 'Region Schema', file: '/bdsa-schema.json', section: 'region' },
-        { id: 'stain', label: 'Stain Schema', file: '/bdsa-schema.json', section: 'stain' },
-        { id: 'bdsa', label: 'BDSA Schema', file: '/bdsa-schema.json', section: 'bdsa' },
-        { id: 'flattened', label: 'Flattened View', file: '/bdsa-schema.json', section: 'flattened' },
-        { id: 'cde-reference', label: 'CDE Reference', file: '/bdsa-schema.json', section: 'cde-reference' }
+        { id: 'clinical', label: 'Clinical Schema', file: schemaFile, section: 'clinical' },
+        { id: 'region', label: 'Region Schema', file: schemaFile, section: 'region' },
+        { id: 'stain', label: 'Stain Schema', file: schemaFile, section: 'stain' },
+        { id: 'bdsa', label: 'BDSA Schema', file: schemaFile, section: 'bdsa' },
+        { id: 'flattened', label: 'Flattened View', file: schemaFile, section: 'flattened' },
+        { id: 'cde-reference', label: 'CDE Reference', file: schemaFile, section: 'cde-reference' }
     ];
 
     return (
         <div className="app">
             <div className="app-header">
                 <div className="header-left">
-                    <img src="/BDSA_logo_clear.png" alt="BDSA Logo" className="logo" />
+                    <img src={logoSrc} alt="BDSA Logo" className="logo" />
                     <div className="header-text">
                         <h1>BDSA Schema Viewer</h1>
                         <p>View and explore the JSON schemas used for data harmonization</p>
                     </div>
                 </div>
-                <div className="header-right">
-                    <button
-                        className="api-button"
-                        onClick={() => window.open('/api/docs', '_blank')}
-                        title="Open API Documentation"
-                    >
-                        📚 API Docs
-                    </button>
-                </div>
+                {showApiDocs && (
+                    <div className="header-right">
+                        <button
+                            className="api-button"
+                            onClick={() => window.open(apiDocsUrl, '_blank')}
+                            title="Open API Documentation"
+                        >
+                            📚 API Docs
+                        </button>
+                    </div>
+                )}
             </div>
 
             <div className="schema-navigation">

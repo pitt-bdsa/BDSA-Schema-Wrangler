@@ -1,76 +1,59 @@
 import React, { useState, useEffect } from 'react';
 import './RegexRulesModal.css';
-import { REGEX_RULE_SETS } from '../utils/constants.js';
 import dsaAuthStore from '../utils/dsaAuthStore';
-import { syncRegexRulesToFolder, getRegexRulesFromFolder } from '../utils/dsaIntegration';
+import { syncRegexRulesToFolder } from '../utils/dsaIntegration';
+import {
+    getDefaultRegexRules,
+    getEnabledPatterns,
+    normalizeRegexRules,
+    testPatternAgainstFilename,
+} from '../utils/regexExtractor';
 
-const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSet: initialSelectedRuleSet, sampleData }) => {
-    const [rules, setRules] = useState({
-        patterns: [
-            {
-                id: 'pattern-1',
-                name: 'Underscore Format',
-                pattern: '^(?<localCaseId>\\d+)_(?<regionNumber>\\d+)_(?<localStainID>[A-Za-z0-9_-]+)_(?<slideNumber>\\d+)$',
-                description: 'Format: 550058_2_Sil_1.mrxs',
-                example: '550058_2_Sil_1.mrxs',
-                priority: 1,
-                enabled: true
-            },
-            {
-                id: 'pattern-2',
-                name: 'Space Format',
-                pattern: '^(?<localCaseId>\\d+)\\s+(?<localRegionId>\\w+)\\s+(?<localStainID>\\w+)_(?<imageType>\\w+)$',
-                description: 'Format: 20232824 B TDP43_LabelArea_Image.optimized.tiff',
-                example: '20232824 B TDP43_LabelArea_Image.optimized.tiff',
-                priority: 2,
-                enabled: true
-            },
-            {
-                id: 'pattern-3',
-                name: 'Extended Format',
-                pattern: '^(?<localCaseId>\\d+)\\s+(?<localRegionId>\\w+)\\s+(?<localStainID>\\w+)_(?<imageType>\\w+)_(?<extendedType>\\w+)$',
-                description: 'Format: 20243819 H PTDP43_Default_Extended.optimized.tiff',
-                example: '20243819 H PTDP43_Default_Extended.optimized.tiff',
-                priority: 3,
-                enabled: true
-            }
-        ]
-    });
+async function persistRulesToFolder(normalized) {
+    const authStatus = dsaAuthStore.getStatus();
+    if (!authStatus.isAuthenticated || !authStatus.isConfigured) {
+        return;
+    }
+    const config = dsaAuthStore.getConfig();
+    const folderId = config.metadataSyncTargetFolder?.trim() || config.resourceId;
+    if (!folderId) {
+        return;
+    }
+    try {
+        const result = await syncRegexRulesToFolder(
+            config.baseUrl,
+            folderId,
+            dsaAuthStore.getToken(),
+            normalized,
+            ''
+        );
+        if (!result.success) {
+            console.warn('Could not save regex rules to folder:', result.error);
+        }
+    } catch (error) {
+        console.warn('Could not save regex rules to folder:', error.message);
+    }
+}
 
+const RegexRulesModal = ({
+    isOpen,
+    onClose,
+    onApplied,
+    currentRules,
+    sampleData,
+}) => {
+    const [rules, setRules] = useState(() => (
+        currentRules ? normalizeRegexRules(currentRules) : getDefaultRegexRules()
+    ));
     const [testResults, setTestResults] = useState({});
-    const [selectedRuleSet, setSelectedRuleSet] = useState(initialSelectedRuleSet || '');
-    const [showRuleSetSelector, setShowRuleSetSelector] = useState(false);
-    const [isSyncing, setIsSyncing] = useState(false);
     const [forceOverride, setForceOverride] = useState(false);
 
     useEffect(() => {
         if (currentRules) {
-            // Ensure currentRules has a patterns array
-            const rulesWithPatterns = {
-                ...currentRules,
-                patterns: currentRules.patterns || []
-            };
-            setRules(rulesWithPatterns);
+            setRules(normalizeRegexRules(currentRules));
         }
     }, [currentRules]);
 
-    useEffect(() => {
-        if (initialSelectedRuleSet) {
-            setSelectedRuleSet(initialSelectedRuleSet);
-        }
-    }, [initialSelectedRuleSet]);
-
-    const handleRuleChange = (property, value) => {
-        setRules(prev => ({
-            ...prev,
-            primaryPattern: {
-                ...prev.primaryPattern,
-                [property]: value
-            }
-        }));
-    };
-
-    // Pattern management functions
     const addPattern = () => {
         const newPattern = {
             id: `pattern-${Date.now()}`,
@@ -78,46 +61,45 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
             pattern: '',
             description: 'Enter pattern description',
             example: 'example.filename',
-            priority: rules.patterns.length + 1,
+            priority: (rules.patterns || []).length + 1,
             enabled: true
         };
 
-        setRules(prev => ({
+        setRules((prev) => ({
             ...prev,
-            patterns: [...prev.patterns, newPattern]
+            patterns: [...(prev.patterns || []), newPattern]
         }));
     };
 
     const updatePattern = (patternId, field, value) => {
-        setRules(prev => ({
+        setRules((prev) => ({
             ...prev,
-            patterns: prev.patterns.map(pattern =>
+            patterns: prev.patterns.map((pattern) => (
                 pattern.id === patternId
                     ? { ...pattern, [field]: value }
                     : pattern
-            )
+            ))
         }));
     };
 
     const deletePattern = (patternId) => {
-        setRules(prev => ({
+        setRules((prev) => ({
             ...prev,
-            patterns: prev.patterns.filter(pattern => pattern.id !== patternId)
+            patterns: prev.patterns.filter((pattern) => pattern.id !== patternId)
         }));
     };
 
     const movePattern = (patternId, direction) => {
-        setRules(prev => {
-            const patterns = [...prev.patterns];
-            const index = patterns.findIndex(p => p.id === patternId);
+        setRules((prev) => {
+            const patterns = [...(prev.patterns || [])];
+            const index = patterns.findIndex((p) => p.id === patternId);
 
             if (direction === 'up' && index > 0) {
                 [patterns[index], patterns[index - 1]] = [patterns[index - 1], patterns[index]];
-            } else if (direction === 'down' && index < patterns.length - 1) {
+            } else if (direction === 'down' && index >= 0 && index < patterns.length - 1) {
                 [patterns[index], patterns[index + 1]] = [patterns[index + 1], patterns[index]];
             }
 
-            // Update priorities
             patterns.forEach((pattern, idx) => {
                 pattern.priority = idx + 1;
             });
@@ -126,63 +108,35 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
         });
     };
 
-    const testRegex = (pattern, testString) => {
-        if (!pattern || !testString) return null;
-
-        try {
-            const regex = new RegExp(pattern);
-            const match = testString.match(regex);
-
-            if (match && match.groups) {
-                // Return the named groups if they exist
-                return match.groups;
-            } else if (match) {
-                // Fallback: return the first capture group if it exists, otherwise the full match
-                return { primaryPattern: match[1] || match[0] };
-            }
-            return null;
-        } catch (error) {
-            return { error: error.message };
-        }
-    };
-
     const testAllRules = () => {
         if (!sampleData || sampleData.length === 0) {
             alert('No sample data available for testing. Please load DSA data first.');
             return;
         }
 
+        const enabled = getEnabledPatterns(rules);
+        if (enabled.length === 0) {
+            alert('No regex patterns defined. Please add some patterns first.');
+            return;
+        }
+
         const results = {};
-        const testSample = sampleData.slice(0, 5); // Test first 5 items
-
-        testSample.forEach((item, index) => {
+        sampleData.slice(0, 5).forEach((item, index) => {
             const fileName = item.name || item.dsa_name || '';
-            results[index] = {
-                fileName,
-                results: {}
-            };
-
-            Object.keys(rules).forEach(field => {
-                const pattern = rules[field].pattern;
-                if (pattern) {
-                    results[index].results[field] = testRegex(pattern, fileName);
-                }
+            results[index] = { fileName, results: {} };
+            enabled.forEach((pattern) => {
+                results[index].results[pattern.name || pattern.id] = testPatternAgainstFilename(
+                    pattern.pattern,
+                    fileName,
+                    pattern.field
+                );
             });
         });
-
         setTestResults(results);
     };
 
-    const handleSave = () => {
-        onSave(rules, selectedRuleSet);
-        onClose();
-    };
-
     const handleApplyRegexRules = async () => {
-        // Import dataStore dynamically to avoid circular dependencies
         const { default: dataStore } = await import('../utils/dataStore');
-
-        // Get current data status
         const dataStatus = dataStore.getStatus();
 
         if (!dataStatus.processedData || dataStatus.processedData.length === 0) {
@@ -190,189 +144,40 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
             return;
         }
 
-        // Check if there are any rules to apply
-        const hasPrimaryPattern = rules.primaryPattern?.pattern && rules.primaryPattern.pattern.trim() !== '';
-        const hasRules = hasPrimaryPattern;
-
-        if (!hasRules) {
+        const normalized = normalizeRegexRules(rules);
+        if (getEnabledPatterns(normalized).length === 0) {
             alert('No regex patterns defined. Please add some patterns first.');
             return;
         }
 
-        // Confirm before applying
         const confirmMessage = forceOverride
-            ? '🔄 REGEX OVERRIDE MODE 🔄\n\n' +
-            'This will re-apply REGEX rules and REPLACE values that were previously filled by regex.\n\n' +
-            '✅ Will override:\n' +
-            '- Empty fields\n' +
-            '- Values from previous regex rules\n\n' +
-            '🛡️ PROTECTED (will NOT override):\n' +
-            '- Manual edits\n' +
-            '- Column mappings\n\n' +
-            'Use this when you\'ve corrected a regex pattern and need to re-extract.\n\n' +
-            'Continue?'
-            : 'This will apply REGEX rules to extract data from filenames.\n\n' +
-            '✅ SAFE MODE: Rules will ONLY be applied to:\n' +
-            '- Empty fields (no existing value)\n\n' +
-            '🛡️ PROTECTED: Manual edits, column mappings, and existing regex values will NOT be overwritten.\n\n' +
-            'Continue?';
+            ? 'Re-apply regex and replace values previously filled by regex.\n\nManual edits and column mappings are left alone.\n\nContinue?'
+            : 'Apply regex to empty fields only.\n\nExisting values are left alone.\n\nContinue?';
 
-        const confirmed = window.confirm(confirmMessage);
-
-        if (!confirmed) {
+        if (!window.confirm(confirmMessage)) {
             return;
         }
 
         try {
-            // Debug: Log the rules being applied
-            console.log('🔍 Applying REGEX rules:', rules);
-            console.log('🔍 Rules summary:', Object.entries(rules).map(([field, rule]) => ({
-                field,
-                pattern: rule.pattern,
-                hasPattern: !!rule.pattern && rule.pattern.trim() !== ''
-            })));
-
-            // Apply regex rules - only mark as modified when in override mode
-            // Pass forceOverride flag to override all existing values if requested
-            console.log('🔍 About to apply regex rules with:', {
-                rules,
-                markAsModified: forceOverride, // Only mark as modified when overriding
-                forceOverride,
-                checkboxChecked: forceOverride
-            });
-
-            const result = dataStore.applyRegexRules(rules, forceOverride, forceOverride);
-
-            console.log('🔍 REGEX application result:', result);
-
-            if (result.success) {
-                const message = `✅ REGEX Rules Applied Successfully!\n\n` +
-                    `📊 Results:\n` +
-                    `- Items processed: ${result.totalItems}\n` +
-                    `- Items updated: ${result.updatedItems || result.extractedCount}\n` +
-                    `- Items skipped (already had values): ${result.skippedItems || (result.totalItems - (result.updatedItems || result.extractedCount))}\n` +
-                    `- Fields extracted: ${result.extractedCount}`;
-
-                alert(message);
-
-                // Close the modal after successful application
-                onClose();
-            } else {
-                alert(`❌ Error applying REGEX rules: ${result.error}`);
+            const result = dataStore.applyRegexRules(normalized, true, forceOverride);
+            if (!result.success) {
+                alert(`Could not apply regex rules: ${result.error}`);
+                return;
             }
+            await persistRulesToFolder(normalized);
+            if (typeof onApplied === 'function') {
+                onApplied(normalized);
+            }
+            alert(
+                `Applied regex rules.\n\n` +
+                `Items processed: ${result.totalItems}\n` +
+                `Items updated: ${result.updatedItems || result.extractedCount}\n` +
+                `Items skipped: ${result.skippedItems || 0}`
+            );
+            onClose();
         } catch (error) {
             console.error('Error applying regex rules:', error);
-            alert(`❌ Error applying REGEX rules: ${error.message}`);
-        }
-    };
-
-    const handleRuleSetSelect = (ruleSetKey) => {
-        const ruleSet = REGEX_RULE_SETS[ruleSetKey];
-        if (ruleSet) {
-            setRules(ruleSet.rules);
-            setSelectedRuleSet(ruleSetKey);
-            setShowRuleSetSelector(false);
-        }
-    };
-
-    const handleCustomRules = () => {
-        setShowRuleSetSelector(false);
-        setSelectedRuleSet('');
-    };
-
-
-    const handlePushToDSA = async () => {
-        const authStatus = dsaAuthStore.getStatus();
-
-        if (!authStatus.isAuthenticated) {
-            alert('Please login to DSA server first');
-            return;
-        }
-
-        if (!authStatus.isConfigured) {
-            alert('Please configure DSA server first');
-            return;
-        }
-
-        setIsSyncing(true);
-        try {
-            await dsaAuthStore.testConnection();
-
-            const config = dsaAuthStore.getConfig();
-            // Use metadataSyncTargetFolder if set, otherwise fall back to resourceId
-            const metadataTargetFolder = config.metadataSyncTargetFolder && config.metadataSyncTargetFolder.trim()
-                ? config.metadataSyncTargetFolder.trim()
-                : config.resourceId;
-
-            const result = await syncRegexRulesToFolder(
-                config.baseUrl,
-                metadataTargetFolder,
-                dsaAuthStore.getToken(),
-                rules,
-                selectedRuleSet
-            );
-
-            if (result.success) {
-                alert('Regex rules pushed successfully to DSA server!');
-            } else {
-                alert(`Push failed: ${result.error}`);
-            }
-        } catch (error) {
-            alert(`DSA push failed: ${error.message}`);
-        } finally {
-            setIsSyncing(false);
-        }
-    };
-
-    const handlePullFromDSA = async () => {
-        const authStatus = dsaAuthStore.getStatus();
-
-        if (!authStatus.isAuthenticated) {
-            alert('Please login to DSA server first');
-            return;
-        }
-
-        if (!authStatus.isConfigured) {
-            alert('Please configure DSA server first');
-            return;
-        }
-
-        setIsSyncing(true);
-        try {
-            await dsaAuthStore.testConnection();
-
-            const config = dsaAuthStore.getConfig();
-            // Use metadataSyncTargetFolder if set, otherwise fall back to resourceId
-            const metadataTargetFolder = config.metadataSyncTargetFolder && config.metadataSyncTargetFolder.trim()
-                ? config.metadataSyncTargetFolder.trim()
-                : config.resourceId;
-
-            const result = await getRegexRulesFromFolder(
-                config.baseUrl,
-                metadataTargetFolder,
-                dsaAuthStore.getToken()
-            );
-
-            if (result.success && result.regexRules) {
-                const pulledRules = result.regexRules.rules;
-                const pulledRuleSetName = result.regexRules.ruleSetName || '';
-
-                // Confirm before overwriting
-                if (!window.confirm('This will overwrite your current regex rules with the versions from the DSA server. Continue?')) {
-                    setIsSyncing(false);
-                    return;
-                }
-
-                setRules(pulledRules);
-                setSelectedRuleSet(pulledRuleSetName);
-                alert('Regex rules pulled successfully from DSA server!');
-            } else {
-                alert('No regex rules found on DSA server.');
-            }
-        } catch (error) {
-            alert(`DSA pull failed: ${error.message}`);
-        } finally {
-            setIsSyncing(false);
+            alert(`Could not apply regex rules: ${error.message}`);
         }
     };
 
@@ -384,62 +189,26 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
                 <div className="regex-modal-header">
                     <h2>Regex Rules for Data Extraction</h2>
                     <div className="regex-header-actions">
-                        <button
-                            className="regex-rule-set-btn"
-                            onClick={() => setShowRuleSetSelector(!showRuleSetSelector)}
-                        >
-                            {selectedRuleSet ? `Using: ${REGEX_RULE_SETS[selectedRuleSet]?.name}` : 'Choose Rule Set'}
-                        </button>
                         <button className="regex-modal-close" onClick={onClose}>×</button>
                     </div>
                 </div>
-
-                {showRuleSetSelector && (
-                    <div className="regex-rule-set-selector">
-                        <h3>Select a Predefined Rule Set</h3>
-                        <div className="regex-rule-set-options">
-                            {Object.entries(REGEX_RULE_SETS).map(([key, ruleSet]) => (
-                                <div key={key} className="regex-rule-set-option">
-                                    <h4>{ruleSet.name}</h4>
-                                    <p>{ruleSet.description}</p>
-                                    <button
-                                        className="regex-use-rule-set-btn"
-                                        onClick={() => handleRuleSetSelect(key)}
-                                    >
-                                        Use This Rule Set
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                        <div className="regex-rule-set-actions">
-                            <button
-                                className="regex-custom-rules-btn"
-                                onClick={handleCustomRules}
-                            >
-                                Create Custom Rules
-                            </button>
-                        </div>
-                    </div>
-                )}
 
                 <div className="regex-modal-body">
                     <div className="regex-tab-content">
                         <div className="regex-field-config">
                             <div className="pattern-management-header">
-                                <h3>📝 Regex Pattern Management</h3>
-                                <p>Manage multiple regex patterns with fallback priority. Patterns are tested in order until one matches.</p>
-
+                                <h3>Filename patterns</h3>
+                                <p>Enabled patterns are tried in order. The first match fills local case, stain, and region from named groups.</p>
                                 <div className="pattern-actions">
                                     <button
                                         onClick={addPattern}
                                         className="add-pattern-btn"
                                         title="Add new pattern"
                                     >
-                                        ➕ Add Pattern
+                                        Add Pattern
                                     </button>
                                 </div>
                             </div>
-
 
                             <div className="patterns-table-container">
                                 <table className="patterns-table">
@@ -455,11 +224,9 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {rules.patterns && rules.patterns.map((pattern, index) => (
+                                        {(rules.patterns || []).map((pattern, index) => (
                                             <tr key={pattern.id} className={`pattern-row ${!pattern.enabled ? 'disabled' : ''}`}>
-                                                <td className="priority-cell">
-                                                    #{pattern.priority}
-                                                </td>
+                                                <td className="priority-cell">#{pattern.priority}</td>
                                                 <td className="name-cell">
                                                     <input
                                                         type="text"
@@ -510,22 +277,22 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
                                                         title="Move up"
                                                         className="action-btn"
                                                     >
-                                                        ⬆️
+                                                        ↑
                                                     </button>
                                                     <button
                                                         onClick={() => movePattern(pattern.id, 'down')}
-                                                        disabled={index === rules.patterns.length - 1}
+                                                        disabled={index === (rules.patterns || []).length - 1}
                                                         title="Move down"
                                                         className="action-btn"
                                                     >
-                                                        ⬇️
+                                                        ↓
                                                     </button>
                                                     <button
                                                         onClick={() => deletePattern(pattern.id)}
                                                         className="action-btn delete-btn"
                                                         title="Delete pattern"
                                                     >
-                                                        🗑️
+                                                        Delete
                                                     </button>
                                                 </td>
                                             </tr>
@@ -534,25 +301,23 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
                                 </table>
                             </div>
 
-
                             <div className="regex-test-section">
-                                <h4>Test Results</h4>
+                                <h4>Test against loaded filenames</h4>
                                 <button onClick={testAllRules} className="regex-test-btn">
-                                    Test All Rules
+                                    Test first 5 files
                                 </button>
 
                                 {Object.keys(testResults).length > 0 && (
                                     <div className="regex-test-results">
-                                        {Object.keys(testResults).map(index => (
+                                        {Object.keys(testResults).map((index) => (
                                             <div key={index} className="regex-test-item">
                                                 <div className="regex-test-filename">
                                                     <strong>{testResults[index].fileName}</strong>
                                                 </div>
                                                 <div className="regex-test-extractions">
-                                                    {Object.keys(testResults[index].results).map(field => {
+                                                    {Object.keys(testResults[index].results).map((field) => {
                                                         const result = testResults[index].results[field];
                                                         if (result && typeof result === 'object' && !result.error) {
-                                                            // Display individual named groups
                                                             return Object.entries(result).map(([key, value]) => (
                                                                 <div key={`${field}-${key}`} className="regex-test-field">
                                                                     <span className="regex-field-name">{key}:</span>
@@ -561,17 +326,15 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
                                                                     </span>
                                                                 </div>
                                                             ));
-                                                        } else {
-                                                            // Fallback for simple results
-                                                            return (
-                                                                <div key={field} className="regex-test-field">
-                                                                    <span className="regex-field-name">{field}:</span>
-                                                                    <span className={`regex-field-value ${result ? 'success' : 'empty'}`}>
-                                                                        {result ? (result.error ? `Error: ${result.error}` : result) : 'No match'}
-                                                                    </span>
-                                                                </div>
-                                                            );
                                                         }
+                                                        return (
+                                                            <div key={field} className="regex-test-field">
+                                                                <span className="regex-field-name">{field}:</span>
+                                                                <span className={`regex-field-value ${result ? 'success' : 'empty'}`}>
+                                                                    {result ? (result.error ? `Error: ${result.error}` : result) : 'No match'}
+                                                                </span>
+                                                            </div>
+                                                        );
                                                     })}
                                                 </div>
                                             </div>
@@ -584,25 +347,7 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
 
                     <div className="regex-modal-footer">
                         <div className="regex-footer-left">
-                            <button
-                                onClick={handlePullFromDSA}
-                                className="regex-dsa-btn"
-                                disabled={isSyncing}
-                                title="Pull regex rules from DSA server"
-                            >
-                                {isSyncing ? '⏳' : '⬇️'} Pull from DSA
-                            </button>
-                            <button
-                                onClick={handlePushToDSA}
-                                className="regex-dsa-btn regex-push-btn"
-                                disabled={isSyncing}
-                                title="Push regex rules to DSA server"
-                            >
-                                {isSyncing ? '⏳' : '🔄'} Push to DSA
-                            </button>
-                        </div>
-                        <div className="regex-footer-center">
-                            <label className="regex-override-checkbox" title="Re-apply regex rules to values that were previously extracted by regex (protects manual edits and column mappings)">
+                            <label className="regex-override-checkbox" title="Replace values previously filled by regex. Manual edits and column mappings stay protected.">
                                 <input
                                     type="checkbox"
                                     checked={forceOverride}
@@ -612,9 +357,8 @@ const RegexRulesModal = ({ isOpen, onClose, onSave, currentRules, selectedRuleSe
                             </label>
                         </div>
                         <div className="regex-footer-right">
-                            <button onClick={handleApplyRegexRules} className="regex-apply-btn">Apply REGEX Rules</button>
                             <button onClick={onClose} className="regex-cancel-btn">Cancel</button>
-                            <button onClick={handleSave} className="regex-save-btn">Save Rules</button>
+                            <button onClick={handleApplyRegexRules} className="regex-apply-btn">Apply</button>
                         </div>
                     </div>
                 </div>

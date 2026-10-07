@@ -3,8 +3,6 @@
  * Handles data transformation, filtering, and metadata enhancement for DSA data
  */
 
-import { applyRegexRules } from './regexExtractor';
-
 /**
  * Flattens nested objects recursively
  * @param {Object} obj - The object to flatten
@@ -161,6 +159,9 @@ export const enhanceDataWithExistingMetadata = (dsaData) => {
             enhancedItem.BDSA.bdsaLocal.bdsaCaseId = bdsaLocal.bdsaCaseId || enhancedItem.BDSA.bdsaLocal.bdsaCaseId || '';
             enhancedItem.BDSA.bdsaLocal.bdsaStainProtocol = bdsaLocal.bdsaStainProtocol || enhancedItem.BDSA.bdsaLocal.bdsaStainProtocol || [];
             enhancedItem.BDSA.bdsaLocal.bdsaRegionProtocol = bdsaLocal.bdsaRegionProtocol || enhancedItem.BDSA.bdsaLocal.bdsaRegionProtocol || [];
+            if (bdsaLocal.fieldSource && typeof bdsaLocal.fieldSource === 'object') {
+                enhancedItem.BDSA._dataSource = { ...bdsaLocal.fieldSource };
+            }
 
             enhancedItem._hasServerMetadata = true;
             enhancedItem._serverMetadataSource = 'meta.bdsaLocal';
@@ -185,6 +186,9 @@ export const enhanceDataWithExistingMetadata = (dsaData) => {
             enhancedItem.BDSA.bdsaLocal.bdsaCaseId = bdsaLocal.bdsaCaseId || enhancedItem.BDSA.bdsaLocal.bdsaCaseId || '';
             enhancedItem.BDSA.bdsaLocal.bdsaStainProtocol = bdsaLocal.bdsaStainProtocol || enhancedItem.BDSA.bdsaLocal.bdsaStainProtocol || [];
             enhancedItem.BDSA.bdsaLocal.bdsaRegionProtocol = bdsaLocal.bdsaRegionProtocol || enhancedItem.BDSA.bdsaLocal.bdsaRegionProtocol || [];
+            if (bdsaLocal.fieldSource && typeof bdsaLocal.fieldSource === 'object') {
+                enhancedItem.BDSA._dataSource = { ...bdsaLocal.fieldSource };
+            }
 
             enhancedItem._hasServerMetadata = true;
             enhancedItem._serverMetadataSource = 'meta.BDSA.bdsaLocal';
@@ -216,10 +220,9 @@ export const enhanceDataWithExistingMetadata = (dsaData) => {
 /**
  * Transforms DSA API response data to match expected format
  * @param {Array} dsaData - Raw DSA API response data
- * @param {Object} regexRules - Regex rules for data extraction
  * @returns {Array} Transformed and flattened data
  */
-export const transformDsaData = (dsaData, regexRules = {}) => {
+export const transformDsaData = (dsaData) => {
     // This function will transform DSA API response to match your expected data format
     // and flatten nested JSON dictionaries
     console.log('🚀🚀🚀 TRANSFORM DEBUG: transformDsaData called with', dsaData?.length, 'items');
@@ -324,30 +327,12 @@ export const transformDsaData = (dsaData, regexRules = {}) => {
         return transformedItem;
     });
 
-    // Only apply regex rules to items that don't already have server metadata
-    const itemsNeedingRegex = transformedData.filter(item => !item._hasServerMetadata);
-    const itemsWithServerMetadata = transformedData.filter(item => item._hasServerMetadata);
-
-    console.log('Metadata processing summary:', {
-        totalItems: transformedData.length,
-        itemsWithServerMetadata: itemsWithServerMetadata.length,
-        itemsNeedingRegex: itemsNeedingRegex.length
-    });
-
-    // Apply regex rules only to items that need it
-    const regexProcessedItems = itemsNeedingRegex.length > 0
-        ? applyRegexRules(itemsNeedingRegex, regexRules)
-        : [];
-
-    // Combine items with server metadata and regex-processed items
-    const result = [...itemsWithServerMetadata, ...regexProcessedItems];
+    const result = transformedData;
 
     console.log('transformDsaData: Processing complete:', {
         originalLength: dsaData.length,
         afterFiltering: filteredData.length,
         resultLength: result.length,
-        itemsWithServerMetadata: itemsWithServerMetadata.length,
-        itemsProcessedWithRegex: regexProcessedItems.length,
         filesSkipped: skipStats.totalSkipped,
         skippedExtensions: skipStats.extensions
     });

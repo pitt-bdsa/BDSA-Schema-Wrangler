@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { DATA_SOURCE_TYPES } from '../utils/constants';
 import { getItemsToSyncCount } from '../utils/dataStore';
 import { generateNestedKeys } from '../utils/columnDefinitionGenerator';
@@ -14,7 +14,6 @@ const DataControlsToolbar = ({
     handleLoadExcel,
     accessoryFile,
     handleAccessoryFileChange,
-    handleLoadAccessoryFile,
     accessoryData,
     accessoryMatchInfo,
     isLoading,
@@ -25,8 +24,25 @@ const DataControlsToolbar = ({
     setShowColumnPanel,
     setShowBdsaMapping,
     setShowRegexRules,
-    setShowDsaSync
+    setShowDsaSync,
+    onClearAllData
 }) => {
+    const [toolsOpen, setToolsOpen] = useState(false);
+    const toolsRef = useRef(null);
+    const accessoryInputRef = useRef(null);
+    const pendingCount = getItemsToSyncCount();
+
+    useEffect(() => {
+        if (!toolsOpen) return undefined;
+        const onPointerDown = (event) => {
+            if (toolsRef.current && !toolsRef.current.contains(event.target)) {
+                setToolsOpen(false);
+            }
+        };
+        document.addEventListener('pointerdown', onPointerDown);
+        return () => document.removeEventListener('pointerdown', onPointerDown);
+    }, [toolsOpen]);
+
     const handleCsvExport = () => {
         if (!dataStatus.processedData || dataStatus.processedData.length === 0) {
             console.warn('No data to export');
@@ -171,60 +187,30 @@ const DataControlsToolbar = ({
 
             {/* Accessory File Controls - Only show when DSA data is loaded */}
             {dataStatus.processedData && dataStatus.processedData.length > 0 && dataStatus.dataSource === 'dsa' && (
-                <>
-                    <div className="accessory-file-section">
-                        <div className="file-input-container">
-                            <input
-                                type="file"
-                                id="accessory-file"
-                                accept=".csv,.xlsx,.xls"
-                                onChange={handleAccessoryFileChange}
-                                className="file-input"
-                            />
-                            <label htmlFor="accessory-file" className="file-input-label">
-                                {accessoryFile ? accessoryFile.name : 'Choose Accessory File'}
-                            </label>
-                        </div>
-                        <button
-                            className="load-accessory-btn"
-                            onClick={handleLoadAccessoryFile}
-                            disabled={!accessoryFile || isLoading}
-                            title="Upload CSV/Excel file with additional metadata to match with DSA items"
-                        >
-                            Load Accessory Data
-                        </button>
-                        {accessoryData && (
-                            <span className="accessory-status">
-                                ✓ {accessoryData.length} accessory items loaded
-                                {accessoryMatchInfo && (
-                                    <span className="match-info">
-                                        ({accessoryMatchInfo.matched} matched, {accessoryMatchInfo.unmatched} unmatched)
-                                    </span>
-                                )}
-                            </span>
-                        )}
-                    </div>
-                </>
-            )}
-
-            {dataStatus.processedData && dataStatus.processedData.length > 0 && (
-                <button
-                    className="column-toggle-btn"
-                    onClick={() => setShowColumnPanel(!showColumnPanel)}
-                    title="Show/Hide Columns"
-                >
-                    {showColumnPanel ? 'Hide Columns' : 'Show Columns'}
-                </button>
-            )}
-
-            {dataStatus.processedData && dataStatus.processedData.length > 0 && (
-                <button
-                    className="bdsa-mapping-btn"
-                    onClick={() => setShowBdsaMapping(true)}
-                    title="Map source columns to BDSA schema fields"
-                >
-                    BDSA Mapping
-                </button>
+                <div className="accessory-file-section">
+                    <input
+                        ref={accessoryInputRef}
+                        type="file"
+                        id="accessory-file"
+                        accept=".csv,.xlsx,.xls"
+                        onChange={handleAccessoryFileChange}
+                        className="accessory-file-input"
+                    />
+                    <button
+                        type="button"
+                        className="load-accessory-btn"
+                        onClick={() => accessoryInputRef.current?.click()}
+                        disabled={isLoading}
+                        title="Upload a CSV or Excel file and match its rows to loaded DSA items"
+                    >
+                        {accessoryFile ? accessoryFile.name : 'Load accessory data'}
+                    </button>
+                    {accessoryData && accessoryMatchInfo && (
+                        <span className="accessory-status">
+                            {accessoryMatchInfo.matched} matched, {accessoryMatchInfo.unmatched} unmatched
+                        </span>
+                    )}
+                </div>
             )}
 
             {dataStatus.processedData && dataStatus.processedData.length > 0 && (
@@ -238,30 +224,77 @@ const DataControlsToolbar = ({
             )}
 
             {dataStatus.processedData && dataStatus.processedData.length > 0 && (
-                <button
-                    className="csv-export-btn"
-                    onClick={handleCsvExport}
-                    title="Export data to CSV file"
-                >
-                    📊 Export CSV
-                </button>
-            )}
-
-            {dataStatus.processedData && dataStatus.processedData.length > 0 && dataStatus.dataSource === 'dsa' && (
-                <button
-                    className="dsa-sync-btn"
-                    onClick={() => setShowDsaSync(true)}
-                    title="Sync BDSA metadata to DSA server"
-                >
-                    <span className={`sync-icon ${getItemsToSyncCount() > 0 ? 'sync-icon-orange' : ''}`}>
-                        {getItemsToSyncCount() > 0 ? '🟠' : '🔄'}
-                    </span>
-                    <span className="sync-text">
-                        <span>DSA</span>
-                        <span>Metadata</span>
-                        <span>Sync</span>
-                    </span>
-                </button>
+                <div className="toolbar-tools" ref={toolsRef}>
+                    <button
+                        type="button"
+                        className={`toolbar-gear-btn${toolsOpen ? ' open' : ''}${pendingCount > 0 ? ' has-pending' : ''}`}
+                        onClick={() => setToolsOpen((open) => !open)}
+                        title="More tools"
+                        aria-haspopup="menu"
+                        aria-expanded={toolsOpen}
+                    >
+                        ⚙
+                    </button>
+                    {toolsOpen && (
+                        <div className="toolbar-tools-menu" role="menu">
+                            <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                    setShowColumnPanel(!showColumnPanel);
+                                    setToolsOpen(false);
+                                }}
+                            >
+                                {showColumnPanel ? 'Hide columns' : 'Show columns'}
+                            </button>
+                            <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                    setShowBdsaMapping(true);
+                                    setToolsOpen(false);
+                                }}
+                            >
+                                BDSA Mapping
+                            </button>
+                            <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                    handleCsvExport();
+                                    setToolsOpen(false);
+                                }}
+                            >
+                                Export CSV
+                            </button>
+                            {dataStatus.dataSource === 'dsa' && (
+                                <button
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={() => {
+                                        setShowDsaSync(true);
+                                        setToolsOpen(false);
+                                    }}
+                                >
+                                    {pendingCount > 0
+                                        ? `DSA metadata sync (${pendingCount} pending)`
+                                        : 'DSA metadata sync'}
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                role="menuitem"
+                                className="toolbar-tools-menu-danger"
+                                onClick={() => {
+                                    setToolsOpen(false);
+                                    onClearAllData?.();
+                                }}
+                            >
+                                Clear all data and restart
+                            </button>
+                        </div>
+                    )}
+                </div>
             )}
         </div>
     );

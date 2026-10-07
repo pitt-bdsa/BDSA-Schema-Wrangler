@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { HIDDEN_DSA_FIELDS, PRIORITY_BDSA_FIELDS, DEFAULT_COLUMN_VISIBILITY } from '../utils/constants';
+import { HIDDEN_DSA_FIELDS, PRIORITY_BDSA_FIELDS, DEFAULT_COLUMN_VISIBILITY, COLUMN_LAYOUT_VERSION } from '../utils/constants';
 import { generateNestedKeys } from '../utils/columnDefinitionGenerator';
 
 export const useColumnVisibility = (dataStatus) => {
@@ -15,7 +15,7 @@ export const useColumnVisibility = (dataStatus) => {
         if (!dataSourceKey) return;
 
         try {
-            const savedConfig = localStorage.getItem(`column_config_${dataSourceKey}`);
+            const savedConfig = localStorage.getItem(`column_config_${COLUMN_LAYOUT_VERSION}_${dataSourceKey}`);
             if (savedConfig) {
                 const config = JSON.parse(savedConfig);
                 console.log('📁 Loaded column config:', config);
@@ -70,7 +70,7 @@ export const useColumnVisibility = (dataStatus) => {
                 order: order || columnOrder,
                 timestamp: new Date().toISOString()
             };
-            localStorage.setItem(`column_config_${dataSourceKey}`, JSON.stringify(config));
+            localStorage.setItem(`column_config_${COLUMN_LAYOUT_VERSION}_${dataSourceKey}`, JSON.stringify(config));
             console.log('✅ Column config saved successfully');
         } catch (error) {
             console.error('Error saving column config:', error);

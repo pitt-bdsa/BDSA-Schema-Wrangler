@@ -26,7 +26,9 @@ export {
     syncColumnMappingsToFolder,
     getColumnMappingsFromFolder,
     getCaseIdMappingsFromFolder,
-    getProtocolsFromFolder
+    getProtocolsFromFolder,
+    getInstitutionIdFromResource,
+    setInstitutionIdOnResource
 } from './DsaFolderMetadataSync.js';
 
 // Protocol Store Integration

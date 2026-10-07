@@ -79,5 +79,31 @@ class StorageManager {
     }
 }
 
+const WRANGLER_STORAGE_EXACT_KEYS = [
+    'columnMappings',
+    'regexRules',
+    'selectedRegexRuleSet',
+];
+
+const WRANGLER_STORAGE_PREFIXES = ['bdsa_', 'column_config_'];
+
+/**
+ * Wipe wrangler-owned localStorage keys only. Never touch host keys such as girderToken.
+ */
+export function clearWranglerLocalStorage() {
+    const toRemove = [];
+    for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (!key) continue;
+        if (
+            WRANGLER_STORAGE_EXACT_KEYS.includes(key)
+            || WRANGLER_STORAGE_PREFIXES.some((prefix) => key.startsWith(prefix))
+        ) {
+            toRemove.push(key);
+        }
+    }
+    toRemove.forEach((key) => localStorage.removeItem(key));
+}
+
 const storageManager = new StorageManager();
 export default storageManager;

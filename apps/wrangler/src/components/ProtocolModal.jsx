@@ -3,7 +3,7 @@ import schemaValidator from '../utils/schemaValidator';
 import ProtocolFormFields from './ProtocolFormFields';
 import './ProtocolModal.css';
 
-const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
+const ProtocolModal = ({ protocol, type, onSave, onClose, embedded = false, typeOptions = null }) => {
     const [formData, setFormData] = useState({
         name: '',
         description: '',
@@ -15,6 +15,7 @@ const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
         vendor: '',
         chromogen: '',
         regionType: '',
+        abbreviation: '',
         landmarks: [],
         hemisphere: '',
         sliceOrientation: '',
@@ -23,6 +24,11 @@ const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
     const [errors, setErrors] = useState({});
     const [isLoading, setIsLoading] = useState(false);
     const [schemaLoaded, setSchemaLoaded] = useState(false);
+    const [saveError, setSaveError] = useState('');
+
+    const catalogOptions = Array.isArray(typeOptions) && typeOptions.length > 0 ? typeOptions : null;
+    const stainOptions = catalogOptions || schemaValidator.getStainTypeOptions();
+    const regionOptions = catalogOptions || schemaValidator.getRegionTypeOptions();
 
     useEffect(() => {
         // Load schema on component mount
@@ -46,6 +52,7 @@ const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
                 vendor: protocol.vendor || '',
                 chromogen: protocol.chromogen || '',
                 regionType: protocol.regionType || '',
+                abbreviation: protocol.abbreviation || '',
                 landmarks: protocol.landmarks || [],
                 hemisphere: protocol.hemisphere || '',
                 sliceOrientation: protocol.sliceOrientation || '',
@@ -71,6 +78,18 @@ const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
         const validationErrors = type === 'stain'
             ? schemaValidator.validateStainProtocol(data)
             : schemaValidator.validateRegionProtocol(data);
+        if (embedded && type === 'stain' && data.stainType && data.stainType !== 'ignore'
+            && catalogOptions && !catalogOptions.some((opt) => opt.value === data.stainType)) {
+            validationErrors.stainType = 'Stain type is not in the published schema';
+        }
+        if (embedded && type === 'region' && data.regionType && data.regionType !== 'ignore'
+            && catalogOptions && !catalogOptions.some((opt) => opt.value === data.regionType)) {
+            validationErrors.regionType = 'Region type is not in the published schema';
+        }
+        if (embedded && type === 'region' && data.regionType && data.regionType !== 'ignore'
+            && !(data.abbreviation || '').trim()) {
+            validationErrors.abbreviation = 'Abbreviation is required';
+        }
         setErrors(validationErrors);
         return Object.keys(validationErrors).length === 0;
     };
@@ -83,10 +102,12 @@ const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
         }
 
         setIsLoading(true);
+        setSaveError('');
         try {
             await onSave(formData);
         } catch (error) {
             console.error('Error saving protocol:', error);
+            setSaveError(error.message || 'Failed to save protocol');
         } finally {
             setIsLoading(false);
         }
@@ -120,7 +141,7 @@ const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
                         className={errors.stainType ? 'error' : ''}
                     >
                         <option value="">Select stain type</option>
-                        {schemaValidator.getStainTypeOptions().map(option => (
+                        {stainOptions.map(option => (
                             <option key={option.value} value={option.value}>
                                 {option.label}
                             </option>
@@ -264,9 +285,13 @@ const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
                         id="regionType"
                         value={formData.regionType}
                         onChange={(e) => {
+                            const selected = regionOptions.find((opt) => opt.value === e.target.value);
                             const newFormData = {
                                 ...formData,
                                 regionType: e.target.value,
+                                abbreviation: formData.abbreviation
+                                    || selected?.abbreviation
+                                    || e.target.value,
                                 // Clear dependent fields when region type changes
                                 landmarks: []
                             };
@@ -277,7 +302,7 @@ const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
                         className={errors.regionType ? 'error' : ''}
                     >
                         <option value="">Select region type</option>
-                        {schemaValidator.getRegionTypeOptions().map(option => (
+                        {regionOptions.map(option => (
                             <option key={option.value} value={option.value}>
                                 {option.label}
                             </option>
@@ -288,6 +313,20 @@ const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
 
                 {formData.regionType && formData.regionType !== 'ignore' && (
                     <>
+                        {embedded && (
+                            <div className="form-group">
+                                <label htmlFor="abbreviation">Abbreviation *</label>
+                                <input
+                                    type="text"
+                                    id="abbreviation"
+                                    value={formData.abbreviation}
+                                    onChange={(e) => handleFieldChange('abbreviation', e.target.value)}
+                                    className={errors.abbreviation ? 'error' : ''}
+                                    placeholder="Short code used in filenames"
+                                />
+                                {errors.abbreviation && <span className="error-message">{errors.abbreviation}</span>}
+                            </div>
+                        )}
                         {/* Landmarks field - multi-select for sub-regions/landmarks */}
                         {schemaValidator.getLandmarkOptions(formData.regionType).length > 0 && (
                             <div className="form-group">
@@ -433,6 +472,8 @@ const ProtocolModal = ({ protocol, type, onSave, onClose }) => {
                     </div>
 
                     {type === 'stain' ? renderStainFields() : renderRegionFields()}
+
+                    {saveError && <div className="error-message">{saveError}</div>}
 
                     <div className="modal-actions">
                         <button type="button" onClick={onClose} className="cancel-button">

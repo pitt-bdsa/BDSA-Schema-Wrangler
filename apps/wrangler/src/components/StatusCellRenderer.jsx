@@ -31,7 +31,6 @@ const StatusCellRenderer = (params) => {
     return (
         <span className={`status-badge ${statusType}`} title={`${statusText} modification`}>
             <span className={`status-indicator ${statusType}`}></span>
-            {statusText}
         </span>
     );
 };

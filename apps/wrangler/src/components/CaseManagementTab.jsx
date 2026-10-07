@@ -1,17 +1,27 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import './CaseManagementTab.css';
-import dataStore, { setCaseIdInData, generateUnmappedCases } from '../utils/dataStore';
+import dataStore from '../utils/dataStore';
 import protocolStore from '../utils/protocolStore';
 import dsaAuthStore from '../utils/dsaAuthStore';
 import CaseStatsPanel from './CaseStatsPanel';
 import CaseIdMappingSection from './CaseIdMappingSection';
 import StainProtocolMapping from './StainProtocolMapping';
 import RegionProtocolMapping from './RegionProtocolMapping';
+import { matchLocalCase } from '../utils/hostCaseMatcher';
+import { normalizeLocalCaseId } from '../utils/bdsaCaseIdAllocator';
+import {
+    inferInstitutionPrefix,
+    loadStoredInstitutionId,
+    persistInstitutionId,
+} from '../utils/bdsaCaseIdAllocator';
+import { applyHostCaseMatches } from '../utils/hostCaseMatcher';
 
-const CaseManagementTab = () => {
+const CaseManagementTab = ({ embedded = false }) => {
     const [activeSubTab, setActiveSubTab] = useState('case-id-mapping');
     const [dataStatus, setDataStatus] = useState(dataStore.getStatus());
-    const [bdsaInstitutionId, setBdsaInstitutionId] = useState('');
+    const [bdsaInstitutionId, setBdsaInstitutionId] = useState(() => loadStoredInstitutionId());
+    const [institutionLocked, setInstitutionLocked] = useState(Boolean(loadStoredInstitutionId()));
+    const [institutionSource, setInstitutionSource] = useState('');
     const [temporaryHideMapped, setTemporaryHideMapped] = useState(false);
     const [showOnlyDuplicates, setShowOnlyDuplicates] = useState(false);
     const [caseIdFilter, setCaseIdFilter] = useState('');
@@ -20,6 +30,8 @@ const CaseManagementTab = () => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [isGeneratingAll, setIsGeneratingAll] = useState(false);
     const [generateAllProgress, setGenerateAllProgress] = useState({ current: 0, total: 0 });
+    const [hostCaseIndex, setHostCaseIndex] = useState(null);
+    const [resourceId, setResourceId] = useState(() => dsaAuthStore.getConfig().resourceId || '');
 
     // Subscribe to data store updates
     useEffect(() => {
@@ -36,6 +48,124 @@ const CaseManagementTab = () => {
 
         return unsubscribe;
     }, []); // Only run once on mount
+
+    useEffect(() => {
+        return dsaAuthStore.subscribe(() => {
+            setResourceId(dsaAuthStore.getConfig().resourceId || '');
+        });
+    }, []);
+
+    const hostImported = embedded || dsaAuthStore.hostImported;
+
+    const getMetadataTarget = () => {
+        const config = dsaAuthStore.getConfig();
+        const overrideFolder = (config.metadataSyncTargetFolder || '').trim();
+        return {
+            baseUrl: config.baseUrl,
+            token: dsaAuthStore.getToken(),
+            resourceId: overrideFolder || config.resourceId,
+            resourceType: overrideFolder ? 'folder' : (config.resourceType || 'folder'),
+            resourceName: config.resourceName || '',
+        };
+    };
+
+    const applyInstitution = (value, { locked = true, source = '', persistLocal = true } = {}) => {
+        const next = String(value || '').trim();
+        setBdsaInstitutionId(next);
+        setInstitutionLocked(Boolean(next) && locked);
+        setInstitutionSource(source);
+        if (persistLocal) persistInstitutionId(next);
+    };
+
+    const saveInstitutionToResource = async (value) => {
+        const next = String(value || '').trim();
+        if (!next) return { success: false, error: 'Institution ID is required' };
+        const target = getMetadataTarget();
+        if (!target.resourceId) {
+            applyInstitution(next, { locked: true, source: 'local' });
+            return { success: true };
+        }
+        const { setInstitutionIdOnResource } = await import('../utils/DsaFolderMetadataSync.js');
+        await setInstitutionIdOnResource(
+            target.baseUrl,
+            target.resourceId,
+            target.token,
+            next,
+            target.resourceType
+        );
+        applyInstitution(next, {
+            locked: true,
+            source: target.resourceType,
+        });
+        return { success: true };
+    };
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            const target = getMetadataTarget();
+            let fromResource = '';
+            if (target.resourceId && target.token) {
+                try {
+                    const { getInstitutionIdFromResource } = await import('../utils/DsaFolderMetadataSync.js');
+                    const result = await getInstitutionIdFromResource(
+                        target.baseUrl,
+                        target.resourceId,
+                        target.token,
+                        target.resourceType
+                    );
+                    fromResource = result.institutionId || '';
+                } catch (error) {
+                    console.warn('Could not read institution ID from resource:', error.message);
+                }
+            }
+
+            let fromNode = '';
+            if (hostImported) {
+                try {
+                    const { default: bdsaCatalogClient } = await import('../utils/bdsaCatalogClient.js');
+                    const { indexHostCases, asCaseList } = await import('../utils/hostCaseMatcher.js');
+                    const [hostCases, localNode] = await Promise.all([
+                        bdsaCatalogClient.listCases(),
+                        bdsaCatalogClient.getLocalNode().catch(() => null),
+                    ]);
+                    if (cancelled) return;
+                    const index = indexHostCases(hostCases);
+                    setHostCaseIndex(index);
+                    applyHostCaseMatches(dataStore, index);
+                    fromNode = String(localNode?.networkIdentifier || '').trim();
+                    if (fromNode === 'NetworkXX') fromNode = '';
+                    if (!fromNode) {
+                        fromNode = inferInstitutionPrefix(asCaseList(hostCases).map((doc) => doc.networkIdentifier));
+                    }
+                } catch (error) {
+                    console.warn('Could not load host BDSA identity:', error.message);
+                }
+            }
+
+            if (cancelled) return;
+            if (fromResource) {
+                applyInstitution(fromResource, { locked: true, source: target.resourceType });
+                return;
+            }
+            if (fromNode && target.resourceId && target.token) {
+                try {
+                    await saveInstitutionToResource(fromNode);
+                    return;
+                } catch (error) {
+                    console.warn('Could not stamp institution ID on resource:', error.message);
+                    applyInstitution(fromNode, { locked: true, source: 'server' });
+                    return;
+                }
+            }
+            if (fromNode) {
+                applyInstitution(fromNode, { locked: true, source: 'server' });
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [embedded, hostImported, resourceId]);
 
     // Reset the temporary filters when new items are generated
     const resetTemporaryFilter = () => {
@@ -76,23 +206,18 @@ const CaseManagementTab = () => {
 
             // Count occurrences of each local case ID
             dataStatus.processedData.forEach((row) => {
-                const localCaseId = row.BDSA?.bdsaLocal?.localCaseId;
+                const localCaseId = normalizeLocalCaseId(row.BDSA?.bdsaLocal?.localCaseId);
                 if (localCaseId) {
                     caseIdCounts[localCaseId] = (caseIdCounts[localCaseId] || 0) + 1;
                 }
             });
 
-            // Read case ID mappings directly from the data items (single source of truth)
             const caseIdMappings = new Map();
             dataStatus.processedData?.forEach((item) => {
-                const localCaseId = item.BDSA?.bdsaLocal?.localCaseId;
+                const localCaseId = normalizeLocalCaseId(item.BDSA?.bdsaLocal?.localCaseId);
                 const bdsaCaseId = item.BDSA?.bdsaLocal?.bdsaCaseId;
-                if (localCaseId) {
-                    // Only set mapping if BDSA Case ID exists, otherwise leave as undefined
-                    if (bdsaCaseId) {
-                        // console.log(`🔍 Mapping: localCaseId="${localCaseId}" → bdsaCaseId="${bdsaCaseId}"`);
-                        caseIdMappings.set(localCaseId, bdsaCaseId);
-                    }
+                if (localCaseId && bdsaCaseId && String(bdsaCaseId).trim()) {
+                    caseIdMappings.set(localCaseId, String(bdsaCaseId).trim());
                 }
             });
 
@@ -186,8 +311,20 @@ const CaseManagementTab = () => {
             );
         }
 
+        if (hostCaseIndex) {
+            return filtered.map((caseData) => {
+                const match = matchLocalCase(caseData.localCaseId, caseData.bdsaCaseId, hostCaseIndex);
+                return {
+                    ...caseData,
+                    hostStatus: match.status,
+                    hostNetworkId: match.networkIdentifier || null,
+                    hostReason: match.reason || '',
+                };
+            });
+        }
+
         return filtered;
-    }, [dataStatus.processedData, dataStatus.caseIdMappings, temporaryHideMapped, showOnlyDuplicates, duplicateBdsaCaseIds, sortField, sortDirection, caseIdFilter]);
+    }, [dataStatus.processedData, dataStatus.caseIdMappings, temporaryHideMapped, showOnlyDuplicates, duplicateBdsaCaseIds, sortField, sortDirection, caseIdFilter, hostCaseIndex]);
 
     // Get statistics
     const stats = useMemo(() => {
@@ -302,136 +439,46 @@ const CaseManagementTab = () => {
         };
     }, [dataStatus.processedData, dataStatus.caseIdConflicts, dataStatus.bdsaCaseIdConflicts, dataStatus.caseIdMappings, bdsaCaseIdHash]);
 
-    // Generate sequential BDSA Case ID (alias for generateCaseId)
+    const generateOptions = () => ({
+        format: hostImported ? 'host' : 'wrangler',
+        extraTakenIds: hostCaseIndex ? Array.from(hostCaseIndex.byNetwork.keys()) : [],
+    });
+
     const generateCaseId = (localCaseId) => {
-        generateSequentialBdsaCaseId(localCaseId);
-    };
-
-    // Generate sequential BDSA Case ID
-    const generateSequentialBdsaCaseId = (localCaseId) => {
-        console.log(`🚀 Generate button clicked for localCaseId: ${localCaseId}`);
-
-        if (!localCaseId) {
-            console.log('❌ No localCaseId provided');
-            return;
-        }
-
         if (!bdsaInstitutionId || bdsaInstitutionId.trim() === '') {
-            console.log('❌ No BDSA Institution ID set');
-            alert('Please set the BDSA Institution ID first. You can:\n1. Pull data from DSA to auto-set it\n2. Enter it manually in the Institution ID field');
+            alert('Set the BDSA Institution ID on this folder or collection before generating case IDs.');
             return;
         }
-
-        console.log(`✅ BDSA Institution ID: ${bdsaInstitutionId}`);
-
-        // Check if this case already has a BDSA Case ID by looking at the data
-        const existingCase = dataStatus.processedData?.find(row =>
-            row.BDSA?.bdsaLocal?.localCaseId === localCaseId &&
-            row.BDSA?.bdsaLocal?.bdsaCaseId
-        );
-
-        if (existingCase) {
-            console.log(`⚠️ Case ${localCaseId} already has BDSA Case ID: ${existingCase.BDSA.bdsaLocal.bdsaCaseId}`);
-            return;
-        }
-
-        console.log(`🔄 Starting generation for case ${localCaseId}...`);
         setIsGenerating(true);
-
         try {
-            // Get next sequential number from existing BDSA Case IDs in the data
-            const existingNumbers = [];
-            dataStatus.processedData?.forEach(row => {
-                const bdsaCaseId = row.BDSA?.bdsaLocal?.bdsaCaseId;
-                if (bdsaCaseId && bdsaCaseId.startsWith(`BDSA-${bdsaInstitutionId.padStart(3, '0')}-`)) {
-                    const match = bdsaCaseId.match(/BDSA-\d{3}-(\d{4})/);
-                    if (match) {
-                        existingNumbers.push(parseInt(match[1], 10));
-                    }
-                }
-            });
-
-            const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
-            const nextNumber = maxNumber + 1;
-            const bdsaCaseId = `BDSA-${bdsaInstitutionId.padStart(3, '0')}-${nextNumber.toString().padStart(4, '0')}`;
-
-            console.log(`🎯 Generated BDSA Case ID: ${bdsaCaseId} (next number: ${nextNumber})`);
-
-            // Set the case ID directly in the data items (single source of truth)
-            console.log(`📝 Calling setCaseIdInData(${localCaseId}, ${bdsaCaseId})`);
-            setCaseIdInData(localCaseId, bdsaCaseId);
-            console.log(`🔄 Calling resetTemporaryFilter()`);
-            resetTemporaryFilter(); // Show the newly generated item
-            console.log(`✅ Generation complete for case ${localCaseId}`);
-
-        } finally {
-            setTimeout(() => setIsGenerating(false), 500);
-        }
-    };
-
-    // Update case ID mapping
-    const updateCaseIdMapping = (localCaseId, bdsaCaseId) => {
-        const trimmedValue = bdsaCaseId ? bdsaCaseId.trim() : '';
-
-        if (trimmedValue) {
-            // Set the case ID directly in the data items
-            setCaseIdInData(localCaseId, trimmedValue);
-        } else {
-            // Clear the case ID by setting it to null
-            setCaseIdInData(localCaseId, null);
-        }
-    };
-
-    // Generate all unmapped case IDs
-    const generateAllCaseIds = async () => {
-        if (!bdsaInstitutionId || bdsaInstitutionId.trim() === '') {
-            alert('Please set the BDSA Institution ID first. You can:\n1. Pull data from DSA to auto-set it\n2. Enter it manually in the Institution ID field');
-            return;
-        }
-
-        const unmappedCases = filteredCaseIds.filter(caseData => !caseData.isMapped);
-        if (unmappedCases.length === 0) {
-            return;
-        }
-
-        setIsGeneratingAll(true);
-        setGenerateAllProgress({ current: 0, total: unmappedCases.length });
-
-        try {
-            // Get all mappings at once to avoid race conditions
-            const caseIdMappings = dataStatus.caseIdMappings || {};
-            const newMappings = { ...caseIdMappings };
-
-            // Generate all BDSA Case IDs without individual updates
-            for (let i = 0; i < unmappedCases.length; i++) {
-                const caseData = unmappedCases[i];
-                const localCaseId = caseData.localCaseId;
-
-                // Check if this case already has a BDSA Case ID
-                if (!newMappings[localCaseId]) {
-                    // Get next sequential number from the current mappings
-                    const existingNumbers = Object.values(newMappings)
-                        .filter(id => id && id.startsWith(`BDSA-${bdsaInstitutionId.padStart(3, '0')}-`))
-                        .map(id => {
-                            const match = id.match(/BDSA-\d{3}-(\d{4})/);
-                            return match ? parseInt(match[1], 10) : 0;
-                        });
-
-                    const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
-                    const nextNumber = maxNumber + 1;
-                    const bdsaCaseId = `BDSA-${bdsaInstitutionId.padStart(3, '0')}-${nextNumber.toString().padStart(4, '0')}`;
-
-                    // Add to the batch
-                    newMappings[localCaseId] = bdsaCaseId;
-                }
-
-                setGenerateAllProgress({ current: i + 1, total: unmappedCases.length });
+            const result = dataStore.generateBdsaCaseIds(bdsaInstitutionId, [localCaseId], generateOptions());
+            if (!result.success) {
+                alert(result.error);
+                return;
             }
+            if (result.assigned.length > 0) {
+                resetTemporaryFilter();
+            }
+        } finally {
+            setIsGenerating(false);
+        }
+    };
 
-            // Update all mappings at once
-            dataStore.updateCaseIdMappings(newMappings);
-            resetTemporaryFilter(); // Show all newly generated items
-
+    const generateAllCaseIds = () => {
+        if (!bdsaInstitutionId || bdsaInstitutionId.trim() === '') {
+            alert('Set the BDSA Institution ID on this folder or collection before generating case IDs.');
+            return;
+        }
+        setIsGeneratingAll(true);
+        try {
+            const result = dataStore.generateBdsaCaseIds(bdsaInstitutionId, null, generateOptions());
+            if (!result.success) {
+                alert(result.error);
+                return;
+            }
+            if (result.assigned.length > 0) {
+                resetTemporaryFilter();
+            }
         } finally {
             setIsGeneratingAll(false);
             setGenerateAllProgress({ current: 0, total: 0 });
@@ -697,6 +744,9 @@ const CaseManagementTab = () => {
                 <CaseIdMappingSection
                     bdsaInstitutionId={bdsaInstitutionId}
                     setBdsaInstitutionId={setBdsaInstitutionId}
+                    institutionLocked={institutionLocked}
+                    institutionSource={institutionSource}
+                    onSaveInstitutionId={saveInstitutionToResource}
                     filteredCaseIds={filteredCaseIds}
                     duplicateBdsaCaseIds={duplicateBdsaCaseIds}
                     clearDuplicates={clearDuplicates}
@@ -718,6 +768,7 @@ const CaseManagementTab = () => {
                     sortDirection={sortDirection}
                     handleSort={handleSort}
                     getSortIcon={getSortIcon}
+                    hostImported={embedded || dsaAuthStore.hostImported}
                 />
             )}
 

@@ -6,28 +6,36 @@ import InputDataTab from './components/InputDataTab';
 import CaseManagementTab from './components/CaseManagementTab';
 import ProtocolDebugPanel from './components/ProtocolDebugPanel';
 import DsaLogin from './components/DsaLogin';
+import schemaValidator from './utils/schemaValidator';
 import './App.css';
 
-function App() {
+function App({
+    embedded = false,
+    schemaFile = '/bdsa-schema.json',
+    logoSrc = '/assets/BDSA_logo_clear.png',
+    onCatalogChanged,
+} = {}) {
     const [activeTab, setActiveTab] = useState(0);
 
+    schemaValidator.setSchemaFile(schemaFile);
+
     const tabs = [
-        { id: 0, label: 'Input Data', component: <InputDataTab /> },
-        { id: 1, label: 'BDSA Schema', component: <SchemaTab /> },
-        { id: 2, label: 'Protocols', component: <ProtocolsTab /> },
-        { id: 3, label: 'Case Management', component: <CaseManagementTab /> },
-        { id: 4, label: '🔍 Protocol Debug', component: <ProtocolDebugPanel /> }
-    ];
+        { label: 'Input Data', component: <InputDataTab embedded={embedded} /> },
+        !embedded && { label: 'BDSA Schema', component: <SchemaTab schemaFile={schemaFile} /> },
+        { label: 'Protocols', component: <ProtocolsTab embedded={embedded} onCatalogChanged={onCatalogChanged} /> },
+        { label: 'Case Management', component: <CaseManagementTab embedded={embedded} /> },
+        { label: '🔍 Protocol Debug', component: <ProtocolDebugPanel /> },
+    ].filter(Boolean).map((tab, id) => ({ ...tab, id }));
 
     return (
-        <div className="app">
+        <div className={`app wrangler-app${embedded ? ' wrangler-app-embedded' : ''}`}>
             <div className="app-header">
                 <div className="header-left">
-                    <img src="/assets/BDSA_logo_clear.png" alt="BDSA Logo" className="logo" />
+                    <img src={logoSrc} alt="BDSA Logo" className="logo" />
                     <h1>BDSA Schema Wrangler</h1>
                 </div>
                 <div className="header-right">
-                    <DsaLogin />
+                    <DsaLogin embedded={embedded} />
                 </div>
             </div>
             <TabView

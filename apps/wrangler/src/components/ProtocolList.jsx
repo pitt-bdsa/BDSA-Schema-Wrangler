@@ -1,13 +1,14 @@
 import React from 'react';
 import './ProtocolList.css';
-import protocolStore from '../utils/protocolStore';
 
-const ProtocolList = ({ protocols, type, onEdit, onDelete, onAdd }) => {
+const ProtocolList = ({ protocols, type, onEdit, onDelete, onAdd, embedded = false }) => {
     const renderProtocolDetails = (protocol) => {
         if (type === 'stain') {
             return (
                 <div className="protocol-details">
-                    <p><strong>GUID:</strong> <code>{protocol.id}</code></p>
+                    {!embedded && (
+                        <p><strong>GUID:</strong> <code>{protocol.id}</code></p>
+                    )}
                     <p><strong>Description:</strong> {protocol.description || 'No description'}</p>
                     {protocol.stainType && protocol.stainType !== 'ignore' && (
                         <p><strong>Stain Type:</strong> {protocol.stainType}</p>
@@ -32,8 +33,13 @@ const ProtocolList = ({ protocols, type, onEdit, onDelete, onAdd }) => {
         } else {
             return (
                 <div className="protocol-details">
-                    <p><strong>GUID:</strong> <code>{protocol.id}</code></p>
+                    {!embedded && (
+                        <p><strong>GUID:</strong> <code>{protocol.id}</code></p>
+                    )}
                     <p><strong>Description:</strong> {protocol.description || 'No description'}</p>
+                    {protocol.abbreviation && (
+                        <p><strong>Abbreviation:</strong> {protocol.abbreviation}</p>
+                    )}
                     {protocol.regionType && protocol.regionType !== 'ignore' && (
                         <p><strong>Region Type:</strong> {protocol.regionType}</p>
                     )}
@@ -55,6 +61,12 @@ const ProtocolList = ({ protocols, type, onEdit, onDelete, onAdd }) => {
     };
 
     const getProtocolStatus = (protocol) => {
+        if (embedded) {
+            if (protocol.id === 'ignore') {
+                return { status: 'local', label: 'Local', className: 'status-local' };
+            }
+            return { status: 'synced', label: 'Catalog', className: 'status-synced' };
+        }
         if (protocol._localModified) {
             return { status: 'modified', label: 'Modified', className: 'status-modified' };
         }
@@ -68,16 +80,6 @@ const ProtocolList = ({ protocols, type, onEdit, onDelete, onAdd }) => {
 
     return (
         <div className="protocol-list">
-            <div className="protocol-list-header">
-                <h3>{type === 'stain' ? 'Stain' : 'Region'} Protocols</h3>
-                <p>
-                    {type === 'stain'
-                        ? 'Define staining protocols for different tissue types and targets.'
-                        : 'Define region protocols for different brain regions and anatomical landmarks.'
-                    }
-                </p>
-            </div>
-
             <div className="protocols-grid">
                 {protocols.map(protocol => {
                     const status = getProtocolStatus(protocol);

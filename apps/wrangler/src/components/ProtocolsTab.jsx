@@ -1,33 +1,66 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import ProtocolList from './ProtocolList';
 import ProtocolModal from './ProtocolModal';
+import SectioningProtocolsPanel from './SectioningProtocolsPanel';
 import protocolStore from '../utils/protocolStore';
 import schemaValidator from '../utils/schemaValidator';
 import dsaAuthStore from '../utils/dsaAuthStore';
+import bdsaCatalogService from '../utils/bdsaCatalogService';
 import './ProtocolsTab.css';
 
-const ProtocolsTab = () => {
+const ProtocolsTab = ({ embedded = false, onCatalogChanged }) => {
     const [activeSubTab, setActiveSubTab] = useState('stain');
     const [showModal, setShowModal] = useState(false);
     const [editingProtocol, setEditingProtocol] = useState(null);
     const [protocols, setProtocols] = useState({
-        stain: protocolStore.stainProtocols,
-        region: protocolStore.regionProtocols
+        stain: embedded ? [] : protocolStore.stainProtocols,
+        region: embedded ? [] : protocolStore.regionProtocols
     });
+    const [typeOptions, setTypeOptions] = useState({ stain: [], region: [] });
+    const [catalogError, setCatalogError] = useState('');
+    const [isLoadingCatalog, setIsLoadingCatalog] = useState(embedded);
     const [syncStatus, setSyncStatus] = useState({
         lastSync: protocolStore.lastSync,
         hasLocalChanges: false
     });
     const [isSyncing, setIsSyncing] = useState(false);
 
+    const notifyHost = useCallback(() => {
+        if (typeof onCatalogChanged === 'function') {
+            onCatalogChanged();
+        }
+    }, [onCatalogChanged]);
+
+    const loadCatalog = useCallback(async () => {
+        if (!embedded) return;
+        setIsLoadingCatalog(true);
+        setCatalogError('');
+        try {
+            const schemas = await bdsaCatalogService.loadSchemas();
+            const { stain, region } = await bdsaCatalogService.refreshProtocols();
+            setTypeOptions({
+                stain: schemas.stainOptions,
+                region: schemas.regionOptions
+            });
+            setProtocols({ stain, region });
+        } catch (error) {
+            setCatalogError(error.message || 'Failed to load catalog from this DSA node');
+        } finally {
+            setIsLoadingCatalog(false);
+        }
+    }, [embedded]);
+
     useEffect(() => {
-        // Load schemas for validation
         const loadSchemas = async () => {
             await schemaValidator.loadSchemas();
         };
         loadSchemas();
 
-        // Subscribe to protocol store changes
+        if (embedded) {
+            loadCatalog();
+            return undefined;
+        }
+
         const unsubscribe = protocolStore.subscribe(() => {
             setProtocols({
                 stain: protocolStore.stainProtocols,
@@ -41,7 +74,7 @@ const ProtocolsTab = () => {
         });
 
         return unsubscribe;
-    }, []);
+    }, [embedded, loadCatalog]);
 
     const handleAddProtocol = () => {
         setEditingProtocol(null);
@@ -54,38 +87,60 @@ const ProtocolsTab = () => {
     };
 
     const handleDeleteProtocol = async (id, type) => {
-        if (window.confirm('Are you sure you want to delete this protocol?')) {
-            if (type === 'stain') {
-                protocolStore.deleteStainProtocol(id);
-            } else {
-                protocolStore.deleteRegionProtocol(id);
-            }
-
-            // Auto-sync to DSA server after protocol deletion
-            await handleAutoSyncToDSA();
+        if (!window.confirm('Are you sure you want to delete this protocol?')) {
+            return;
         }
+
+        if (embedded) {
+            try {
+                if (type === 'stain') {
+                    await bdsaCatalogService.deleteStainProtocol(id);
+                } else {
+                    await bdsaCatalogService.deleteRegionProtocol(id);
+                }
+                notifyHost();
+                await loadCatalog();
+            } catch (error) {
+                alert(error.message || 'Failed to delete protocol');
+            }
+            return;
+        }
+
+        if (type === 'stain') {
+            protocolStore.deleteStainProtocol(id);
+        } else {
+            protocolStore.deleteRegionProtocol(id);
+        }
+        await handleAutoSyncToDSA();
     };
 
     const handleSaveProtocol = async (protocolData) => {
+        if (embedded) {
+            if (activeSubTab === 'stain') {
+                await bdsaCatalogService.saveStainProtocol(protocolData, editingProtocol?.id);
+            } else {
+                await bdsaCatalogService.saveRegionProtocol(protocolData, editingProtocol?.id);
+            }
+            notifyHost();
+            await loadCatalog();
+            setShowModal(false);
+            setEditingProtocol(null);
+            return;
+        }
+
         if (editingProtocol) {
-            // Update existing protocol
             if (activeSubTab === 'stain') {
                 protocolStore.updateStainProtocol(editingProtocol.id, protocolData);
             } else {
                 protocolStore.updateRegionProtocol(editingProtocol.id, protocolData);
             }
+        } else if (activeSubTab === 'stain') {
+            protocolStore.addStainProtocol(protocolData);
         } else {
-            // Add new protocol
-            if (activeSubTab === 'stain') {
-                protocolStore.addStainProtocol(protocolData);
-            } else {
-                protocolStore.addRegionProtocol(protocolData);
-            }
+            protocolStore.addRegionProtocol(protocolData);
         }
 
-        // Auto-sync to DSA server after protocol changes
         await handleAutoSyncToDSA();
-
         setShowModal(false);
         setEditingProtocol(null);
     };
@@ -98,16 +153,11 @@ const ProtocolsTab = () => {
     const handleAutoSyncToDSA = async () => {
         const authStatus = dsaAuthStore.getStatus();
 
-        // Only auto-sync if authenticated and configured
-        if (!authStatus.isAuthenticated || !authStatus.isConfigured) {
-            console.log('🔄 Auto-sync skipped: Not authenticated or configured with DSA');
+        if (!authStatus.isAuthenticated || !authStatus.isConfigured || authStatus.hostImported) {
             return;
         }
 
         try {
-            console.log('🔄 Auto-syncing protocols to DSA server...');
-
-            // Get DSA configuration
             const config = dsaAuthStore.getConfig();
             const dsaConfig = {
                 baseUrl: config.baseUrl,
@@ -115,21 +165,9 @@ const ProtocolsTab = () => {
                 metadataSyncTargetFolder: config.metadataSyncTargetFolder,
                 token: dsaAuthStore.getToken()
             };
-
-            // Sync protocols to DSA folder
-            const result = await protocolStore.syncWithDSA(dsaConfig);
-
-            if (result.success) {
-                console.log('✅ Auto-sync successful:', {
-                    stainProtocols: result.pushed?.stainProtocols || 0,
-                    regionProtocols: result.pushed?.regionProtocols || 0
-                });
-            } else {
-                console.warn('⚠️ Auto-sync failed:', result.error);
-            }
+            await protocolStore.syncWithDSA(dsaConfig);
         } catch (error) {
-            console.warn('⚠️ Auto-sync error:', error.message);
-            // Don't show error to user for auto-sync - it's background operation
+            console.warn('Auto-sync error:', error.message);
         }
     };
 
@@ -148,10 +186,7 @@ const ProtocolsTab = () => {
 
         setIsSyncing(true);
         try {
-            // Test connection first
             await dsaAuthStore.testConnection();
-
-            // Get DSA configuration
             const config = dsaAuthStore.getConfig();
             const dsaConfig = {
                 baseUrl: config.baseUrl,
@@ -159,10 +194,7 @@ const ProtocolsTab = () => {
                 metadataSyncTargetFolder: config.metadataSyncTargetFolder,
                 token: dsaAuthStore.getToken()
             };
-
-            // Sync protocols to DSA folder
             const result = await protocolStore.syncWithDSA(dsaConfig);
-
             if (result.success) {
                 alert(`Protocols synced successfully!\n\nPushed:\n- ${result.pushed.stainProtocols} stain protocols\n- ${result.pushed.regionProtocols} region protocols`);
             } else {
@@ -177,10 +209,8 @@ const ProtocolsTab = () => {
 
     const handleClearProtocols = () => {
         const confirmMessage = `Are you sure you want to clear all protocols?\n\nThis will remove:\n- ${protocols.stain.length} stain protocols\n- ${protocols.region.length} region protocols\n\nThis action cannot be undone.`;
-
         if (window.confirm(confirmMessage)) {
             protocolStore.resetToDefaults();
-            console.log('🧹 Cleared all protocols and reset to defaults');
         }
     };
 
@@ -199,10 +229,7 @@ const ProtocolsTab = () => {
 
         setIsSyncing(true);
         try {
-            // Test connection first
             await dsaAuthStore.testConnection();
-
-            // Get DSA configuration
             const config = dsaAuthStore.getConfig();
             const dsaConfig = {
                 baseUrl: config.baseUrl,
@@ -210,16 +237,10 @@ const ProtocolsTab = () => {
                 metadataSyncTargetFolder: config.metadataSyncTargetFolder,
                 token: dsaAuthStore.getToken()
             };
-
-            // Confirm before overwriting local protocols
-            const confirmMessage = 'This will overwrite your local protocols with the versions from the DSA server. Continue?';
-            if (!window.confirm(confirmMessage)) {
+            if (!window.confirm('This will overwrite your local protocols with the versions from the DSA server. Continue?')) {
                 return;
             }
-
-            // Pull protocols from DSA folder
             const result = await protocolStore.pullFromDSA(dsaConfig);
-
             if (result.success) {
                 if (result.pulled.stainProtocols > 0 || result.pulled.regionProtocols > 0) {
                     alert(`Protocols pulled successfully!\n\nPulled:\n- ${result.pulled.stainProtocols} stain protocols\n- ${result.pulled.regionProtocols} region protocols`);
@@ -237,52 +258,75 @@ const ProtocolsTab = () => {
     };
 
     const currentProtocols = activeSubTab === 'stain' ? protocols.stain : protocols.region;
+    const currentTypeOptions = activeSubTab === 'stain' ? typeOptions.stain : typeOptions.region;
 
     return (
         <div className="protocols-tab">
             <div className="protocols-header">
                 <div className="header-content">
                     <h2>Protocols</h2>
-                    <p>Manage stain and region protocols for BDSA schema compliance</p>
-                    <div className="sync-status">
-                        {syncStatus.lastSync && (
-                            <span className="last-sync">
-                                Last sync: {syncStatus.lastSync.toLocaleString()}
-                            </span>
-                        )}
-                        {syncStatus.hasLocalChanges && (
-                            <span className="local-changes">
-                                ⚠️ Local changes pending
-                            </span>
-                        )}
-                    </div>
+                    <p>
+                        {embedded
+                            ? 'Stain, region, and sectioning definitions on this DSA node'
+                            : 'Manage stain and region protocols for BDSA schema compliance'}
+                    </p>
+                    {!embedded && (
+                        <div className="sync-status">
+                            {syncStatus.lastSync && (
+                                <span className="last-sync">
+                                    Last sync: {syncStatus.lastSync.toLocaleString()}
+                                </span>
+                            )}
+                            {syncStatus.hasLocalChanges && (
+                                <span className="local-changes">
+                                    Local changes pending
+                                </span>
+                            )}
+                        </div>
+                    )}
+                    {embedded && catalogError && (
+                        <div className="local-changes">{catalogError}</div>
+                    )}
                 </div>
                 <div className="header-actions">
-                    <button
-                        className="sync-button"
-                        onClick={handlePullFromDSA}
-                        disabled={isSyncing}
-                        title="Pull protocols from DSA server"
-                    >
-                        {isSyncing ? '⏳' : '⬇️'} Pull from DSA
-                    </button>
-                    <button
-                        className={`sync-button ${syncStatus.hasLocalChanges ? 'has-changes' : ''}`}
-                        onClick={handleSyncWithDSA}
-                        disabled={isSyncing}
-                        title="Push protocols to DSA server"
-                    >
-                        {isSyncing ? '⏳' : '🔄'} Push to DSA
-                        {syncStatus.hasLocalChanges && !isSyncing && <span className="change-indicator">●</span>}
-                    </button>
-                    <button
-                        className="sync-button clear-button"
-                        onClick={handleClearProtocols}
-                        disabled={isSyncing}
-                        title="Clear all protocols and reset to defaults"
-                    >
-                        🧹 Clear Protocols
-                    </button>
+                    {embedded ? (
+                        <button
+                            className="sync-button"
+                            onClick={loadCatalog}
+                            disabled={isLoadingCatalog}
+                            title="Reload catalog from this DSA node"
+                        >
+                            {isLoadingCatalog ? 'Loading…' : 'Refresh'}
+                        </button>
+                    ) : (
+                        <>
+                            <button
+                                className="sync-button"
+                                onClick={handlePullFromDSA}
+                                disabled={isSyncing}
+                                title="Pull protocols from DSA server"
+                            >
+                                {isSyncing ? '⏳' : '⬇️'} Pull from DSA
+                            </button>
+                            <button
+                                className={`sync-button ${syncStatus.hasLocalChanges ? 'has-changes' : ''}`}
+                                onClick={handleSyncWithDSA}
+                                disabled={isSyncing}
+                                title="Push protocols to DSA server"
+                            >
+                                {isSyncing ? '⏳' : '🔄'} Push to DSA
+                                {syncStatus.hasLocalChanges && !isSyncing && <span className="change-indicator">●</span>}
+                            </button>
+                            <button
+                                className="sync-button clear-button"
+                                onClick={handleClearProtocols}
+                                disabled={isSyncing}
+                                title="Clear all protocols and reset to defaults"
+                            >
+                                🧹 Clear Protocols
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -299,24 +343,42 @@ const ProtocolsTab = () => {
                 >
                     Region Protocols ({protocols.region.length})
                 </button>
+                {embedded && (
+                    <button
+                        className={`nav-button ${activeSubTab === 'blocks' ? 'active' : ''}`}
+                        onClick={() => setActiveSubTab('blocks')}
+                    >
+                        Sectioning / Blocks
+                    </button>
+                )}
             </div>
 
             <div className="protocols-content">
-                <ProtocolList
-                    protocols={currentProtocols}
-                    type={activeSubTab}
-                    onEdit={handleEditProtocol}
-                    onDelete={handleDeleteProtocol}
-                    onAdd={handleAddProtocol}
-                />
+                {activeSubTab === 'blocks' && embedded ? (
+                    <SectioningProtocolsPanel
+                        regionTemplates={protocols.region.filter((protocol) => protocol.id !== 'ignore')}
+                        onCatalogChanged={notifyHost}
+                    />
+                ) : (
+                    <ProtocolList
+                        protocols={currentProtocols}
+                        type={activeSubTab}
+                        onEdit={handleEditProtocol}
+                        onDelete={handleDeleteProtocol}
+                        onAdd={handleAddProtocol}
+                        embedded={embedded}
+                    />
+                )}
             </div>
 
-            {showModal && (
+            {showModal && activeSubTab !== 'blocks' && (
                 <ProtocolModal
                     protocol={editingProtocol}
                     type={activeSubTab}
                     onSave={handleSaveProtocol}
                     onClose={handleCloseModal}
+                    embedded={embedded}
+                    typeOptions={embedded ? currentTypeOptions : null}
                 />
             )}
         </div>

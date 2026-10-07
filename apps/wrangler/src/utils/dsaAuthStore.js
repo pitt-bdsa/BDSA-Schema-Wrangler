@@ -17,6 +17,7 @@ class DsaAuthStore {
         this.userInfo = this.loadUserInfo();
         this.lastLogin = this.loadLastLogin();
         this.tokenExpiry = this.loadTokenExpiry();
+        this.hostImported = false;
         this.isAuthenticated = this.validateAuthentication();
     }
 
@@ -140,8 +141,8 @@ class DsaAuthStore {
             return false;
         }
 
-        // Check if token has expired (if we have expiry info)
-        if (this.tokenExpiry && new Date() > this.tokenExpiry) {
+        // Host-imported sessions are owned by the BDSA login; skip wrangler expiry.
+        if (!this.hostImported && this.tokenExpiry && new Date() > this.tokenExpiry) {
             console.log('Token has expired');
             this.logout();
             return false;
@@ -208,7 +209,67 @@ class DsaAuthStore {
         }
     }
 
+    /**
+     * Reuse the host BDSA Girder session. Does not replace host login.
+     * baseUrl must be the site origin plus /dsa (wrangler appends /api/v1).
+     */
+    importHostSession({ token, user, baseUrl }) {
+        this.hostImported = true;
+
+        if (!token) {
+            this.clearLocalSession();
+            return;
+        }
+
+        if (baseUrl) {
+            this.config.baseUrl = baseUrl;
+            this.saveConfig();
+        }
+
+        this.token = token;
+        this.userInfo = {
+            id: user?._id || user?.id,
+            name: user?.login || user?.firstName || user?.email || 'User',
+            email: user?.email,
+            login: user?.login
+        };
+        this.lastLogin = new Date();
+        this.tokenExpiry = null;
+        this.isAuthenticated = !!(this.token && this.config.baseUrl);
+
+        this.saveToken();
+        this.saveUserInfo();
+        this.saveLastLogin();
+        localStorage.removeItem(STORAGE_KEYS.TOKEN_EXPIRY);
+        this.notify();
+    }
+
+    /**
+     * Drop wrangler token keys only. Never DELETE Girder auth — that would
+     * log the user out of the host BDSA app.
+     */
+    clearLocalSession() {
+        this.token = '';
+        this.userInfo = null;
+        this.lastLogin = null;
+        this.tokenExpiry = null;
+        this.isAuthenticated = false;
+        this.hostImported = false;
+
+        localStorage.removeItem(STORAGE_KEYS.GIRDER_TOKEN);
+        localStorage.removeItem(STORAGE_KEYS.USER_INFO);
+        localStorage.removeItem(STORAGE_KEYS.LAST_LOGIN);
+        localStorage.removeItem(STORAGE_KEYS.TOKEN_EXPIRY);
+
+        this.notify();
+    }
+
     async logout() {
+        if (this.hostImported) {
+            this.clearLocalSession();
+            return;
+        }
+
         try {
             // If we have a token and server URL, try to logout from server
             if (this.token && this.config.baseUrl) {
@@ -224,20 +285,7 @@ class DsaAuthStore {
             // Continue with local logout even if server logout fails
         }
 
-        // Clear local state
-        this.token = '';
-        this.userInfo = null;
-        this.lastLogin = null;
-        this.tokenExpiry = null;
-        this.isAuthenticated = false;
-
-        // Clear localStorage
-        localStorage.removeItem(STORAGE_KEYS.GIRDER_TOKEN);
-        localStorage.removeItem(STORAGE_KEYS.USER_INFO);
-        localStorage.removeItem(STORAGE_KEYS.LAST_LOGIN);
-        localStorage.removeItem(STORAGE_KEYS.TOKEN_EXPIRY);
-
-        this.notify();
+        this.clearLocalSession();
     }
 
     async validateToken() {
@@ -256,11 +304,17 @@ class DsaAuthStore {
                 return true;
             } else {
                 console.log('Token validation failed, logging out');
+                if (this.hostImported) {
+                    return false;
+                }
                 this.logout();
                 return false;
             }
         } catch (error) {
             console.error('Token validation error:', error);
+            if (this.hostImported) {
+                return false;
+            }
             this.logout();
             return false;
         }
@@ -332,8 +386,11 @@ class DsaAuthStore {
             serverUrl: this.config.baseUrl,
             resourceId: this.config.resourceId,
             resourceType: this.config.resourceType,
+            resourceName: this.config.resourceName,
+            resourcePath: this.config.resourcePath,
             lastLogin: this.lastLogin,
-            tokenExpiry: this.tokenExpiry
+            tokenExpiry: this.tokenExpiry,
+            hostImported: this.hostImported
         };
     }
 

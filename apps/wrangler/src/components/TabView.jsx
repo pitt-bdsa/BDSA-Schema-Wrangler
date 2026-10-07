@@ -16,7 +16,7 @@ const TabView = ({ tabs, activeTab, onTabChange }) => {
                 ))}
             </div>
             <div className="tab-content">
-                {tabs[activeTab]?.component}
+                {tabs.find((tab) => tab.id === activeTab)?.component}
             </div>
         </div>
     );

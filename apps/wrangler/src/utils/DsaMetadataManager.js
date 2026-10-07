@@ -297,9 +297,14 @@ export const syncItemBdsaMetadata = async (baseUrl, item, girderToken, columnMap
         const bdsaRegionProtocolRefs = item.BDSA?.bdsaLocal?.bdsaRegionProtocol || [];
 
         // Resolve protocol references to NAMES for DSA storage (GUIDs are internal only)
-        const { default: protocolStore } = await import('./protocolStore.js');
-        const bdsaStainProtocol = resolveProtocolToNames(bdsaStainProtocolRefs, 'stain', protocolStore);
-        const bdsaRegionProtocol = resolveProtocolToNames(bdsaRegionProtocolRefs, 'region', protocolStore);
+        const { getStainProtocols, getRegionProtocols, ensureProtocolsLoaded } = await import('./protocolSource.js');
+        await ensureProtocolsLoaded();
+        const protocolLists = {
+            stainProtocols: getStainProtocols(),
+            regionProtocols: getRegionProtocols(),
+        };
+        const bdsaStainProtocol = resolveProtocolToNames(bdsaStainProtocolRefs, 'stain', protocolLists);
+        const bdsaRegionProtocol = resolveProtocolToNames(bdsaRegionProtocolRefs, 'region', protocolLists);
 
         console.log(`🔍 SYNC VALUES - Item ${itemId}:`, {
             localCaseId,
@@ -461,30 +466,24 @@ export const syncItemBdsaMetadata = async (baseUrl, item, girderToken, columnMap
  * @param {Object} processorRef - Reference to store processor instance
  * @returns {Promise<Object>} Sync result
  */
-export const syncAllBdsaMetadata = async (baseUrl, items, girderToken, columnMapping, progressCallback = null, processorRef = null) => {
-    console.log('Starting sync of BDSA metadata to DSA server:', {
-        itemCount: items.length,
-        baseUrl,
-        columnMapping
-    });
-
-    // Import DsaBatchProcessor dynamically to avoid circular dependencies
-    const { DsaBatchProcessor } = await import('./DsaBatchProcessor.js');
-
-    const processor = new DsaBatchProcessor(baseUrl, girderToken, {
-        batchSize: 5, // Conservative batch size
-        delayBetweenBatches: 1000, // 1 second between batches
-        retryAttempts: 3
-    });
-
-    // Store processor reference for cancellation
-    if (processorRef) {
-        processorRef.current = processor;
+export const persistBdsaLocalBulk = async (items, onProgress = null) => {
+    const { collectBdsaLocalUpdates } = await import('./hostCaseMatcher.js');
+    const { default: bdsaCatalogClient } = await import('./bdsaCatalogClient.js');
+    const updates = collectBdsaLocalUpdates(items);
+    if (updates.length === 0) {
+        return { success: true, updatedCount: 0, failedCount: 0, updated: [], failed: [] };
     }
+    return bdsaCatalogClient.postItemMetadataBulk(updates, { onProgress });
+};
 
-    if (progressCallback) {
-        processor.onProgress(progressCallback);
-    }
-
-    return await processor.processBatch(items, columnMapping, syncItemBdsaMetadata);
+export const syncAllBdsaMetadata = async (baseUrl, items, girderToken, columnMapping, progressCallback = null) => {
+    const bulk = await persistBdsaLocalBulk(items, progressCallback);
+    return {
+        success: (bulk.failedCount || 0) === 0,
+        successCount: bulk.updatedCount || 0,
+        errorCount: bulk.failedCount || 0,
+        updated: bulk.updated,
+        failed: bulk.failed,
+        totalItems: items.length,
+    };
 };

@@ -1,9 +1,13 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import dataStore from '../utils/dataStore';
+import { formatBdsaCaseId } from '../utils/bdsaCaseIdAllocator';
 
 const CaseIdMappingSection = ({
     bdsaInstitutionId,
     setBdsaInstitutionId,
+    institutionLocked = false,
+    institutionSource = '',
+    onSaveInstitutionId,
     filteredCaseIds,
     duplicateBdsaCaseIds,
     clearDuplicates,
@@ -17,19 +21,72 @@ const CaseIdMappingSection = ({
     caseIdFilter,
     setCaseIdFilter,
     generateAllCaseIds,
-    isGeneratingAll: isGenerating,
     handleSyncCaseIdMappingsToDSA,
     handlePullCaseIdMappingsFromDSA,
-    filteredCaseIds: caseIds,
     generateCaseId,
-    isGenerating: isGeneratingSingle,
+    isGenerating,
     sortField,
     sortDirection,
     handleSort,
-    getSortIcon
+    getSortIcon,
+    hostImported = false,
 }) => {
-    // Track the original institution ID value for confirmation
     const originalInstitutionId = useRef(bdsaInstitutionId);
+    const [draftInstitutionId, setDraftInstitutionId] = useState(bdsaInstitutionId);
+
+    useEffect(() => {
+        setDraftInstitutionId(bdsaInstitutionId);
+        originalInstitutionId.current = bdsaInstitutionId;
+    }, [bdsaInstitutionId]);
+    const [isUnlocking, setIsUnlocking] = useState(false);
+    const [isSavingInstitution, setIsSavingInstitution] = useState(false);
+    const exampleId = bdsaInstitutionId
+        ? formatBdsaCaseId(bdsaInstitutionId, 1, hostImported ? 'host' : 'wrangler')
+        : '';
+    const sourceLabel = institutionSource === 'collection'
+        ? 'this collection'
+        : institutionSource === 'server'
+            ? 'this BDSA server'
+            : 'this folder';
+    const showHostCaseColumn = hostImported && filteredCaseIds.some((caseId) => (
+        caseId.hostStatus === 'existing' || caseId.hostStatus === 'conflict'
+    ));
+
+    const requestUnlock = () => {
+        const confirmed = window.confirm(
+            `This Institution ID is stored on ${sourceLabel}. Changing it does not rewrite existing BDSA Case IDs, so new IDs can diverge.\n\nOnly change this if you know the stored value is wrong.`
+        );
+        if (!confirmed) return;
+        const typed = window.prompt(`Type the current Institution ID to unlock:\n${bdsaInstitutionId}`);
+        if (typed !== bdsaInstitutionId) {
+            if (typed != null) alert('Unlock cancelled. The typed value did not match.');
+            return;
+        }
+        setDraftInstitutionId(bdsaInstitutionId);
+        setIsUnlocking(true);
+    };
+
+    const saveInstitution = async () => {
+        const next = (isUnlocking ? draftInstitutionId : bdsaInstitutionId).trim();
+        if (!next) {
+            alert('Enter an Institution ID first.');
+            return;
+        }
+        setIsSavingInstitution(true);
+        try {
+            if (onSaveInstitutionId) {
+                await onSaveInstitutionId(next);
+            } else {
+                setBdsaInstitutionId(next);
+            }
+            originalInstitutionId.current = next;
+            setIsUnlocking(false);
+        } catch (error) {
+            alert(error.message || 'Could not save Institution ID');
+        } finally {
+            setIsSavingInstitution(false);
+        }
+    };
 
     return (
         <div className="case-id-mapping-content">
@@ -37,51 +94,62 @@ const CaseIdMappingSection = ({
             <div className="mapping-settings">
                 <div className="setting-group">
                     <label htmlFor="institution-id">BDSA Institution ID:</label>
-                    <input
-                        id="institution-id"
-                        type="text"
-                        value={bdsaInstitutionId}
-                        onChange={(e) => {
-                            // Just update the local state, don't trigger confirmation yet
-                            setBdsaInstitutionId(e.target.value);
-                        }}
-                        onBlur={(e) => {
-                            const newValue = e.target.value.trim();
-                            const originalValue = originalInstitutionId.current;
-
-                            // Only show confirmation if there's an actual change and original value exists
-                            if (originalValue && originalValue.trim() !== '' && newValue !== originalValue && newValue !== '') {
-                                const confirmMessage = `Are you sure you want to change the BDSA Institution ID from "${originalValue}" to "${newValue}"?\n\nThis will affect all future BDSA Case ID generation.`;
-                                if (!window.confirm(confirmMessage)) {
-                                    // Reset to original value if user cancels
-                                    setBdsaInstitutionId(originalValue);
-                                    e.target.value = originalValue;
-                                } else {
-                                    // Update the ref to the new value
-                                    originalInstitutionId.current = newValue;
-                                }
-                            } else if (newValue !== originalValue) {
-                                // Update the ref when value changes (even if no confirmation needed)
-                                originalInstitutionId.current = newValue;
-                            }
-                        }}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                e.target.blur(); // Trigger the blur handler
-                            }
-                        }}
-                        className="institution-id-input"
-                        placeholder="Auto-set from DSA collection (or enter manually)"
-                        style={{
-                            backgroundColor: bdsaInstitutionId ? '#f0f8ff' : '#fff',
-                            borderColor: bdsaInstitutionId ? '#4a90e2' : '#ccc'
-                        }}
-                    />
+                    {institutionLocked && !isUnlocking ? (
+                        <div className="institution-locked">
+                            <code className="institution-locked-value">{bdsaInstitutionId}</code>
+                            <button
+                                type="button"
+                                className="institution-change-btn"
+                                onClick={requestUnlock}
+                            >
+                                Change…
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="institution-edit">
+                            <input
+                                id="institution-id"
+                                type="text"
+                                value={isUnlocking ? draftInstitutionId : bdsaInstitutionId}
+                                onChange={(e) => {
+                                    if (isUnlocking) {
+                                        setDraftInstitutionId(e.target.value);
+                                    } else {
+                                        setBdsaInstitutionId(e.target.value);
+                                    }
+                                }}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') saveInstitution();
+                                }}
+                                className="institution-id-input"
+                                placeholder="e.g. BDSA02"
+                            />
+                            <button
+                                type="button"
+                                className="institution-save-btn"
+                                onClick={saveInstitution}
+                                disabled={isSavingInstitution}
+                            >
+                                {isSavingInstitution ? 'Saving…' : 'Save to folder'}
+                            </button>
+                            {isUnlocking && (
+                                <button
+                                    type="button"
+                                    className="institution-cancel-btn"
+                                    onClick={() => {
+                                        setIsUnlocking(false);
+                                        setDraftInstitutionId(bdsaInstitutionId);
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                            )}
+                        </div>
+                    )}
                     <small>
                         {bdsaInstitutionId
-                            ? `Used for generating BDSA Case IDs (e.g., BDSA-${bdsaInstitutionId}-0001)`
-                            : 'Will be auto-set when you pull data from DSA, or enter manually if needed'
-                        }
+                            ? `Stored on ${sourceLabel}. New IDs look like ${exampleId}.`
+                            : 'Set once on this folder or collection. After that it stays locked so IDs do not drift.'}
                     </small>
                 </div>
                 <div className="setting-group">
@@ -224,20 +292,24 @@ const CaseIdMappingSection = ({
                         >
                             🚀 Generate All
                         </button>
-                        <button
-                            className="dsa-sync-btn"
-                            onClick={handleSyncCaseIdMappingsToDSA}
-                            title="Push case ID mappings to DSA server"
-                        >
-                            🔄 Push to DSA
-                        </button>
-                        <button
-                            className="dsa-sync-btn"
-                            onClick={handlePullCaseIdMappingsFromDSA}
-                            title="Pull case ID mappings from DSA server"
-                        >
-                            ⬇️ Pull from DSA
-                        </button>
+                        {!hostImported && (
+                            <>
+                                <button
+                                    className="dsa-sync-btn"
+                                    onClick={handleSyncCaseIdMappingsToDSA}
+                                    title="Push case ID mappings to DSA server"
+                                >
+                                    🔄 Push to DSA
+                                </button>
+                                <button
+                                    className="dsa-sync-btn"
+                                    onClick={handlePullCaseIdMappingsFromDSA}
+                                    title="Pull case ID mappings from DSA server"
+                                >
+                                    ⬇️ Pull from DSA
+                                </button>
+                            </>
+                        )}
                     </div>
                 </div>
 
@@ -263,6 +335,7 @@ const CaseIdMappingSection = ({
                                 >
                                     Rows {getSortIcon('rowCount')}
                                 </th>
+                                {showHostCaseColumn && <th>Host case</th>}
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -308,14 +381,26 @@ const CaseIdMappingSection = ({
                                             )}
                                         </td>
                                         <td>{caseId.rowCount}</td>
+                                        {showHostCaseColumn && (
+                                            <td>
+                                                {(caseId.hostStatus === 'existing' || caseId.hostStatus === 'conflict') ? (
+                                                    <span
+                                                        className={`host-case-badge host-case-${caseId.hostStatus}`}
+                                                        title={caseId.hostReason || caseId.hostNetworkId || ''}
+                                                    >
+                                                        {caseId.hostStatus === 'existing' ? 'Existing' : 'Conflict'}
+                                                    </span>
+                                                ) : null}
+                                            </td>
+                                        )}
                                         <td>
                                             {!caseId.isMapped ? (
                                                 <button
                                                     className="generate-case-id-btn"
                                                     onClick={() => generateCaseId(caseId.localCaseId)}
-                                                    disabled={isGenerating}
+                                                    disabled={isGenerating || isGeneratingAll}
                                                 >
-                                                    {isGenerating ? '⏳' : '🚀'} Generate
+                                                    {isGenerating || isGeneratingAll ? '⏳' : '🚀'} Generate
                                                 </button>
                                             ) : (
                                                 <span className="mapped-indicator">

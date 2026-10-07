@@ -17,6 +17,7 @@ import bdsaInitializer from './BdsaInitializer.js';
 import columnMapper from './ColumnMapper.js';
 import accessoryDataMatcher from './AccessoryDataMatcher.js';
 import protocolStore from './protocolStore.js';
+import { allocateBdsaCaseIds, normalizeLocalCaseId } from './bdsaCaseIdAllocator.js';
 
 class DataStore {
     constructor() {
@@ -34,6 +35,7 @@ class DataStore {
 
         // Track if we're currently in a batch update to avoid excessive notifications
         this._batchUpdateMode = false;
+        this._caseIdAllocating = false;
 
         // DSA sync state
         this.syncInProgress = false;
@@ -487,15 +489,52 @@ class DataStore {
      * @param {string} localCaseId - The local case ID to update
      * @param {string|null} bdsaCaseId - The BDSA case ID to set, or null to clear
      */
+    generateBdsaCaseIds(institutionId, localCaseIds = null, options = {}) {
+        if (this._caseIdAllocating) {
+            return { success: false, error: 'Case ID generation is already running', assigned: [] };
+        }
+        this._caseIdAllocating = true;
+        try {
+            const { error, assignments } = allocateBdsaCaseIds(
+                this.processedData,
+                institutionId,
+                localCaseIds,
+                options
+            );
+            if (error) {
+                return { success: false, error, assigned: [] };
+            }
+            if (assignments.length === 0) {
+                return { success: true, assigned: [] };
+            }
+            this._batchUpdateMode = true;
+            assignments.forEach(({ localCaseId, bdsaCaseId }) => {
+                this.setCaseIdInData(localCaseId, bdsaCaseId);
+            });
+            this._batchUpdateMode = false;
+            this.initializeCaseIdMappingsFromData();
+            this.notify();
+            return { success: true, assigned: assignments };
+        } finally {
+            this._batchUpdateMode = false;
+            this._caseIdAllocating = false;
+        }
+    }
+
     setCaseIdInData(localCaseId, bdsaCaseId) {
         if (!this.processedData || this.processedData.length === 0) {
             return;
         }
 
-        console.log(`🔍 setCaseIdInData called: localCaseId="${localCaseId}", bdsaCaseId="${bdsaCaseId}"`);
+        const targetLocalId = normalizeLocalCaseId(localCaseId);
+        if (!targetLocalId) {
+            return;
+        }
+
+        console.log(`🔍 setCaseIdInData called: localCaseId="${targetLocalId}", bdsaCaseId="${bdsaCaseId}"`);
         let updatedCount = 0;
         this.processedData.forEach((item) => {
-            if (item.BDSA?.bdsaLocal?.localCaseId === localCaseId) {
+            if (normalizeLocalCaseId(item.BDSA?.bdsaLocal?.localCaseId) === targetLocalId) {
                 console.log(`🔧 Found matching item: localCaseId="${item.BDSA?.bdsaLocal?.localCaseId}", current bdsaCaseId="${item.BDSA?.bdsaLocal?.bdsaCaseId}"`);
                 if (!item.BDSA) {
                     item.BDSA = {};
@@ -531,28 +570,19 @@ class DataStore {
 
         if (updatedCount > 0) {
             const action = bdsaCaseId ? `Set` : `Cleared`;
-            const value = bdsaCaseId ? `${localCaseId} -> ${bdsaCaseId}` : localCaseId;
+            const value = bdsaCaseId ? `${targetLocalId} -> ${bdsaCaseId}` : targetLocalId;
             console.log(`${action} case ID ${value} for ${updatedCount} items`);
-            console.log(`🔍 Added ${updatedCount} items to modifiedItems. Total modified: ${this.modifiedItems.size}`);
 
-            // Update the caseIdMappings Map to keep it in sync
             if (bdsaCaseId) {
-                this.caseIdMappings.set(localCaseId, bdsaCaseId);
-                console.log(`✅ Updated caseIdMappings: ${localCaseId} -> ${bdsaCaseId}`);
+                this.caseIdMappings.set(targetLocalId, bdsaCaseId);
             } else {
-                this.caseIdMappings.delete(localCaseId);
-                console.log(`🗑️ Removed ${localCaseId} from caseIdMappings`);
+                this.caseIdMappings.delete(targetLocalId);
             }
 
-            // Re-initialize case ID mappings to update the UI with new mappings
-            this.initializeCaseIdMappingsFromData();
-
-            // Notify UI of changes (proxy is disabled, so we need to call this explicitly)
-            this.notify();
-
-            // Skip saveToStorage() for large datasets to avoid quota errors
-            // Data will be persisted via export/sync instead
-            // this.saveToStorage();
+            if (!this._batchUpdateMode) {
+                this.initializeCaseIdMappingsFromData();
+                this.notify();
+            }
         }
     }
 

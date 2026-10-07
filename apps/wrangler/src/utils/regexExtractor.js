@@ -1,109 +1,117 @@
 /**
- * Utility functions for extracting data using regex rules
+ * Unified regex extraction: one patterns[] format, one apply path.
  */
 
 import { DEFAULT_REGEX_RULES } from './constants.js';
 
-/**
- * Apply regex rules to extract localCaseId, localStainID, and localRegionId from file names
- * @param {Array} data - Array of data items
- * @param {Object} regexRules - Object containing regex patterns for each field
- * @param {Object} columnMapping - Object mapping field names to column names
- * @returns {Array} - Array of data items with extracted values
- */
-export const applyRegexRules = (data, regexRules, columnMapping = {}) => {
-    console.log('applyRegexRules called with:', {
-        dataLength: data?.length,
-        regexRules: regexRules,
-        columnMapping: columnMapping,
-        hasData: !!data,
-        isArray: Array.isArray(data)
-    });
+export const REGEX_TARGET_FIELDS = ['localCaseId', 'localStainID', 'localRegionId', 'localImageType'];
 
-    if (!data || !Array.isArray(data) || !regexRules) {
-        console.log('applyRegexRules: Early return due to missing data or rules');
-        return data;
+function isEmptyValue(value) {
+    return value == null || value === '' || value === '0';
+}
+
+function shouldWriteField(currentValue, currentSource, forceOverride) {
+    if (isEmptyValue(currentValue)) return true;
+    return Boolean(forceOverride) && currentSource !== 'manual' && currentSource !== 'column_mapping';
+}
+
+function ensureBdsa(item) {
+    if (!item.BDSA) {
+        item.BDSA = {
+            bdsaLocal: {},
+            _dataSource: {},
+            _lastModified: new Date().toISOString()
+        };
+    }
+    if (!item.BDSA.bdsaLocal) {
+        item.BDSA.bdsaLocal = {};
+    }
+    if (!item.BDSA._dataSource) {
+        item.BDSA._dataSource = {};
+    }
+}
+
+function toPattern(entry, index, fallbackId) {
+    return {
+        id: entry.id || fallbackId || `pattern-${index + 1}`,
+        name: entry.name || `Pattern ${index + 1}`,
+        pattern: entry.pattern || '',
+        description: entry.description || '',
+        example: entry.example || '',
+        priority: Number.isFinite(Number(entry.priority)) ? Number(entry.priority) : index + 1,
+        enabled: entry.enabled !== false,
+        ...(entry.field && REGEX_TARGET_FIELDS.includes(entry.field) ? { field: entry.field } : {}),
+    };
+}
+
+/**
+ * Convert any historical rule shape into { patterns: [...] }.
+ */
+export function normalizeRegexRules(raw) {
+    if (!raw || typeof raw !== 'object') {
+        return { patterns: [] };
     }
 
-    return data.map((item, index) => {
-        const fileName = item.name || item.dsa_name || '';
-        const updatedItem = { ...item };
+    if (Array.isArray(raw.patterns)) {
+        return {
+            patterns: raw.patterns
+                .filter((entry) => entry && typeof entry === 'object')
+                .map((entry, index) => toPattern(entry, index))
+                .sort((a, b) => a.priority - b.priority),
+        };
+    }
 
-        // Initialize BDSA object if it doesn't exist
-        if (!updatedItem.BDSA) {
-            updatedItem.BDSA = {};
-        }
-        if (!updatedItem.BDSA.bdsaLocal) {
-            updatedItem.BDSA.bdsaLocal = {};
-        }
-        if (!updatedItem.BDSA._dataSource) {
-            updatedItem.BDSA._dataSource = {};
-        }
+    const patterns = [];
+    let priority = 1;
 
-        // Track which fields were extracted by regex vs pre-populated from source
-        const regexExtracted = {};
-        const dataSource = {};
+    if (raw.primaryPattern?.pattern) {
+        patterns.push(toPattern({
+            ...raw.primaryPattern,
+            id: raw.primaryPattern.id || 'primary-pattern',
+            name: raw.primaryPattern.name || 'Primary pattern',
+            priority,
+        }, 0, 'primary-pattern'));
+        priority += 1;
+    }
 
-        // Process each field type
-        const fieldMappings = [
-            { field: 'localCaseId', sourceColumn: columnMapping.localCaseId },
-            { field: 'localStainID', sourceColumn: columnMapping.localStainID },
-            { field: 'localRegionId', sourceColumn: columnMapping.localRegionId },
-            { field: 'localImageType', sourceColumn: columnMapping.localImageType }
-        ];
-
-        fieldMappings.forEach(({ field, sourceColumn }) => {
-            const regexRule = regexRules[field];
-
-            // Check if we have a source column for this field
-            const hasSourceColumn = sourceColumn && sourceColumn.trim() !== '';
-            const sourceValue = hasSourceColumn ? item[sourceColumn] : null;
-
-            // Pre-populate BDSA field from source data if available and not empty
-            if (hasSourceColumn && sourceValue && sourceValue !== '' && sourceValue !== '0') {
-                updatedItem.BDSA.bdsaLocal[field] = sourceValue;
-                updatedItem.BDSA._dataSource[field] = 'column_mapping';
-                dataSource[field] = 'column_mapping';
-                console.log(`✅ Pre-populated ${field} from source column ${sourceColumn}: ${sourceValue}`);
-            }
-
-            // Only apply regex if:
-            // 1. The BDSA field is still empty/null after source column check
-            // 2. A regex rule is defined for this field
-            const currentValue = updatedItem.BDSA.bdsaLocal[field];
-            if ((!currentValue || currentValue === '' || currentValue === '0') && regexRule?.pattern) {
-                const extractedValue = extractWithRegex(fileName, regexRule.pattern);
-                if (extractedValue) {
-                    updatedItem.BDSA.bdsaLocal[field] = extractedValue;
-                    updatedItem.BDSA._dataSource[field] = 'regex';
-                    regexExtracted[field] = true;
-                    dataSource[field] = 'regex';
-                    console.log(`Applied regex to ${field}: ${extractedValue}`);
-                }
-            }
+    if (raw.fallbackPatterns && typeof raw.fallbackPatterns === 'object') {
+        Object.entries(raw.fallbackPatterns).forEach(([field, rule]) => {
+            if (!rule?.pattern || !REGEX_TARGET_FIELDS.includes(field)) return;
+            patterns.push(toPattern({
+                ...rule,
+                id: rule.id || `fallback-${field}`,
+                name: rule.name || `${field} fallback`,
+                priority,
+                field,
+            }, patterns.length, `fallback-${field}`));
+            priority += 1;
         });
+    }
 
-        // Add metadata for tracking
-        updatedItem._regexExtracted = regexExtracted;
-        updatedItem._dataSource = dataSource;
+    if (!raw.primaryPattern && !raw.fallbackPatterns) {
+        REGEX_TARGET_FIELDS.forEach((field) => {
+            const rule = raw[field];
+            if (!rule?.pattern) return;
+            patterns.push(toPattern({
+                ...rule,
+                id: rule.id || `field-${field}`,
+                name: rule.name || field,
+                priority,
+                field,
+            }, patterns.length, `field-${field}`));
+            priority += 1;
+        });
+    }
 
-        // Mark item as modified if any BDSA fields were updated
-        const hasBdsaChanges = Object.keys(regexExtracted).some(field => regexExtracted[field]) ||
-            Object.keys(dataSource).some(field => dataSource[field]);
-        if (hasBdsaChanges) {
-            updatedItem._localLastModified = new Date().toISOString();
-        }
+    return { patterns };
+}
 
-        return updatedItem;
-    });
-};
+export function getEnabledPatterns(rules) {
+    return normalizeRegexRules(rules).patterns.filter(
+        (pattern) => pattern.enabled && pattern.pattern && pattern.pattern.trim() !== ''
+    );
+}
 
-/**
- * Extract value from string using regex pattern
- * @param {string} text - Text to extract from
- * @param {string} pattern - Regex pattern
- * @returns {string|null} - Extracted value or null if no match
- */
 export const extractWithRegex = (text, pattern) => {
     if (!text || !pattern) {
         return null;
@@ -112,24 +120,162 @@ export const extractWithRegex = (text, pattern) => {
     try {
         const regex = new RegExp(pattern);
         const match = text.match(regex);
-
-        if (match) {
-            // Return the first capture group if it exists, otherwise the full match
-            return match[1] || match[0];
-        }
-        return null;
+        if (!match) return null;
+        return match[1] || match[0];
     } catch (error) {
         console.error('Regex extraction error:', error);
         return null;
     }
 };
 
+export function matchFilename(fileName, pattern) {
+    if (!fileName || !pattern) return null;
+    try {
+        return fileName.match(new RegExp(pattern));
+    } catch (error) {
+        console.error('Regex extraction error:', error);
+        return null;
+    }
+}
+
+export function testPatternAgainstFilename(pattern, fileName, field = null) {
+    if (!pattern || !fileName) return null;
+    try {
+        const match = fileName.match(new RegExp(pattern));
+        if (!match) return null;
+        if (match.groups && Object.keys(match.groups).length > 0) {
+            return match.groups;
+        }
+        if (field) {
+            return { [field]: match[1] || match[0] };
+        }
+        return { match: match[1] || match[0] };
+    } catch (error) {
+        return { error: error.message };
+    }
+}
+
+function writeExtracted(item, field, extractedValue) {
+    const currentValue = item.BDSA.bdsaLocal[field];
+    const changed = currentValue !== extractedValue;
+    item.BDSA.bdsaLocal[field] = extractedValue;
+    item.BDSA._dataSource[field] = 'regex';
+    item.BDSA._lastModified = new Date().toISOString();
+    return changed;
+}
+
 /**
- * Test regex pattern against sample data
- * @param {string} pattern - Regex pattern to test
- * @param {Array} sampleData - Array of sample data items
- * @returns {Object} - Test results
+ * Apply normalized patterns to items in place.
+ * Named-group patterns: first match wins for that file.
+ * Field-scoped fallbacks keep filling other empty target fields.
  */
+export function applyRegexRulesToItems(items, rules, {
+    forceOverride = false,
+    markAsModified = true,
+    modifiedItems = null,
+} = {}) {
+    if (!items || !Array.isArray(items) || items.length === 0) {
+        return {
+            success: false,
+            error: 'No data available',
+            extractedCount: 0,
+            updatedItems: 0,
+            skippedItems: 0,
+            totalItems: 0,
+        };
+    }
+
+    const enabled = getEnabledPatterns(rules);
+    if (enabled.length === 0) {
+        return {
+            success: false,
+            error: 'No regex patterns defined. Please add some patterns first.',
+            extractedCount: 0,
+            updatedItems: 0,
+            skippedItems: 0,
+            totalItems: items.length,
+        };
+    }
+
+    let extractedCount = 0;
+    let skippedCount = 0;
+
+    items.forEach((item) => {
+        const fileName = item.name || item.dsa_name || '';
+        ensureBdsa(item);
+        let itemUpdated = false;
+        let valueChanged = false;
+        let usedNamedGroupPattern = false;
+
+        enabled.forEach((pattern) => {
+            if (usedNamedGroupPattern) return;
+            const match = matchFilename(fileName, pattern.pattern);
+            if (!match) return;
+
+            const namedGroups = match.groups
+                ? Object.entries(match.groups).filter(([field, value]) => (
+                    REGEX_TARGET_FIELDS.includes(field) && value
+                ))
+                : [];
+
+            if (namedGroups.length > 0) {
+                namedGroups.forEach(([field, extractedValue]) => {
+                    const currentValue = item.BDSA.bdsaLocal[field];
+                    const currentSource = item.BDSA._dataSource[field];
+                    if (!shouldWriteField(currentValue, currentSource, forceOverride)) return;
+                    if (writeExtracted(item, field, extractedValue)) {
+                        valueChanged = true;
+                    }
+                    itemUpdated = true;
+                });
+                usedNamedGroupPattern = true;
+                return;
+            }
+
+            if (pattern.field && REGEX_TARGET_FIELDS.includes(pattern.field)) {
+                const extractedValue = match[1] || match[0];
+                if (!extractedValue) return;
+                const currentValue = item.BDSA.bdsaLocal[pattern.field];
+                const currentSource = item.BDSA._dataSource[pattern.field];
+                if (!shouldWriteField(currentValue, currentSource, forceOverride)) return;
+                if (writeExtracted(item, pattern.field, extractedValue)) {
+                    valueChanged = true;
+                }
+                itemUpdated = true;
+            }
+        });
+
+        if (itemUpdated) {
+            extractedCount += 1;
+            if (markAsModified && valueChanged && modifiedItems) {
+                const itemId = item.id || item._id || item.dsa_id;
+                if (itemId) {
+                    modifiedItems.add(itemId);
+                }
+            }
+        } else {
+            skippedCount += 1;
+        }
+    });
+
+    return {
+        success: true,
+        extractedCount,
+        updatedItems: extractedCount,
+        skippedItems: skippedCount,
+        totalItems: items.length,
+    };
+}
+
+/** In-place apply used by older transform callers. */
+export const applyRegexRules = (data, regexRules) => {
+    if (!data || !Array.isArray(data) || !regexRules) {
+        return data;
+    }
+    applyRegexRulesToItems(data, regexRules, { markAsModified: false, forceOverride: false });
+    return data;
+};
+
 export const testRegexPattern = (pattern, sampleData) => {
     if (!pattern || !sampleData || !Array.isArray(sampleData)) {
         return { success: false, error: 'Invalid input' };
@@ -154,7 +300,7 @@ export const testRegexPattern = (pattern, sampleData) => {
         });
 
         if (extracted !== null) {
-            results.matches++;
+            results.matches += 1;
         }
     });
 
@@ -162,19 +308,8 @@ export const testRegexPattern = (pattern, sampleData) => {
     return results;
 };
 
-/**
- * Get default regex rules for common filename patterns
- * @returns {Object} - Default regex rules
- */
-export const getDefaultRegexRules = () => {
-    return DEFAULT_REGEX_RULES;
-};
+export const getDefaultRegexRules = () => normalizeRegexRules(DEFAULT_REGEX_RULES);
 
-/**
- * Validate regex pattern
- * @param {string} pattern - Regex pattern to validate
- * @returns {Object} - Validation result
- */
 export const validateRegexPattern = (pattern) => {
     if (!pattern) {
         return { valid: false, error: 'Pattern is required' };
@@ -188,17 +323,12 @@ export const validateRegexPattern = (pattern) => {
     }
 };
 
-/**
- * Get suggested patterns based on sample data analysis
- * @param {Array} sampleData - Array of sample data items
- * @returns {Object} - Suggested patterns for each field
- */
 export const getSuggestedPatterns = (sampleData) => {
     if (!sampleData || !Array.isArray(sampleData) || sampleData.length === 0) {
         return getDefaultRegexRules();
     }
 
-    const suggestions = {
+    return {
         localCaseId: [
             { pattern: '^(\\d+-\\d+)', description: 'Match digits-digits at start (e.g., 05-662)' },
             { pattern: '^(\\d{2}-\\d{3})', description: 'Match exactly 2 digits, dash, 3 digits' },
@@ -215,6 +345,4 @@ export const getSuggestedPatterns = (sampleData) => {
             { pattern: '-(\\w+)_\\w+\\.', description: 'Match word between dash and underscore before extension' }
         ]
     };
-
-    return suggestions;
 };

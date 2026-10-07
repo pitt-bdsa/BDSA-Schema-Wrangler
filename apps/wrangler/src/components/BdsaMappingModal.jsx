@@ -151,7 +151,9 @@ const BdsaMappingModal = ({ isOpen, onClose, onSave, currentMappings, availableC
 
                 <div className="bdsa-mapping-modal-body">
                     <p className="bdsa-mapping-description">
-                        Designate which columns represent your local identifiers for mapping to BDSA schema standards.
+                        Optional. Point local case, stain, or region at an existing column — including
+                        item metadata already on the DSA item. Skip this if filename regex already
+                        filled those fields; regex writes them to <code>meta.BDSA.bdsaLocal</code> directly.
                     </p>
 
                     <div className="bdsa-mapping-fields">
