@@ -126,6 +126,8 @@ class ProtocolCaseGenerator {
                 casesMap.set(bdsaCaseId, {
                     bdsaId: bdsaCaseId,
                     localCaseId: localCaseId,
+                    sectioningProtocolId: bdsaLocal.bdsaSectioningProtocolId || '',
+                    sectioningProtocolName: bdsaLocal.bdsaSectioningProtocol || '',
                     slides: [],
                     unmappedSlides: [],
                     totalSlides: 0,

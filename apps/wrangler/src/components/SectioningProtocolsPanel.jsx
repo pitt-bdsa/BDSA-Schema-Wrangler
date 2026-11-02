@@ -155,9 +155,14 @@ const SectioningProtocolsPanel = ({ regionTemplates = [], onCatalogChanged }) =>
     return (
         <div className="protocol-list">
             {error && <div className="sectioning-error">{error}</div>}
+            <div className="sectioning-empty">
+                A sectioning protocol is the blocking recipe for a case workup.
+                It owns blocks. Each block lists region definitions sampled from that block.
+                Region definitions are the anatomy catalog, not this protocol.
+            </div>
             {templates.length === 0 && (
                 <div className="sectioning-empty">
-                    Create at least one region protocol before adding blocks.
+                    Add region definitions first. Blocks choose from those regions.
                 </div>
             )}
 

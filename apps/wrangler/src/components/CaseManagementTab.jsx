@@ -15,6 +15,7 @@ import {
     persistInstitutionId,
 } from '../utils/bdsaCaseIdAllocator';
 import { applyHostCaseMatches } from '../utils/hostCaseMatcher';
+import bdsaCatalogService from '../utils/bdsaCatalogService';
 
 const CaseManagementTab = ({ embedded = false }) => {
     const [activeSubTab, setActiveSubTab] = useState('case-id-mapping');
@@ -29,9 +30,11 @@ const CaseManagementTab = ({ embedded = false }) => {
     const [sortDirection, setSortDirection] = useState('asc');
     const [isGenerating, setIsGenerating] = useState(false);
     const [isGeneratingAll, setIsGeneratingAll] = useState(false);
-    const [generateAllProgress, setGenerateAllProgress] = useState({ current: 0, total: 0 });
+    const [generateAllProgress, setGenerateAllProgress] = useState({ current: 0, total: 0, label: '' });
     const [hostCaseIndex, setHostCaseIndex] = useState(null);
     const [resourceId, setResourceId] = useState(() => dsaAuthStore.getConfig().resourceId || '');
+    const [sectioningProtocols, setSectioningProtocols] = useState([]);
+    const [isSavingSectioningProtocol, setIsSavingSectioningProtocol] = useState(false);
 
     // Subscribe to data store updates
     useEffect(() => {
@@ -56,6 +59,30 @@ const CaseManagementTab = ({ embedded = false }) => {
     }, []);
 
     const hostImported = embedded || dsaAuthStore.hostImported;
+
+    useEffect(() => {
+        if (!hostImported) {
+            setSectioningProtocols([]);
+            return undefined;
+        }
+        if (activeSubTab !== 'case-id-mapping') {
+            return undefined;
+        }
+        let cancelled = false;
+        (async () => {
+            try {
+                const catalog = await bdsaCatalogService.listSectioningCatalog();
+                if (!cancelled) {
+                    setSectioningProtocols(catalog.protocols || []);
+                }
+            } catch (error) {
+                console.warn('Could not load sectioning protocols:', error.message);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [hostImported, activeSubTab]);
 
     const getMetadataTarget = () => {
         const config = dsaAuthStore.getConfig();
@@ -213,21 +240,49 @@ const CaseManagementTab = ({ embedded = false }) => {
             });
 
             const caseIdMappings = new Map();
+            const sectioningByCase = new Map();
             dataStatus.processedData?.forEach((item) => {
                 const localCaseId = normalizeLocalCaseId(item.BDSA?.bdsaLocal?.localCaseId);
                 const bdsaCaseId = item.BDSA?.bdsaLocal?.bdsaCaseId;
                 if (localCaseId && bdsaCaseId && String(bdsaCaseId).trim()) {
                     caseIdMappings.set(localCaseId, String(bdsaCaseId).trim());
                 }
+                if (!localCaseId) {
+                    return;
+                }
+                const protocolId = String(item.BDSA?.bdsaLocal?.bdsaSectioningProtocolId || '').trim();
+                const protocolName = String(item.BDSA?.bdsaLocal?.bdsaSectioningProtocol || '').trim();
+                const current = sectioningByCase.get(localCaseId);
+                if (!current) {
+                    sectioningByCase.set(localCaseId, {
+                        id: protocolId,
+                        name: protocolName,
+                        mixed: false,
+                    });
+                    return;
+                }
+                if ((current.id || '') !== protocolId || (current.name || '') !== protocolName) {
+                    current.mixed = true;
+                    if (!current.id && !current.name && (protocolId || protocolName)) {
+                        current.id = protocolId;
+                        current.name = protocolName;
+                    }
+                }
             });
 
             const allCases = Object.entries(caseIdCounts)
-                .map(([caseId, count]) => ({
-                    localCaseId: caseId,
-                    rowCount: count,
-                    bdsaCaseId: caseIdMappings.get(caseId) || null,
-                    isMapped: Boolean(caseIdMappings.get(caseId))
-                }));
+                .map(([caseId, count]) => {
+                    const sectioning = sectioningByCase.get(caseId) || {};
+                    return {
+                        localCaseId: caseId,
+                        rowCount: count,
+                        bdsaCaseId: caseIdMappings.get(caseId) || null,
+                        isMapped: Boolean(caseIdMappings.get(caseId)),
+                        sectioningProtocolId: sectioning.id || '',
+                        sectioningProtocolName: sectioning.name || '',
+                        sectioningProtocolMixed: Boolean(sectioning.mixed),
+                    };
+                });
 
             // Always provide a stable sort to prevent rows from jumping around during edits
             if (sortField) {
@@ -444,7 +499,85 @@ const CaseManagementTab = ({ embedded = false }) => {
         extraTakenIds: hostCaseIndex ? Array.from(hostCaseIndex.byNetwork.keys()) : [],
     });
 
-    const generateCaseId = (localCaseId) => {
+    const persistItemsForLocalCases = async (localCaseIds, onProgress) => {
+        const assignedLocals = new Set(
+            (localCaseIds || []).map((localCaseId) => normalizeLocalCaseId(localCaseId)).filter(Boolean)
+        );
+        if (assignedLocals.size === 0) {
+            return { updatedCount: 0, failedCount: 0 };
+        }
+        const items = (dataStore.processedData || []).filter((item) => (
+            assignedLocals.has(normalizeLocalCaseId(item.BDSA?.bdsaLocal?.localCaseId))
+        ));
+        if (items.length === 0) {
+            return { updatedCount: 0, failedCount: 0 };
+        }
+        const { persistBdsaLocalBulk } = await import('../utils/DsaMetadataManager.js');
+        const result = await persistBdsaLocalBulk(items, onProgress);
+        (result.updated || []).forEach((itemId) => dataStore.modifiedItems.delete(itemId));
+        dataStore.notify();
+        return result;
+    };
+
+    const persistAssignedCaseIds = async (assignments, onProgress) => {
+        if (!assignments?.length) {
+            return { updatedCount: 0, failedCount: 0 };
+        }
+        return persistItemsForLocalCases(
+            assignments.map((assignment) => assignment.localCaseId),
+            onProgress
+        );
+    };
+
+    const handleSetSectioningProtocol = async (localCaseId, protocol) => {
+        dataStore.setSectioningProtocolInData(localCaseId, protocol);
+        if (!hostImported) {
+            return;
+        }
+        setIsSavingSectioningProtocol(true);
+        try {
+            const persist = await persistItemsForLocalCases([localCaseId]);
+            if (persist.failedCount) {
+                alert(`Saved the blocking protocol locally, but ${persist.failedCount} slide(s) failed to write to this DSA node.`);
+            }
+        } catch (error) {
+            alert(error.message || 'Failed to save the blocking protocol to this DSA node.');
+        } finally {
+            setIsSavingSectioningProtocol(false);
+        }
+    };
+
+    const handleApplySectioningProtocolToAll = async (protocol) => {
+        const cases = getUniqueCaseIds();
+        if (cases.length === 0) {
+            return;
+        }
+        const label = protocol?.name || 'this blocking protocol';
+        const confirmed = window.confirm(
+            `Apply “${label}” as the blocking protocol for all ${cases.length} cases?\n\nSlide-level BDSA Region values are not changed.`
+        );
+        if (!confirmed) {
+            return;
+        }
+        const localCaseIds = cases.map((caseData) => caseData.localCaseId);
+        dataStore.setSectioningProtocolForCases(localCaseIds, protocol);
+        if (!hostImported) {
+            return;
+        }
+        setIsSavingSectioningProtocol(true);
+        try {
+            const persist = await persistItemsForLocalCases(localCaseIds);
+            if (persist.failedCount) {
+                alert(`Applied the blocking protocol locally, but ${persist.failedCount} slide(s) failed to write to this DSA node.`);
+            }
+        } catch (error) {
+            alert(error.message || 'Failed to save the blocking protocol to this DSA node.');
+        } finally {
+            setIsSavingSectioningProtocol(false);
+        }
+    };
+
+    const generateCaseId = async (localCaseId) => {
         if (!bdsaInstitutionId || bdsaInstitutionId.trim() === '') {
             alert('Set the BDSA Institution ID on this folder or collection before generating case IDs.');
             return;
@@ -458,18 +591,25 @@ const CaseManagementTab = ({ embedded = false }) => {
             }
             if (result.assigned.length > 0) {
                 resetTemporaryFilter();
+                const persist = await persistAssignedCaseIds(result.assigned);
+                if (persist.failedCount) {
+                    alert(`Generated ${result.assigned.length} Case ID(s), but ${persist.failedCount} slide(s) failed to save to this DSA node.`);
+                }
             }
+        } catch (error) {
+            alert(error.message || 'Failed to save generated Case IDs to this DSA node.');
         } finally {
             setIsGenerating(false);
         }
     };
 
-    const generateAllCaseIds = () => {
+    const generateAllCaseIds = async () => {
         if (!bdsaInstitutionId || bdsaInstitutionId.trim() === '') {
             alert('Set the BDSA Institution ID on this folder or collection before generating case IDs.');
             return;
         }
         setIsGeneratingAll(true);
+        setGenerateAllProgress({ current: 0, total: 0, label: 'Generating BDSA Case IDs...' });
         try {
             const result = dataStore.generateBdsaCaseIds(bdsaInstitutionId, null, generateOptions());
             if (!result.success) {
@@ -478,10 +618,22 @@ const CaseManagementTab = ({ embedded = false }) => {
             }
             if (result.assigned.length > 0) {
                 resetTemporaryFilter();
+                const persist = await persistAssignedCaseIds(result.assigned, (progress) => {
+                    setGenerateAllProgress({
+                        current: progress.current || 0,
+                        total: progress.total || 0,
+                        label: 'Saving Case IDs to this DSA node...',
+                    });
+                });
+                if (persist.failedCount) {
+                    alert(`Generated ${result.assigned.length} Case IDs. Saved ${persist.updatedCount} slides; ${persist.failedCount} failed.`);
+                }
             }
+        } catch (error) {
+            alert(error.message || 'Failed to save generated Case IDs to this DSA node.');
         } finally {
             setIsGeneratingAll(false);
-            setGenerateAllProgress({ current: 0, total: 0 });
+            setGenerateAllProgress({ current: 0, total: 0, label: '' });
         }
     };
 
@@ -735,7 +887,7 @@ const CaseManagementTab = ({ embedded = false }) => {
                     className={`sub-tab-btn ${activeSubTab === 'region-protocol-mapping' ? 'active' : ''}`}
                     onClick={() => setActiveSubTab('region-protocol-mapping')}
                 >
-                    Region Protocol Mapping
+                    Region Mapping
                 </button>
             </div>
 
@@ -769,6 +921,10 @@ const CaseManagementTab = ({ embedded = false }) => {
                     handleSort={handleSort}
                     getSortIcon={getSortIcon}
                     hostImported={embedded || dsaAuthStore.hostImported}
+                    sectioningProtocols={sectioningProtocols}
+                    onSetSectioningProtocol={handleSetSectioningProtocol}
+                    onApplySectioningProtocolToAll={handleApplySectioningProtocolToAll}
+                    isSavingSectioningProtocol={isSavingSectioningProtocol}
                 />
             )}
 

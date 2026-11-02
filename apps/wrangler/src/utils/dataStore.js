@@ -586,6 +586,80 @@ class DataStore {
         }
     }
 
+    // Case-level write: every slide with this localCaseId gets the same blocking protocol.
+    setSectioningProtocolInData(localCaseId, protocol) {
+        if (!this.processedData || this.processedData.length === 0) {
+            return 0;
+        }
+
+        const targetLocalId = normalizeLocalCaseId(localCaseId);
+        if (!targetLocalId) {
+            return 0;
+        }
+
+        const protocolId = protocol?.id ? String(protocol.id).trim() : '';
+        const protocolName = protocol?.name ? String(protocol.name).trim() : '';
+        let updatedCount = 0;
+
+        this.processedData.forEach((item) => {
+            if (normalizeLocalCaseId(item.BDSA?.bdsaLocal?.localCaseId) !== targetLocalId) {
+                return;
+            }
+            if (!item.BDSA) {
+                item.BDSA = {};
+            }
+            if (!item.BDSA.bdsaLocal) {
+                item.BDSA.bdsaLocal = {};
+            }
+            if (!item.BDSA._dataSource) {
+                item.BDSA._dataSource = {};
+            }
+
+            item.BDSA.bdsaLocal.bdsaSectioningProtocolId = protocolId || null;
+            item.BDSA.bdsaLocal.bdsaSectioningProtocol = protocolName || null;
+            item.BDSA._lastModified = new Date().toISOString();
+
+            if (protocolId || protocolName) {
+                item.BDSA._dataSource.bdsaSectioningProtocol = 'case_id_mapping';
+                item.BDSA._dataSource.bdsaSectioningProtocolId = 'case_id_mapping';
+            } else {
+                delete item.BDSA._dataSource.bdsaSectioningProtocol;
+                delete item.BDSA._dataSource.bdsaSectioningProtocolId;
+            }
+
+            const itemId = item.id || item._id || item.dsa_id;
+            if (itemId) {
+                this.modifiedItems.add(itemId);
+            }
+            updatedCount++;
+        });
+
+        if (updatedCount > 0 && !this._batchUpdateMode) {
+            this.notify();
+        }
+        return updatedCount;
+    }
+
+    setSectioningProtocolForCases(localCaseIds, protocol) {
+        const ids = Array.isArray(localCaseIds) ? localCaseIds : [];
+        if (ids.length === 0) {
+            return 0;
+        }
+        this._batchUpdateMode = true;
+        let updatedCount = 0;
+        try {
+            ids.forEach((localCaseId) => {
+                updatedCount += this.setSectioningProtocolInData(localCaseId, protocol);
+            });
+        } finally {
+            this._batchUpdateMode = false;
+        }
+        if (updatedCount > 0) {
+            this.notify();
+        }
+        return updatedCount;
+    }
+
     /**
      * Apply case ID mappings to the actual data items
      * This updates the BDSA.bdsaLocal.bdsaCaseId field in the data items
@@ -1026,6 +1100,7 @@ export const getItemsToSyncCount = () => dataStore.getItemsToSyncCount();
 // Export data management functions
 export const setProcessedData = (data, source, sourceInfo) => dataStore.setProcessedData(data, source, sourceInfo);
 export const setCaseIdInData = (localCaseId, bdsaCaseId) => dataStore.setCaseIdInData(localCaseId, bdsaCaseId);
+export const setSectioningProtocolInData = (localCaseId, protocol) => dataStore.setSectioningProtocolInData(localCaseId, protocol);
 export const loadDsaData = (dsaAuthStore) => dataStore.loadDsaData(dsaAuthStore);
 export const generateUnmappedCases = () => dataStore.generateUnmappedCases();
 export const generateStainProtocolCases = () => dataStore.generateStainProtocolCases();

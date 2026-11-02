@@ -379,7 +379,7 @@ const RegionProtocolMapping = () => {
         return (
             <div className="stain-protocol-mapping">
                 <div className="header">
-                    <h2>Region Protocol Mapping</h2>
+                    <h2>Region Mapping</h2>
                     <p>No cases with region slides found.</p>
                 </div>
                 <div className="no-cases">
@@ -438,6 +438,11 @@ const RegionProtocolMapping = () => {
                     <div className="case-pill">
                         <div className="case-id">{currentCase.bdsaId}</div>
                         <div className="case-details">Local: {currentCase.localCaseId} • {currentCaseIndex + 1} of {cases.length}</div>
+                        {currentCase.sectioningProtocolName && (
+                            <div className="case-blocking-protocol">
+                                Blocking: {currentCase.sectioningProtocolName}
+                            </div>
+                        )}
                         {unmappedCounts.total > 0 && (
                             <div className="unmapped-counts">
                                 <span className="unmapped-stain">{unmappedCounts.stain} unmapped stain</span>
@@ -481,8 +486,8 @@ const RegionProtocolMapping = () => {
             </div>
 
             <div className="mapping-interface">
-                <h3>Map Region Protocols to Slides</h3>
-                <p>Select a region protocol for each group of slides with the same region type.</p>
+                <h3>Map Region Definitions to Slides</h3>
+                <p>Assign one or more region definitions to each slide. These can differ from the case blocking protocol when a side or block was cut differently.</p>
 
                 {Object.keys(regionGroups).length === 0 ? (
                     <div className="no-unmapped-slides">
@@ -580,7 +585,7 @@ const RegionProtocolMapping = () => {
 
                                     {/* Protocol selection - always visible */}
                                     <div className="protocol-selection">
-                                        <label>Add Region Protocol:</label>
+                                        <label>Add region definition:</label>
                                         <div className="available-protocols">
                                             {availableProtocols
                                                 .filter(protocol => !allGroupGuids.includes(protocol.id))

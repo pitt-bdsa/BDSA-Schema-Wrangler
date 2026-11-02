@@ -305,6 +305,8 @@ export const syncItemBdsaMetadata = async (baseUrl, item, girderToken, columnMap
         };
         const bdsaStainProtocol = resolveProtocolToNames(bdsaStainProtocolRefs, 'stain', protocolLists);
         const bdsaRegionProtocol = resolveProtocolToNames(bdsaRegionProtocolRefs, 'region', protocolLists);
+        const bdsaSectioningProtocol = item.BDSA?.bdsaLocal?.bdsaSectioningProtocol || '';
+        const bdsaSectioningProtocolId = item.BDSA?.bdsaLocal?.bdsaSectioningProtocolId || '';
 
         console.log(`🔍 SYNC VALUES - Item ${itemId}:`, {
             localCaseId,
@@ -313,6 +315,8 @@ export const syncItemBdsaMetadata = async (baseUrl, item, girderToken, columnMap
             bdsaCaseId,
             bdsaStainProtocol,
             bdsaRegionProtocol,
+            bdsaSectioningProtocol,
+            bdsaSectioningProtocolId,
             hasBDSAObject: !!item.BDSA,
             hasBdsaLocal: !!item.BDSA?.bdsaLocal,
             bdsaObject: item.BDSA,
@@ -328,13 +332,16 @@ export const syncItemBdsaMetadata = async (baseUrl, item, girderToken, columnMap
             bdsaCaseId,
             bdsaStainProtocol,
             bdsaRegionProtocol,
+            bdsaSectioningProtocol,
+            bdsaSectioningProtocolId,
             lastUpdated: new Date().toISOString(),
             source: 'BDSA-Schema-Wrangler'
         };
 
         // Only sync if we have at least one local value, bdsaCaseId, or protocol arrays
         const hasProtocols = (Array.isArray(bdsaStainProtocol) && bdsaStainProtocol.length > 0) ||
-            (Array.isArray(bdsaRegionProtocol) && bdsaRegionProtocol.length > 0);
+            (Array.isArray(bdsaRegionProtocol) && bdsaRegionProtocol.length > 0) ||
+            Boolean(bdsaSectioningProtocol || bdsaSectioningProtocolId);
 
         if (!localCaseId && !localStainID && !localRegionId && !bdsaCaseId && !hasProtocols) {
             console.log(`🚨 SYNC SKIP - Item ${itemId} has no local metadata values:`, {
@@ -388,7 +395,9 @@ export const syncItemBdsaMetadata = async (baseUrl, item, girderToken, columnMap
                 normalizeForComparison(existingMetadata.localRegionId) !== normalizeForComparison(localRegionId) ||
                 existingMetadata.bdsaCaseId !== bdsaCaseId ||
                 normalizeForComparison(existingMetadata.bdsaStainProtocol) !== normalizeForComparison(bdsaStainProtocol) ||
-                normalizeForComparison(existingMetadata.bdsaRegionProtocol) !== normalizeForComparison(bdsaRegionProtocol);
+                normalizeForComparison(existingMetadata.bdsaRegionProtocol) !== normalizeForComparison(bdsaRegionProtocol) ||
+                normalizeForComparison(existingMetadata.bdsaSectioningProtocol) !== normalizeForComparison(bdsaSectioningProtocol) ||
+                normalizeForComparison(existingMetadata.bdsaSectioningProtocolId) !== normalizeForComparison(bdsaSectioningProtocolId);
 
             console.log(`Skip check for item ${itemId}:`, {
                 existingMetadata: {

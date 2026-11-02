@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import dataStore from '../utils/dataStore';
 import { formatBdsaCaseId } from '../utils/bdsaCaseIdAllocator';
+import { docId } from '../utils/bdsaCatalogMapper';
 
 const CaseIdMappingSection = ({
     bdsaInstitutionId,
@@ -30,6 +31,10 @@ const CaseIdMappingSection = ({
     handleSort,
     getSortIcon,
     hostImported = false,
+    sectioningProtocols = [],
+    onSetSectioningProtocol,
+    onApplySectioningProtocolToAll,
+    isSavingSectioningProtocol = false,
 }) => {
     const originalInstitutionId = useRef(bdsaInstitutionId);
     const [draftInstitutionId, setDraftInstitutionId] = useState(bdsaInstitutionId);
@@ -51,6 +56,42 @@ const CaseIdMappingSection = ({
     const showHostCaseColumn = hostImported && filteredCaseIds.some((caseId) => (
         caseId.hostStatus === 'existing' || caseId.hostStatus === 'conflict'
     ));
+    const showSectioningProtocol = hostImported;
+    const protocolKey = (protocol) => String(docId(protocol) || protocol?.id || protocol?.name || '');
+    const applySectioningChange = (localCaseId, value) => {
+        if (!onSetSectioningProtocol) return;
+        if (!value) {
+            onSetSectioningProtocol(localCaseId, null);
+            return;
+        }
+        const protocol = sectioningProtocols.find((item) => protocolKey(item) === value);
+        onSetSectioningProtocol(localCaseId, protocol
+            ? { id: protocolKey(protocol), name: protocol.name }
+            : { id: value, name: value });
+    };
+    const applySectioningToAll = (value) => {
+        if (!value || !onApplySectioningProtocolToAll) return;
+        const protocol = sectioningProtocols.find((item) => protocolKey(item) === value);
+        if (protocol) {
+            onApplySectioningProtocolToAll({ id: protocolKey(protocol), name: protocol.name });
+        }
+    };
+    const selectedSectioningValue = (caseId) => {
+        if (caseId.sectioningProtocolId) {
+            const byId = sectioningProtocols.find((item) => protocolKey(item) === caseId.sectioningProtocolId);
+            return protocolKey(byId) || caseId.sectioningProtocolId;
+        }
+        if (caseId.sectioningProtocolName) {
+            const byName = sectioningProtocols.find((item) => item.name === caseId.sectioningProtocolName);
+            return protocolKey(byName) || caseId.sectioningProtocolName;
+        }
+        return '';
+    };
+    const hasStoredSectioningOrphan = (caseId) => {
+        const selected = selectedSectioningValue(caseId);
+        if (!selected) return false;
+        return !sectioningProtocols.some((item) => protocolKey(item) === selected);
+    };
 
     const requestUnlock = () => {
         const confirmed = window.confirm(
@@ -152,18 +193,6 @@ const CaseIdMappingSection = ({
                             : 'Set once on this folder or collection. After that it stays locked so IDs do not drift.'}
                     </small>
                 </div>
-                <div className="setting-group">
-                    <label>Data Source Column:</label>
-                    <div className="data-source-info">
-                        <span className="data-source-text">
-                            Showing unique case IDs from column: BDSA.bdsaLocal.localCaseId
-                        </span>
-                        <br />
-                        <span className="total-cases-text">
-                            Total unique cases: {filteredCaseIds.length}
-                        </span>
-                    </div>
-                </div>
             </div>
 
             {/* Duplicate Warning */}
@@ -187,7 +216,7 @@ const CaseIdMappingSection = ({
             {isGeneratingAll && (
                 <div className="bulk-generation-progress">
                     <div className="progress-info">
-                        <span>Generating BDSA Case IDs...</span>
+                        <span>{generateAllProgress.label || 'Generating BDSA Case IDs...'}</span>
                         <span>{generateAllProgress.current} of {generateAllProgress.total}</span>
                     </div>
                     <div className="progress-bar">
@@ -202,40 +231,21 @@ const CaseIdMappingSection = ({
             {/* Case ID Table */}
             <div className="case-id-mapping-table">
                 <div className="mapping-summary">
-                    <div className="summary-info">
-                        <p>
-                            Showing unique case IDs from column: BDSA.bdsaLocal.localCaseId
-                        </p>
-                        <p>Total unique cases: {filteredCaseIds.length}</p>
-                    </div>
+                    <span className="summary-count">{filteredCaseIds.length} cases</span>
                     <div className="mapping-controls">
                         <div className="search-filter">
                             <input
                                 type="text"
-                                placeholder="Search by Local Case ID or BDSA Case ID..."
+                                placeholder="Search case IDs…"
                                 value={caseIdFilter}
                                 onChange={(e) => setCaseIdFilter(e.target.value)}
                                 className="case-search-input"
-                                style={{
-                                    padding: '8px 12px',
-                                    border: '1px solid #ddd',
-                                    borderRadius: '4px',
-                                    fontSize: '14px',
-                                    minWidth: '300px'
-                                }}
                             />
                             {caseIdFilter && (
                                 <button
+                                    type="button"
                                     onClick={() => setCaseIdFilter('')}
                                     className="clear-search-btn"
-                                    style={{
-                                        marginLeft: '8px',
-                                        padding: '8px 12px',
-                                        border: '1px solid #ccc',
-                                        borderRadius: '4px',
-                                        backgroundColor: '#f5f5f5',
-                                        cursor: 'pointer'
-                                    }}
                                 >
                                     Clear
                                 </button>
@@ -245,23 +255,23 @@ const CaseIdMappingSection = ({
                             className={`toggle-mapped-btn ${temporaryHideMapped ? 'active' : ''}`}
                             onClick={() => setTemporaryHideMapped(!temporaryHideMapped)}
                         >
-                            👤 {temporaryHideMapped ? 'Show All' : 'Hide Mapped'}
+                            {temporaryHideMapped ? 'Show All' : 'Hide Mapped'}
                         </button>
                         {duplicateBdsaCaseIds.size > 0 && (
                             <button
                                 className={`show-duplicates-btn ${showOnlyDuplicates ? 'active' : ''}`}
                                 onClick={() => {
                                     setShowOnlyDuplicates(!showOnlyDuplicates);
-                                    // Reset the hide mapped filter when showing duplicates
                                     if (!showOnlyDuplicates && temporaryHideMapped) {
                                         setTemporaryHideMapped(false);
                                     }
                                 }}
                             >
-                                🟠 {showOnlyDuplicates ? 'Show All' : `Show Only Duplicates (${duplicateBdsaCaseIds.size})`}
+                                {showOnlyDuplicates ? 'Show All' : `Duplicates (${duplicateBdsaCaseIds.size})`}
                             </button>
                         )}
                         <button
+                            type="button"
                             className="clear-all-btn"
                             onClick={() => {
                                 if (window.confirm('Clear all BDSA Case ID mappings?\n\nThis will remove all BDSA Case IDs but preserve your local case IDs, stain IDs, and region IDs.')) {
@@ -269,28 +279,15 @@ const CaseIdMappingSection = ({
                                 }
                             }}
                             disabled={isGeneratingAll || filteredCaseIds.filter(c => c.isMapped).length === 0}
-                            style={{
-                                backgroundColor: '#dc3545',
-                                color: 'white',
-                                border: 'none',
-                                padding: '10px 16px',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                fontSize: '14px',
-                                fontWeight: '500',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px'
-                            }}
                         >
-                            🗑️ Clear All Mappings
+                            Clear All
                         </button>
                         <button
                             className="generate-all-btn"
                             onClick={generateAllCaseIds}
                             disabled={isGeneratingAll || filteredCaseIds.filter(c => !c.isMapped).length === 0}
                         >
-                            🚀 Generate All
+                            Generate All
                         </button>
                         {!hostImported && (
                             <>
@@ -310,6 +307,26 @@ const CaseIdMappingSection = ({
                                 </button>
                             </>
                         )}
+                        {showSectioningProtocol && (
+                            <select
+                                className="blocking-protocol-select apply-all"
+                                value=""
+                                onChange={(e) => applySectioningToAll(e.target.value)}
+                                disabled={isSavingSectioningProtocol || sectioningProtocols.length === 0 || filteredCaseIds.length === 0}
+                                title="Store the same blocking protocol on every case. Slide regions stay independent."
+                            >
+                                <option value="">
+                                    {sectioningProtocols.length === 0
+                                        ? 'No blocking protocols'
+                                        : 'Apply blocking protocol to all…'}
+                                </option>
+                                {sectioningProtocols.map((protocol) => (
+                                    <option key={protocolKey(protocol)} value={protocolKey(protocol)}>
+                                        {protocol.name}
+                                    </option>
+                                ))}
+                            </select>
+                        )}
                     </div>
                 </div>
 
@@ -318,25 +335,33 @@ const CaseIdMappingSection = ({
                         <thead>
                             <tr>
                                 <th
-                                    className="sortable"
+                                    className="sortable col-local"
                                     onClick={() => handleSort('localCaseId')}
                                 >
                                     Local Case ID {getSortIcon('localCaseId')}
                                 </th>
                                 <th
-                                    className="sortable"
+                                    className="sortable col-bdsa"
                                     onClick={() => handleSort('bdsaCaseId')}
                                 >
                                     BDSA Case ID {getSortIcon('bdsaCaseId')}
                                 </th>
+                                {showSectioningProtocol && (
+                                    <th
+                                        className="col-blocking"
+                                        title="One blocking protocol per case. Every slide in the case shares it so sections from the same block cannot drift."
+                                    >
+                                        Blocking Protocol
+                                    </th>
+                                )}
                                 <th
-                                    className="sortable"
+                                    className="sortable col-rows"
                                     onClick={() => handleSort('rowCount')}
                                 >
                                     Rows {getSortIcon('rowCount')}
                                 </th>
-                                {showHostCaseColumn && <th>Host case</th>}
-                                <th>Actions</th>
+                                {showHostCaseColumn && <th className="col-host">Host case</th>}
+                                <th className="col-actions">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -347,8 +372,8 @@ const CaseIdMappingSection = ({
                                         key={caseId.localCaseId}
                                         className={`${caseId.isMapped ? 'mapped' : 'unmapped'} ${isDuplicate ? 'duplicate-bdsa-case' : ''}`}
                                     >
-                                        <td>{caseId.localCaseId}</td>
-                                        <td>
+                                        <td className="col-local">{caseId.localCaseId}</td>
+                                        <td className="col-bdsa">
                                             {caseId.isMapped ? (
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                     <input
@@ -380,9 +405,34 @@ const CaseIdMappingSection = ({
                                                 <span className="unmapped-case-id">Not mapped</span>
                                             )}
                                         </td>
-                                        <td>{caseId.rowCount}</td>
+                                        {showSectioningProtocol && (
+                                            <td className="col-blocking">
+                                                <select
+                                                    className={`blocking-protocol-select${caseId.sectioningProtocolMixed ? ' mixed' : ''}`}
+                                                    value={selectedSectioningValue(caseId)}
+                                                    onChange={(e) => applySectioningChange(caseId.localCaseId, e.target.value)}
+                                                    disabled={isSavingSectioningProtocol}
+                                                    title={caseId.sectioningProtocolMixed
+                                                        ? 'Slides in this case have different blocking protocols. Pick one to apply it to every slide.'
+                                                        : 'Applies to every slide in this case. Slide regions can still be overridden.'}
+                                                >
+                                                    <option value="">None</option>
+                                                    {hasStoredSectioningOrphan(caseId) && (
+                                                        <option value={selectedSectioningValue(caseId)}>
+                                                            {caseId.sectioningProtocolName || caseId.sectioningProtocolId} (stored)
+                                                        </option>
+                                                    )}
+                                                    {sectioningProtocols.map((protocol) => (
+                                                        <option key={protocolKey(protocol)} value={protocolKey(protocol)}>
+                                                            {protocol.name}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </td>
+                                        )}
+                                        <td className="col-rows">{caseId.rowCount}</td>
                                         {showHostCaseColumn && (
-                                            <td>
+                                            <td className="col-host">
                                                 {(caseId.hostStatus === 'existing' || caseId.hostStatus === 'conflict') ? (
                                                     <span
                                                         className={`host-case-badge host-case-${caseId.hostStatus}`}
@@ -393,7 +443,7 @@ const CaseIdMappingSection = ({
                                                 ) : null}
                                             </td>
                                         )}
-                                        <td>
+                                        <td className="col-actions">
                                             {!caseId.isMapped ? (
                                                 <button
                                                     className="generate-case-id-btn"

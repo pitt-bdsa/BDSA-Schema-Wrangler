@@ -159,6 +159,8 @@ export const enhanceDataWithExistingMetadata = (dsaData) => {
             enhancedItem.BDSA.bdsaLocal.bdsaCaseId = bdsaLocal.bdsaCaseId || enhancedItem.BDSA.bdsaLocal.bdsaCaseId || '';
             enhancedItem.BDSA.bdsaLocal.bdsaStainProtocol = bdsaLocal.bdsaStainProtocol || enhancedItem.BDSA.bdsaLocal.bdsaStainProtocol || [];
             enhancedItem.BDSA.bdsaLocal.bdsaRegionProtocol = bdsaLocal.bdsaRegionProtocol || enhancedItem.BDSA.bdsaLocal.bdsaRegionProtocol || [];
+            enhancedItem.BDSA.bdsaLocal.bdsaSectioningProtocol = bdsaLocal.bdsaSectioningProtocol || enhancedItem.BDSA.bdsaLocal.bdsaSectioningProtocol || '';
+            enhancedItem.BDSA.bdsaLocal.bdsaSectioningProtocolId = bdsaLocal.bdsaSectioningProtocolId || enhancedItem.BDSA.bdsaLocal.bdsaSectioningProtocolId || '';
             if (bdsaLocal.fieldSource && typeof bdsaLocal.fieldSource === 'object') {
                 enhancedItem.BDSA._dataSource = { ...bdsaLocal.fieldSource };
             }
@@ -186,6 +188,8 @@ export const enhanceDataWithExistingMetadata = (dsaData) => {
             enhancedItem.BDSA.bdsaLocal.bdsaCaseId = bdsaLocal.bdsaCaseId || enhancedItem.BDSA.bdsaLocal.bdsaCaseId || '';
             enhancedItem.BDSA.bdsaLocal.bdsaStainProtocol = bdsaLocal.bdsaStainProtocol || enhancedItem.BDSA.bdsaLocal.bdsaStainProtocol || [];
             enhancedItem.BDSA.bdsaLocal.bdsaRegionProtocol = bdsaLocal.bdsaRegionProtocol || enhancedItem.BDSA.bdsaLocal.bdsaRegionProtocol || [];
+            enhancedItem.BDSA.bdsaLocal.bdsaSectioningProtocol = bdsaLocal.bdsaSectioningProtocol || enhancedItem.BDSA.bdsaLocal.bdsaSectioningProtocol || '';
+            enhancedItem.BDSA.bdsaLocal.bdsaSectioningProtocolId = bdsaLocal.bdsaSectioningProtocolId || enhancedItem.BDSA.bdsaLocal.bdsaSectioningProtocolId || '';
             if (bdsaLocal.fieldSource && typeof bdsaLocal.fieldSource === 'object') {
                 enhancedItem.BDSA._dataSource = { ...bdsaLocal.fieldSource };
             }

@@ -267,7 +267,7 @@ const ProtocolsTab = ({ embedded = false, onCatalogChanged }) => {
                     <h2>Protocols</h2>
                     <p>
                         {embedded
-                            ? 'Stain, region, and sectioning definitions on this DSA node'
+                            ? 'Stain and region definitions are catalogs. A sectioning protocol is the blocking recipe: it owns blocks, and each block lists which regions were sampled.'
                             : 'Manage stain and region protocols for BDSA schema compliance'}
                     </p>
                     {!embedded && (
@@ -335,20 +335,20 @@ const ProtocolsTab = ({ embedded = false, onCatalogChanged }) => {
                     className={`nav-button ${activeSubTab === 'stain' ? 'active' : ''}`}
                     onClick={() => setActiveSubTab('stain')}
                 >
-                    Stain Protocols ({protocols.stain.length})
+                    {embedded ? 'Stain Definitions' : 'Stain Protocols'} ({protocols.stain.length})
                 </button>
                 <button
                     className={`nav-button ${activeSubTab === 'region' ? 'active' : ''}`}
                     onClick={() => setActiveSubTab('region')}
                 >
-                    Region Protocols ({protocols.region.length})
+                    {embedded ? 'Region Definitions' : 'Region Protocols'} ({protocols.region.length})
                 </button>
                 {embedded && (
                     <button
                         className={`nav-button ${activeSubTab === 'blocks' ? 'active' : ''}`}
                         onClick={() => setActiveSubTab('blocks')}
                     >
-                        Sectioning / Blocks
+                        Sectioning Protocols
                     </button>
                 )}
             </div>

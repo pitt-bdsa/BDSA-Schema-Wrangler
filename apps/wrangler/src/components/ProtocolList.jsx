@@ -2,6 +2,9 @@ import React from 'react';
 import './ProtocolList.css';
 
 const ProtocolList = ({ protocols, type, onEdit, onDelete, onAdd, embedded = false }) => {
+    const kindLabel = embedded
+        ? (type === 'stain' ? 'Stain Definition' : 'Region Definition')
+        : (type === 'stain' ? 'Stain Protocol' : 'Region Protocol');
     const renderProtocolDetails = (protocol) => {
         if (type === 'stain') {
             return (
@@ -123,8 +126,10 @@ const ProtocolList = ({ protocols, type, onEdit, onDelete, onAdd, embedded = fal
                 <div className="add-protocol-card" onClick={onAdd}>
                     <div className="add-content">
                         <div className="add-icon">+</div>
-                        <h4>Add New {type === 'stain' ? 'Stain' : 'Region'} Protocol</h4>
-                        <p>Click to create a new protocol</p>
+                        <h4>Add New {kindLabel}</h4>
+                        <p>{embedded
+                            ? (type === 'stain' ? 'Catalog stain used on slides' : 'Catalog region used on slides and inside blocks')
+                            : 'Click to create a new protocol'}</p>
                     </div>
                 </div>
             </div>

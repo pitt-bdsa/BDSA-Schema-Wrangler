@@ -1191,16 +1191,23 @@
 }
 
 /* Protocol cell renderer styles */
+.protocol-grid-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .protocol-cell-renderer {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
     align-items: center;
-    min-height: 32px;
-    padding: 6px 4px;
+    justify-content: center;
+    min-height: 0;
+    padding: 0;
     line-height: 1;
-    justify-content: flex-start;
     height: 100%;
+    width: 100%;
     box-sizing: border-box;
 }
 

@@ -26,7 +26,9 @@ class BdsaInitializer {
                         localRegionId: null,
                         bdsaCaseId: null,  // Initialize this field so the column appears
                         bdsaStainProtocol: null,  // Initialize BDSA Region Protocol field (can be array)
-                        bdsaRegionProtocol: null  // Initialize BDSA Protocol field (can be array)
+                        bdsaRegionProtocol: null,  // Initialize BDSA Protocol field (can be array)
+                        bdsaSectioningProtocol: null,
+                        bdsaSectioningProtocolId: null
                     },
                     _dataSource: {}
                     // Don't set _lastModified here - only set it when actually modifying data
@@ -40,7 +42,9 @@ class BdsaInitializer {
                         localRegionId: null,
                         bdsaCaseId: null,
                         bdsaStainProtocol: null,  // Initialize BDSA Region Protocol field (can be array)
-                        bdsaRegionProtocol: null  // Initialize BDSA Protocol field (can be array)
+                        bdsaRegionProtocol: null,  // Initialize BDSA Protocol field (can be array)
+                        bdsaSectioningProtocol: null,
+                        bdsaSectioningProtocolId: null
                     };
                 } else {
                     // Ensure bdsaCaseId field exists - but preserve existing value if it exists
@@ -54,6 +58,12 @@ class BdsaInitializer {
                     // Ensure bdsaRegionProtocol field exists - but preserve existing value if it exists
                     if (!item.BDSA.bdsaLocal.hasOwnProperty('bdsaRegionProtocol')) {
                         item.BDSA.bdsaLocal.bdsaRegionProtocol = null;
+                    }
+                    if (!item.BDSA.bdsaLocal.hasOwnProperty('bdsaSectioningProtocol')) {
+                        item.BDSA.bdsaLocal.bdsaSectioningProtocol = null;
+                    }
+                    if (!item.BDSA.bdsaLocal.hasOwnProperty('bdsaSectioningProtocolId')) {
+                        item.BDSA.bdsaLocal.bdsaSectioningProtocolId = null;
                     }
                     // Preserve existing values - don't overwrite them with null
                     // The existing values should already be set by transformDsaData

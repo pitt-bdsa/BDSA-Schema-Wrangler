@@ -8,7 +8,9 @@ const getColumnDisplayName = (fieldName) => {
         'name': 'Name',
         'BDSA.bdsaLocal.bdsaCaseId': 'BDSA Case ID',
         'BDSA.bdsaLocal.bdsaStainProtocol': 'BDSA Stain Protocol',
-        'BDSA.bdsaLocal.bdsaRegionProtocol': 'BDSA Region Protocol',
+        'BDSA.bdsaLocal.bdsaRegionProtocol': 'BDSA Region',
+        'BDSA.bdsaLocal.bdsaSectioningProtocol': 'Blocking Protocol',
+        'BDSA.bdsaLocal.bdsaSectioningProtocolId': 'Blocking Protocol ID',
         'BDSA.bdsaLocal.localCaseId': 'Local Case ID',
         'BDSA.bdsaLocal.localRegionId': 'Local Region ID',
         'BDSA.bdsaLocal.localStainID': 'Local Stain ID',
@@ -238,8 +240,14 @@ export const generateColumnDefinitions = (processedData, columnVisibility, colum
 
                     // Make BDSA local fields editable
                     if (fullKey.startsWith('BDSA.bdsaLocal.')) {
-                        columnDef.editable = true;
-                        columnDef.onCellValueChanged = onCellValueChanged;
+                        const isCaseLevelSectioning = fullKey === 'BDSA.bdsaLocal.bdsaSectioningProtocol'
+                            || fullKey === 'BDSA.bdsaLocal.bdsaSectioningProtocolId';
+                        columnDef.editable = !isCaseLevelSectioning;
+                        if (isCaseLevelSectioning) {
+                            columnDef.headerTooltip = 'Case-level blocking protocol. Change it in Case ID Mapping so every slide in the case stays in sync.';
+                        } else {
+                            columnDef.onCellValueChanged = onCellValueChanged;
+                        }
                         console.log(`🔍 BDSA Column created: ${fullKey} (editable: ${columnDef.editable})`);
                     }
 

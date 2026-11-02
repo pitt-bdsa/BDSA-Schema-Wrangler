@@ -109,6 +109,8 @@ export function collectBdsaLocalUpdates(items) {
                 bdsaCaseId: bdsaLocal.bdsaCaseId || null,
                 bdsaStainProtocol: bdsaLocal.bdsaStainProtocol || null,
                 bdsaRegionProtocol: bdsaLocal.bdsaRegionProtocol || null,
+                bdsaSectioningProtocol: bdsaLocal.bdsaSectioningProtocol || null,
+                bdsaSectioningProtocolId: bdsaLocal.bdsaSectioningProtocolId || null,
                 fieldSource,
             },
         };

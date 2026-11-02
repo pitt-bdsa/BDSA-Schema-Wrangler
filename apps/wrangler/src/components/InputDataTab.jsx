@@ -727,9 +727,15 @@ const InputDataTab = ({ embedded = false }) => {
                             columnDef.editable = true;
 
                             // Use custom cell renderer for protocol fields
-                            if (fullKey.includes('Protocol')) {
+                            if (fullKey.includes('Protocol') && !fullKey.includes('SectioningProtocol')) {
                                 columnDef.cellRenderer = ProtocolArrayCellRenderer;
                                 columnDef.editable = false; // Disable AG Grid editing, use modal instead
+                                columnDef.cellClass = 'protocol-grid-cell';
+                            }
+                            if (fullKey === 'BDSA.bdsaLocal.bdsaSectioningProtocol'
+                                || fullKey === 'BDSA.bdsaLocal.bdsaSectioningProtocolId') {
+                                columnDef.editable = false;
+                                columnDef.headerTooltip = 'Case-level blocking protocol. Change it in Case ID Mapping so every slide in the case stays in sync.';
                             }
                         }
 
@@ -749,7 +755,8 @@ const InputDataTab = ({ embedded = false }) => {
                         }
 
                         if (fullKey === 'BDSA.bdsaLocal.bdsaStainProtocol'
-                            || fullKey === 'BDSA.bdsaLocal.bdsaRegionProtocol') {
+                            || fullKey === 'BDSA.bdsaLocal.bdsaRegionProtocol'
+                            || fullKey === 'BDSA.bdsaLocal.bdsaSectioningProtocol') {
                             columnDef.width = 210;
                             columnDef.minWidth = 160;
                         }
@@ -769,7 +776,7 @@ const InputDataTab = ({ embedded = false }) => {
                                     const fieldName = colDef.field.replace('BDSA.bdsaLocal.', '');
 
                                     // Handle protocol arrays properly
-                                    if (colDef.field.includes('Protocol')) {
+                                    if (colDef.field.includes('Protocol') && !colDef.field.includes('SectioningProtocol')) {
                                         // Ensure we store as array
                                         data.BDSA.bdsaLocal[fieldName] = Array.isArray(newValue) ? newValue : [];
                                     } else {

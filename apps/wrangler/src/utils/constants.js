@@ -19,6 +19,8 @@ export const HIDDEN_DSA_FIELDS = [
     'meta.BDSA.bdsaLocal.bdsaCaseId',
     'meta.BDSA.bdsaLocal.bdsaStainProtocol',
     'meta.BDSA.bdsaLocal.bdsaRegionProtocol',
+    'meta.BDSA.bdsaLocal.bdsaSectioningProtocol',
+    'meta.BDSA.bdsaLocal.bdsaSectioningProtocolId',
     'meta.BDSA.bdsaLocal.lastUpdated',
     'meta.BDSA.bdsaLocal.source',
 
@@ -72,6 +74,9 @@ export const HIDDEN_DSA_FIELDS = [
     'BDSA._dataSource.bdsaCaseId',
     'BDSA._dataSource.bdsaStainProtocol',
     'BDSA._dataSource.bdsaRegionProtocol',
+    'BDSA._dataSource.bdsaSectioningProtocol',
+    'BDSA._dataSource.bdsaSectioningProtocolId',
+    'BDSA.bdsaLocal.bdsaSectioningProtocolId',
     'BDSA._lastModified',
 
     // Internal tracking fields (should never be shown to users)
@@ -106,6 +111,7 @@ export const PRIORITY_BDSA_FIELDS = [
     'BDSA.bdsaLocal.bdsaCaseId',
     'BDSA.bdsaLocal.bdsaStainProtocol',
     'BDSA.bdsaLocal.bdsaRegionProtocol',
+    'BDSA.bdsaLocal.bdsaSectioningProtocol',
 ];
 
 export const COLUMN_LAYOUT_VERSION = 'v3';

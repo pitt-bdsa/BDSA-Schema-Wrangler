@@ -442,7 +442,9 @@ const ProtocolModal = ({ protocol, type, onSave, onClose, embedded = false, type
         <div className="modal-overlay" onClick={onClose}>
             <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-header">
-                    <h2>{protocol ? 'Edit' : 'Add New'} {type === 'stain' ? 'Stain' : 'Region'} Protocol</h2>
+                    <h2>{protocol ? 'Edit' : 'Add New'} {embedded
+                        ? (type === 'stain' ? 'Stain Definition' : 'Region Definition')
+                        : (type === 'stain' ? 'Stain Protocol' : 'Region Protocol')}</h2>
                     <button className="close-button" onClick={onClose}>×</button>
                 </div>
 
