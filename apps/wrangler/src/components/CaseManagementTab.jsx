@@ -16,6 +16,10 @@ import {
 } from '../utils/bdsaCaseIdAllocator';
 import { applyHostCaseMatches } from '../utils/hostCaseMatcher';
 import bdsaCatalogService from '../utils/bdsaCatalogService';
+import {
+    applySectioningProtocolToCases,
+    formatWiringSummary,
+} from '../utils/bdsaWiringService';
 
 const CaseManagementTab = ({ embedded = false }) => {
     const [activeSubTab, setActiveSubTab] = useState('case-id-mapping');
@@ -35,6 +39,7 @@ const CaseManagementTab = ({ embedded = false }) => {
     const [resourceId, setResourceId] = useState(() => dsaAuthStore.getConfig().resourceId || '');
     const [sectioningProtocols, setSectioningProtocols] = useState([]);
     const [isSavingSectioningProtocol, setIsSavingSectioningProtocol] = useState(false);
+    const [sectioningProgress, setSectioningProgress] = useState('');
 
     // Subscribe to data store updates
     useEffect(() => {
@@ -529,22 +534,107 @@ const CaseManagementTab = ({ embedded = false }) => {
         );
     };
 
+    const describeWiringProblems = (wiring) => {
+        const problems = [];
+        (wiring?.results || []).forEach((result) => {
+            if (result.status === 'applied') {
+                (result.issues || []).forEach((issue) => {
+                    if (issue.reason !== 'update-failed' && issue.reason !== 'ambiguous-block') {
+                        return;
+                    }
+                    const label = issue.itemName || issue.itemId;
+                    const extra = issue.error ? ` (${issue.error})` : '';
+                    problems.push(`${result.localCaseId}: ${label} — ${issue.reason}${extra}`);
+                });
+                return;
+            }
+            const extra = result.error ? ` (${result.error})` : '';
+            problems.push(`${result.localCaseId}: ${result.status}${extra}`);
+        });
+        return problems;
+    };
+
+    const persistAndWireSectioningProtocol = async (localCaseIds, protocol, { singleCase = false } = {}) => {
+        setIsSavingSectioningProtocol(true);
+        setSectioningProgress(singleCase ? 'Saving sectioning protocol…' : 'Saving sectioning protocol to cases…');
+        let persist = { updatedCount: 0, failedCount: 0 };
+        let persistError = '';
+        let wiring = null;
+        let wiringError = '';
+
+        try {
+            persist = await persistItemsForLocalCases(localCaseIds);
+        } catch (error) {
+            persistError = error.message || 'Failed to save the sectioning protocol to this DSA node.';
+        }
+
+        if (!persistError) {
+            try {
+                const regionTemplates = await bdsaCatalogService.listRegionProtocols();
+                wiring = await applySectioningProtocolToCases({
+                    localCaseIds,
+                    protocol,
+                    items: dataStore.processedData,
+                    regionTemplates,
+                    onProgress: ({ current, total, localCaseId }) => {
+                        setSectioningProgress(total > 1
+                            ? `Wiring sectioning protocol · ${current}/${total} cases (${localCaseId})`
+                            : 'Wiring sectioning protocol to the host case…');
+                    },
+                });
+            } catch (error) {
+                wiringError = error.message || 'Failed to wire the sectioning protocol to the host case.';
+            }
+        }
+
+        setIsSavingSectioningProtocol(false);
+        setSectioningProgress('');
+
+        const totals = wiring?.totals;
+        const notable = Boolean(
+            persistError
+            || wiringError
+            || persist.failedCount
+            || totals?.failed
+            || totals?.ambiguous
+            || totals?.errors
+            || totals?.missingCases
+            || totals?.protocolChanges
+            || totals?.assigned
+        );
+        if (!notable) {
+            return;
+        }
+
+        const lines = [];
+        if (persist.failedCount) {
+            lines.push(`${persist.failedCount} slide(s) failed to save to this DSA node.`);
+        }
+        if (persistError) {
+            lines.push(persistError);
+        }
+        if (wiringError) {
+            lines.push(wiringError);
+        }
+        if (totals) {
+            lines.push(formatWiringSummary(totals, { singleCase }));
+            const problems = describeWiringProblems(wiring);
+            if (problems.length) {
+                lines.push('', ...problems.slice(0, 5));
+                if (problems.length > 5) {
+                    lines.push(`…and ${problems.length - 5} more.`);
+                }
+            }
+        }
+        window.alert(lines.filter(Boolean).join('\n'));
+    };
+
     const handleSetSectioningProtocol = async (localCaseId, protocol) => {
         dataStore.setSectioningProtocolInData(localCaseId, protocol);
         if (!hostImported) {
             return;
         }
-        setIsSavingSectioningProtocol(true);
-        try {
-            const persist = await persistItemsForLocalCases([localCaseId]);
-            if (persist.failedCount) {
-                alert(`Saved the blocking protocol locally, but ${persist.failedCount} slide(s) failed to write to this DSA node.`);
-            }
-        } catch (error) {
-            alert(error.message || 'Failed to save the blocking protocol to this DSA node.');
-        } finally {
-            setIsSavingSectioningProtocol(false);
-        }
+        await persistAndWireSectioningProtocol([localCaseId], protocol, { singleCase: true });
     };
 
     const handleApplySectioningProtocolToAll = async (protocol) => {
@@ -552,9 +642,11 @@ const CaseManagementTab = ({ embedded = false }) => {
         if (cases.length === 0) {
             return;
         }
-        const label = protocol?.name || 'this blocking protocol';
+        const label = protocol?.name || 'this sectioning protocol';
         const confirmed = window.confirm(
-            `Apply “${label}” as the blocking protocol for all ${cases.length} cases?\n\nSlide-level BDSA Region values are not changed.`
+            `Apply “${label}” as the sectioning protocol for all ${cases.length} cases?\n\n`
+            + 'Changing a case protocol rebuilds its blocks and clears existing slide block assignments. '
+            + 'Slides are re-assigned only when their regions match a block.'
         );
         if (!confirmed) {
             return;
@@ -564,17 +656,7 @@ const CaseManagementTab = ({ embedded = false }) => {
         if (!hostImported) {
             return;
         }
-        setIsSavingSectioningProtocol(true);
-        try {
-            const persist = await persistItemsForLocalCases(localCaseIds);
-            if (persist.failedCount) {
-                alert(`Applied the blocking protocol locally, but ${persist.failedCount} slide(s) failed to write to this DSA node.`);
-            }
-        } catch (error) {
-            alert(error.message || 'Failed to save the blocking protocol to this DSA node.');
-        } finally {
-            setIsSavingSectioningProtocol(false);
-        }
+        await persistAndWireSectioningProtocol(localCaseIds, protocol);
     };
 
     const generateCaseId = async (localCaseId) => {
@@ -925,6 +1007,7 @@ const CaseManagementTab = ({ embedded = false }) => {
                     onSetSectioningProtocol={handleSetSectioningProtocol}
                     onApplySectioningProtocolToAll={handleApplySectioningProtocolToAll}
                     isSavingSectioningProtocol={isSavingSectioningProtocol}
+                    sectioningProgress={sectioningProgress}
                 />
             )}
 

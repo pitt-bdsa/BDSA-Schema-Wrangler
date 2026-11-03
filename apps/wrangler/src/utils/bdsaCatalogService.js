@@ -1,4 +1,5 @@
 import bdsaCatalogClient from './bdsaCatalogClient';
+import { resolveTemplateIdForRegion } from './bdsaBlockAssignment';
 import {
     IGNORE_REGION,
     IGNORE_STAIN,
@@ -205,7 +206,7 @@ class BdsaCatalogService {
         await bdsaCatalogClient.deleteSectioningProtocol(id);
     }
 
-    async saveBlock({ name, protocolId, regionIds }, existingBlock) {
+    async saveBlock({ name, protocolId, regionIds, templates }, existingBlock) {
         const trimmed = (name || '').trim();
         if (!trimmed) {
             throw new Error('Block name is required');
@@ -228,20 +229,29 @@ class BdsaCatalogService {
             });
         }
 
+        // Regions copied from a protocol/schema often have no sourceId (and their
+        // _id is not a template id). Resolve by lineage first, then by identity
+        // (schemaRegionKey / abbreviation / display name) so editing a block does
+        // not silently duplicate regions that are already there.
+        const templateList = (Array.isArray(templates) && templates.length
+            ? templates
+            : this.regionProtocols).filter((template) => (
+            template && String(template.id || template._id || '') !== 'ignore'
+        ));
         const currentRegions = asList(existingBlock?.regionDefinitions);
-        const currentTemplateIds = new Set(
-            currentRegions.map((region) => String(region.sourceId || '')).filter(Boolean)
+        const existingTemplateIds = new Set(
+            currentRegions
+                .map((region) => resolveTemplateIdForRegion(region, templateList))
+                .filter(Boolean)
         );
 
-        const toAdd = [...selected].filter((id) => (
-            !currentTemplateIds.has(id)
-            && !currentRegions.some((region) => String(region._id) === id)
-        ));
+        const toAdd = [...selected].filter((id) => !existingTemplateIds.has(id));
 
         const toRemove = currentRegions.filter((region) => {
-            const templateId = String(region.sourceId || '');
-            if (templateId) return !selected.has(templateId);
-            return !selected.has(String(region._id));
+            const templateId = resolveTemplateIdForRegion(region, templateList);
+            // Unresolvable regions are preserved rather than guessed at.
+            if (!templateId) return false;
+            return !selected.has(templateId);
         });
 
         if (toAdd.length) {

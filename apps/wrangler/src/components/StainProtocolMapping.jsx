@@ -460,7 +460,7 @@ const StainProtocolMapping = () => {
                         <div className="case-details">Local: {currentCase.localCaseId} • {currentCaseIndex + 1} of {cases.length}</div>
                         {currentCase.sectioningProtocolName && (
                             <div className="case-blocking-protocol">
-                                Blocking: {currentCase.sectioningProtocolName}
+                                Sectioning: {currentCase.sectioningProtocolName}
                             </div>
                         )}
                         {unmappedCounts.total > 0 && (

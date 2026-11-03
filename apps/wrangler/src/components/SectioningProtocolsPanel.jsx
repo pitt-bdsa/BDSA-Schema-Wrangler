@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import bdsaCatalogService from '../utils/bdsaCatalogService';
 import { docId } from '../utils/bdsaCatalogMapper';
+import { resolveTemplateIdForRegion } from '../utils/bdsaBlockAssignment';
 import './ProtocolList.css';
 import './ProtocolModal.css';
 import './SectioningProtocolsPanel.css';
@@ -95,6 +96,7 @@ const SectioningProtocolsPanel = ({ regionTemplates = [], onCatalogChanged }) =>
                 name: blockModal.form.name,
                 protocolId: blockModal.protocolId,
                 regionIds: blockModal.form.regionIds,
+                templates,
             }, blockModal.existing);
             setBlockModal(null);
             await notifyAndReload();
@@ -126,9 +128,9 @@ const SectioningProtocolsPanel = ({ regionTemplates = [], onCatalogChanged }) =>
     };
 
     const openEditBlock = (block) => {
-        const selected = (block.regionDefinitions || [])
-            .map((region) => String(region.sourceId || region._id || ''))
-            .filter(Boolean);
+        const selected = [...new Set((block.regionDefinitions || [])
+            .map((region) => resolveTemplateIdForRegion(region, templates))
+            .filter(Boolean))];
         setBlockModal({
             protocolId: block.protocolId,
             existing: block,

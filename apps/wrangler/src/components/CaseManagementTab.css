@@ -1561,3 +1561,10 @@
     background: #fee2e2;
     color: #991b1b;
 }
+.sectioning-progress {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+    color: #555;
+    font-size: 0.85em;
+}

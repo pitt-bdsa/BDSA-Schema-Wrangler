@@ -186,20 +186,21 @@ class BdsaCatalogClient {
         return this.get('/bdsa/block', { includeRegions: true });
     }
 
-    createBlock({ name, protocolId }) {
+    createBlock({ name, protocolId, filenamePattern }) {
+        const body = { name, protocol_id: protocolId };
+        if (filenamePattern !== undefined) body.filename_pattern = filenamePattern;
         return this.post('/bdsa/block', {
             query: { name },
-            body: { name, protocol_id: protocolId },
+            body,
         });
     }
 
-    updateBlock(id, { name, protocolId }) {
-        return this.put(`/bdsa/block/${id}`, {
-            body: {
-                name,
-                protocol_id: protocolId,
-            },
-        });
+    updateBlock(id, { name, protocolId, filenamePattern }) {
+        const body = {};
+        if (name !== undefined) body.name = name;
+        if (protocolId !== undefined) body.protocol_id = protocolId;
+        if (filenamePattern !== undefined) body.filename_pattern = filenamePattern;
+        return this.put(`/bdsa/block/${id}`, { body });
     }
 
     deleteBlock(id) {
@@ -218,6 +219,30 @@ class BdsaCatalogClient {
 
     listCases() {
         return this.get('/bdsa/case');
+    }
+
+    getCase({ id, networkIdentifier } = {}) {
+        return this.get('/bdsa/case', { id, networkIdentifier });
+    }
+
+    updateCase(id, { protocolId, details, localIdentifier, schemaId } = {}) {
+        const body = { details: details || {} };
+        if (localIdentifier !== undefined) body.localIdentifier = localIdentifier;
+        if (schemaId !== undefined) body.schemaId = schemaId;
+        if (protocolId !== undefined) body.protocol_id = protocolId;
+        return this.put(`/bdsa/case/${id}`, { body });
+    }
+
+    refreshCaseProtocolBlocks(caseId) {
+        return this.post(`/bdsa/case/${caseId}/refresh-protocol-blocks`);
+    }
+
+    updateItem(itemId, payload = {}) {
+        // PUT /bdsa/item/:itemId expects a single form field named "body"
+        // containing the JSON payload (same shape the manage app sends).
+        return this.put(`/bdsa/item/${itemId}`, {
+            body: { body: payload },
+        });
     }
 
     getLocalNode() {

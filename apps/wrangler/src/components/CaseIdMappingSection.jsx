@@ -35,6 +35,7 @@ const CaseIdMappingSection = ({
     onSetSectioningProtocol,
     onApplySectioningProtocolToAll,
     isSavingSectioningProtocol = false,
+    sectioningProgress = '',
 }) => {
     const originalInstitutionId = useRef(bdsaInstitutionId);
     const [draftInstitutionId, setDraftInstitutionId] = useState(bdsaInstitutionId);
@@ -313,12 +314,12 @@ const CaseIdMappingSection = ({
                                 value=""
                                 onChange={(e) => applySectioningToAll(e.target.value)}
                                 disabled={isSavingSectioningProtocol || sectioningProtocols.length === 0 || filteredCaseIds.length === 0}
-                                title="Store the same blocking protocol on every case. Slide regions stay independent."
+                                title="Store the same sectioning protocol on every case and re-assign slides to matching blocks."
                             >
                                 <option value="">
                                     {sectioningProtocols.length === 0
-                                        ? 'No blocking protocols'
-                                        : 'Apply blocking protocol to all…'}
+                                        ? 'No sectioning protocols'
+                                        : 'Apply sectioning protocol to all…'}
                                 </option>
                                 {sectioningProtocols.map((protocol) => (
                                     <option key={protocolKey(protocol)} value={protocolKey(protocol)}>
@@ -326,6 +327,11 @@ const CaseIdMappingSection = ({
                                     </option>
                                 ))}
                             </select>
+                        )}
+                        {sectioningProgress && (
+                            <span className="sectioning-progress" role="status">
+                                {sectioningProgress}
+                            </span>
                         )}
                     </div>
                 </div>
@@ -349,9 +355,9 @@ const CaseIdMappingSection = ({
                                 {showSectioningProtocol && (
                                     <th
                                         className="col-blocking"
-                                        title="One blocking protocol per case. Every slide in the case shares it so sections from the same block cannot drift."
+                                        title="One sectioning protocol per case. Every slide in the case shares it so sections from the same block cannot drift."
                                     >
-                                        Blocking Protocol
+                                        Sectioning Protocol
                                     </th>
                                 )}
                                 <th
@@ -413,8 +419,8 @@ const CaseIdMappingSection = ({
                                                     onChange={(e) => applySectioningChange(caseId.localCaseId, e.target.value)}
                                                     disabled={isSavingSectioningProtocol}
                                                     title={caseId.sectioningProtocolMixed
-                                                        ? 'Slides in this case have different blocking protocols. Pick one to apply it to every slide.'
-                                                        : 'Applies to every slide in this case. Slide regions can still be overridden.'}
+                                                        ? 'Slides in this case have different sectioning protocols. Pick one to apply it to every slide.'
+                                                        : 'Applies to every slide in this case. Slides are matched to one of the case blocks by their region set.'}
                                                 >
                                                     <option value="">None</option>
                                                     {hasStoredSectioningOrphan(caseId) && (
